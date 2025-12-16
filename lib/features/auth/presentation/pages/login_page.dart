@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'home_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -29,7 +30,10 @@ class _LoginPageState extends State<LoginPage> {
   void _fazerLogin() {
     // Valida se os campos estão preenchidos conforme as regras do validator
     if (_formKey.currentState!.validate()) {
-      // AQUI ENTRARÁ A LÓGICA DO FIREBASE DEPOIS
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const HomePage()),
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Processando login...')),
       );

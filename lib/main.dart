@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
+import '/features/auth/presentation/pages/login_page.dart';
 
 void main() async {
   // 1. Garante que o motor do Flutter esteja inicializado
@@ -23,9 +24,7 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.blue,
         useMaterial3: true,
       ),
-      home: const Scaffold(
-        body: Center(child: Text("Firebase Inicializado com Sucesso!")),
-      ),
+      home: const LoginPage(),
     );
   }
 }
