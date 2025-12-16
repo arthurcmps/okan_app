@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "1080333508962",
+    "project_id": "app-academia-2914d",
+    "storage_bucket": "app-academia-2914d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1080333508962:android:80fc8f4687883e764ccc3b",
+        "android_client_info": {
+          "package_name": "com.example.okan"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAexNOHGsp24JmCmK7JF-ajxv_147sc_U8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1080333508962:android:98fb49231c4699c94ccc3b",
+        "android_client_info": {
+          "package_name": "com.example.okan_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAexNOHGsp24JmCmK7JF-ajxv_147sc_U8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
