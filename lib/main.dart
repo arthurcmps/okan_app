@@ -10,11 +10,11 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  runApp(MyApp());
+  runApp(OkanApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp ({super.key});
+class OkanApp extends StatelessWidget {
+  const OkanApp ({super.key});
 
   @override
   Widget build(BuildContext context){

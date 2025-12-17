@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'home_page.dart';
+import 'register_page.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -27,16 +29,47 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  void _fazerLogin() {
-    // Valida se os campos estão preenchidos conforme as regras do validator
+Future<void> _fazerLogin() async {
     if (_formKey.currentState!.validate()) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const HomePage()),
-      );
+      
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Processando login...')),
+        const SnackBar(content: Text('Entrando ...')),
       );
+
+      try {
+        // 1. Tentar fazer login no Firebase
+        await FirebaseAuth.instance.signInWithEmailAndPassword(
+          email: _emailController.text.trim(),
+          password: _passwordController.text.trim(),
+        );
+
+        if (!mounted) return;
+
+        // 2. Sucesso! Ir para a Home
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomePage()),
+        );
+
+      } on FirebaseAuthException catch (e) {
+        // 3. Tratamento de Erros
+        String mensagemErro = 'Erro ao fazer login. Verifique os dados.';
+        
+        // Nota: Por segurança, o Firebase às vezes retorna erros genéricos,
+        // mas podemos tentar tratar alguns códigos.
+        if (e.code == 'user-not-found' || e.code == 'wrong-password') {
+          mensagemErro = 'E-mail ou senha incorretos.';
+        } else if (e.code == 'invalid-email') {
+           mensagemErro = 'Formato de e-mail inválido.';
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(mensagemErro),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -163,7 +196,10 @@ class _LoginPageState extends State<LoginPage> {
                     const Text('Não tem uma conta?'),
                     TextButton(
                       onPressed: () {
-                        // Navegar para tela de cadastro
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const RegisterPage()),
+                        );
                       },
                       child: const Text('Cadastre-se'),
                     ),
