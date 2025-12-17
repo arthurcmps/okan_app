@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // <--- IMPORTANTE
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -16,6 +17,7 @@ class _RegisterPageState extends State<RegisterPage> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
+  DateTime? _dataNascimento; // <--- Variável para guardar a data
   bool _isPasswordVisible = false;
 
   @override
@@ -27,40 +29,62 @@ class _RegisterPageState extends State<RegisterPage> {
     super.dispose();
   }
 
-Future<void> _fazerCadastro() async {
-    // 1. Validar formulário
+  Future<void> _fazerCadastro() async {
+    // Validação extra para a data
+    if (_dataNascimento == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Por favor, informe sua data de nascimento.'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+
     if (_formKey.currentState!.validate()) {
       
-      // Mostrar feedback visual que está a carregar
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Criando a sua conta...')),
       );
 
       try {
-        // 2. Chamar o Firebase para criar utilizador
+        // 1. Criar Auth (Login/Senha)
         final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
         );
 
-        // 3. Atualizar o Nome do utilizador (Para aparecer na Home depois)
-        await userCredential.user?.updateDisplayName(_nameController.text.trim());
+        final user = userCredential.user;
 
-        if (!mounted) return; // Verifica se a tela ainda existe
+        // 2. Atualizar Nome no Auth
+        await user?.updateDisplayName(_nameController.text.trim());
 
-        // 4. Sucesso! Voltar para o Login
+        // 3. SALVAR NO FIRESTORE (A Mágica acontece aqui)
+        // Isso cria o perfil inicial para que a tela de Perfil não fique vazia
+        if (user != null) {
+          await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+            'name': _nameController.text.trim(),
+            'email': _emailController.text.trim(),
+            'birthDate': Timestamp.fromDate(_dataNascimento!), // Salva a data
+            'role': 'aluno', // Conforme documento técnico
+            'createdAt': FieldValue.serverTimestamp(),
+            // Campos opcionais começam zerados ou vazios
+            'weight': 0.0,
+            'objectives': 'Definir objetivo',
+          });
+        }
+
+        if (!mounted) return;
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Conta criada com sucesso! Faça login.'),
+            content: Text('Conta criada com sucesso!'),
             backgroundColor: Colors.green,
           ),
         );
-        Navigator.pop(context);
+        
+        // Pode voltar para o Login ou ir direto para Home, depende do seu fluxo.
+        Navigator.pop(context); 
 
       } on FirebaseAuthException catch (e) {
-        // 5. Tratamento de Erros específicos do Firebase
         String mensagemErro = 'Ocorreu um erro ao registar.';
-        
         if (e.code == 'weak-password') {
           mensagemErro = 'A senha é muito fraca.';
         } else if (e.code == 'email-already-in-use') {
@@ -68,12 +92,8 @@ Future<void> _fazerCadastro() async {
         } else if (e.code == 'invalid-email') {
           mensagemErro = 'O e-mail é inválido.';
         }
-
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(mensagemErro),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text(mensagemErro), backgroundColor: Colors.red),
         );
       }
     }
@@ -85,6 +105,7 @@ Future<void> _fazerCadastro() async {
       appBar: AppBar(
         title: const Text("Crie sua conta"),
         backgroundColor: Colors.transparent,
+        foregroundColor: Colors.black,
         elevation: 0,
       ),
       body: Center(
@@ -106,10 +127,40 @@ Future<void> _fazerCadastro() async {
                     prefixIcon: Icon(Icons.person),
                     border: OutlineInputBorder(),
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) return 'Digite seu nome';
-                    return null;
+                  validator: (value) => (value == null || value.isEmpty) ? 'Digite seu nome' : null,
+                ),
+                const SizedBox(height: 16),
+
+                // --- NOVO CAMPO: DATA DE NASCIMENTO ---
+                InkWell(
+                  onTap: () async {
+                    final dataEscolhida = await showDatePicker(
+                      context: context,
+                      initialDate: DateTime(2000),
+                      firstDate: DateTime(1940),
+                      lastDate: DateTime.now(),
+                    );
+                    if (dataEscolhida != null) {
+                      setState(() {
+                        _dataNascimento = dataEscolhida;
+                      });
+                    }
                   },
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Data de Nascimento',
+                      prefixIcon: Icon(Icons.calendar_today),
+                      border: OutlineInputBorder(),
+                    ),
+                    child: Text(
+                      _dataNascimento == null
+                          ? 'Toque para selecionar'
+                          : '${_dataNascimento!.day}/${_dataNascimento!.month}/${_dataNascimento!.year}',
+                      style: TextStyle(
+                        color: _dataNascimento == null ? Colors.grey : Colors.black,
+                      ),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 16),
 
@@ -142,10 +193,7 @@ Future<void> _fazerCadastro() async {
                       onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
                     ),
                   ),
-                  validator: (value) {
-                    if (value == null || value.length < 6) return 'Mínimo 6 caracteres';
-                    return null;
-                  },
+                  validator: (value) => (value == null || value.length < 6) ? 'Mínimo 6 caracteres' : null,
                 ),
                 const SizedBox(height: 16),
 

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart'; // <--- Importante
+import 'package:cloud_firestore/cloud_firestore.dart'; // <--- Importante
 import 'home_page.dart';
 import 'register_page.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -11,65 +13,117 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  // Controladores para capturar o texto digitado
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  
-  // Chave para validar o formulário (ex: campo vazio)
   final _formKey = GlobalKey<FormState>();
-
-  // Variável para controlar se a senha está visível ou oculta
   bool _isPasswordVisible = false;
+  bool _isLoading = false; // Para mostrar carregamento no botão Google
 
   @override
   void dispose() {
-    // Importante: Limpar os controladores para não vazar memória
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-Future<void> _fazerLogin() async {
+  // --- LOGIN COM EMAIL E SENHA ---
+  Future<void> _fazerLogin() async {
     if (_formKey.currentState!.validate()) {
+      setState(() => _isLoading = true);
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Entrando ...')),
-      );
-
       try {
-        // 1. Tentar fazer login no Firebase
         await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
         );
 
         if (!mounted) return;
-
-        // 2. Sucesso! Ir para a Home
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => HomePage()),
         );
 
       } on FirebaseAuthException catch (e) {
-        // 3. Tratamento de Erros
-        String mensagemErro = 'Erro ao fazer login. Verifique os dados.';
-        
-        // Nota: Por segurança, o Firebase às vezes retorna erros genéricos,
-        // mas podemos tentar tratar alguns códigos.
-        if (e.code == 'user-not-found' || e.code == 'wrong-password') {
+        String mensagemErro = 'Erro ao fazer login.';
+        if (e.code == 'user-not-found' || e.code == 'wrong-password' || e.code == 'invalid-credential') {
           mensagemErro = 'E-mail ou senha incorretos.';
         } else if (e.code == 'invalid-email') {
            mensagemErro = 'Formato de e-mail inválido.';
         }
-
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(mensagemErro),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text(mensagemErro), backgroundColor: Colors.red),
         );
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
       }
+    }
+  }
+
+  // --- LOGIN COM GOOGLE (NOVO) ---
+  Future<void> _fazerLoginGoogle() async {
+    setState(() => _isLoading = true);
+
+    try {
+      // 1. Iniciar fluxo do Google
+      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+      
+      // Se o usuário cancelou a janelinha
+      if (googleUser == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // 2. Obter credenciais
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      // 3. Fazer login no Firebase
+      final UserCredential userCredential = 
+          await FirebaseAuth.instance.signInWithCredential(credential);
+      
+      final user = userCredential.user;
+
+      // 4. VERIFICAÇÃO INTELIGENTE DO FIRESTORE
+      // Se for o primeiro acesso via Google, precisamos criar o perfil no banco
+      // para que a tela de Perfil funcione (peso, idade, etc).
+      if (user != null) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+
+        if (!userDoc.exists) {
+          // Cria o documento padrão
+          await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+            'name': user.displayName ?? "Aluno Google",
+            'email': user.email,
+            'photoUrl': user.photoURL, // Salva a foto do Google!
+            'role': 'aluno',
+            'createdAt': FieldValue.serverTimestamp(),
+            'weight': 0.0,
+            'objectives': 'Definir objetivo',
+            // Não temos data de nascimento pelo Google, fica vazio para editar depois
+          });
+        }
+      }
+
+      if (!mounted) return;
+      
+      // Sucesso
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => HomePage()),
+      );
+
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro no Google: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -85,15 +139,8 @@ Future<void> _fazerLogin() async {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // 1. Logo ou Ícone da Academia
-                const Icon(
-                  Icons.fitness_center,
-                  size: 80,
-                  color: Colors.blue,
-                ),
+                const Icon(Icons.fitness_center, size: 80, color: Colors.blue),
                 const SizedBox(height: 24),
-                
-                // 2. Título de Boas-vindas
                 Text(
                   'Bem-vindo de volta!',
                   textAlign: TextAlign.center,
@@ -101,17 +148,9 @@ Future<void> _fazerLogin() async {
                         fontWeight: FontWeight.bold,
                       ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Acesse sua conta para treinar',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: Colors.grey[600],
-                      ),
-                ),
                 const SizedBox(height: 48),
 
-                // 3. Campo de E-mail
+                // CAMPOS DE EMAIL E SENHA
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
@@ -120,76 +159,62 @@ Future<void> _fazerLogin() async {
                     prefixIcon: Icon(Icons.email_outlined),
                     border: OutlineInputBorder(),
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Por favor, digite seu e-mail';
-                    }
-                    if (!value.contains('@')) {
-                      return 'Digite um e-mail válido';
-                    }
-                    return null;
-                  },
+                  validator: (val) => (val == null || !val.contains('@')) ? 'E-mail inválido' : null,
                 ),
                 const SizedBox(height: 16),
-
-                // 4. Campo de Senha
                 TextFormField(
                   controller: _passwordController,
-                  obscureText: !_isPasswordVisible, // Oculta o texto
+                  obscureText: !_isPasswordVisible,
                   decoration: InputDecoration(
                     labelText: 'Senha',
                     prefixIcon: const Icon(Icons.lock_outline),
                     border: const OutlineInputBorder(),
                     suffixIcon: IconButton(
-                      icon: Icon(
-                        _isPasswordVisible
-                            ? Icons.visibility_off
-                            : Icons.visibility,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _isPasswordVisible = !_isPasswordVisible;
-                        });
-                      },
+                      icon: Icon(_isPasswordVisible ? Icons.visibility_off : Icons.visibility),
+                      onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
                     ),
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Por favor, digite sua senha';
-                    }
-                    if (value.length < 6) {
-                      return 'A senha deve ter pelo menos 6 caracteres';
-                    }
-                    return null;
-                  },
+                  validator: (val) => (val == null || val.length < 6) ? 'Senha curta' : null,
                 ),
                 
-                // 5. Botão "Esqueci a senha" (Opcional)
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () {
-                      // Ação de recuperar senha
-                    },
-                    child: const Text('Esqueci minha senha'),
-                  ),
-                ),
                 const SizedBox(height: 24),
 
-                // 6. Botão de Login Principal
+                // BOTÃO ENTRAR
                 FilledButton(
-                  onPressed: _fazerLogin,
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                  child: const Text(
-                    'ENTRAR',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
+                  onPressed: _isLoading ? null : _fazerLogin,
+                  style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
+                  child: _isLoading 
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
+                    : const Text('ENTRAR', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                ),
+                
+                const SizedBox(height: 16),
+                
+                // --- DIVISOR "OU" ---
+                const Row(
+                  children: [
+                    Expanded(child: Divider()),
+                    Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Text("OU")),
+                    Expanded(child: Divider()),
+                  ],
                 ),
                 const SizedBox(height: 16),
 
-                // 7. Link para Cadastro
+                // --- BOTÃO GOOGLE ---
+                OutlinedButton.icon(
+                  onPressed: _isLoading ? null : _fazerLoginGoogle,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    side: const BorderSide(color: Colors.grey),
+                  ),
+                  // Se quiser o logo colorido, pode usar Image.asset, mas vamos usar um Icon simples por enquanto
+                  icon: const Icon(Icons.g_mobiledata, size: 32, color: Colors.red), 
+                  label: const Text("Entrar com Google", style: TextStyle(fontSize: 16, color: Colors.black87)),
+                ),
+
+                const SizedBox(height: 24),
+
+                // LINK CADASTRO
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
