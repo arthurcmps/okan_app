@@ -54,7 +54,7 @@ class _TreinoDetalhesPageState extends State<TreinoDetalhesPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.nomeTreino),
+        title: Text(widget.nomeTreino ?? "Treino"),
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
       ),
@@ -73,7 +73,7 @@ class _TreinoDetalhesPageState extends State<TreinoDetalhesPage> {
                   style: TextStyle(color: Colors.blue.shade900, fontSize: 14),
                 ),
                 Text(
-                  widget.grupoMuscular,
+                  widget.grupoMuscular ?? "Geral",
                   style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,

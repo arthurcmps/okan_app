@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'train_page.dart'; // Certifique-se que o arquivo existe e o nome está certo
+import 'train_page.dart';
+import 'profile_page.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -36,6 +37,17 @@ class HomePage extends StatelessWidget {
           ],
         ),
         actions: [
+          // BOTÃO PERFIL (NOVO)
+          IconButton(
+            icon: const Icon(Icons.person),
+            tooltip: 'Meu Perfil',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ProfilePage()),
+              );
+            },
+          ),
           // Botão de Logout
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.red),
