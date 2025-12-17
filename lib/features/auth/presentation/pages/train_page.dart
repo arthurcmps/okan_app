@@ -225,6 +225,7 @@ class _TreinoDetalhesPageState extends State<TreinoDetalhesPage> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
+      // 1. Salva no Histórico (Isso já existia)
       await FirebaseFirestore.instance.collection('historico').add({
         'usuarioId': user.uid,
         'treinoNome': _nomeAtual,
@@ -232,11 +233,42 @@ class _TreinoDetalhesPageState extends State<TreinoDetalhesPage> {
         'data': FieldValue.serverTimestamp(),
       });
 
+      // --- NOVIDADE: RESETAR OS CHECKS ---
+      
+      // Pega todos os exercícios desse treino
+      final snapshot = await FirebaseFirestore.instance
+          .collection('treinos')
+          .doc(widget.treinoId)
+          .collection('exercicios')
+          .get();
+
+      // Cria um lote de escrita (Batch) para ser rápido
+      final batch = FirebaseFirestore.instance.batch();
+
+      // Para cada exercício, manda atualizar 'concluido' para false
+      for (var doc in snapshot.docs) {
+        batch.update(doc.reference, {'concluido': false});
+      }
+
+      // Executa todas as atualizações de uma vez
+      await batch.commit();
+
+      // -----------------------------------
+
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Treino registrado! 💪'), backgroundColor: Colors.green));
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Treino finalizado! Até a próxima. 💪'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
       Navigator.pop(context);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao salvar: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao finalizar: $e')),
+      );
     }
   }
 
