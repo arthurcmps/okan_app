@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // Import necessário
-import 'package:firebase_core/firebase_core.dart'; // Import para usar o Firebase.app()
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class TreinoDetalhesPage extends StatefulWidget {
   final String nomeTreino;
@@ -19,6 +20,36 @@ class TreinoDetalhesPage extends StatefulWidget {
 }
 
 class _TreinoDetalhesPageState extends State<TreinoDetalhesPage> {
+  // Função para salvar o treino no histórico
+  Future<void> _salvarHistorico() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return; // Segurança básica
+
+      // Escreve na coleção 'historico'
+      await FirebaseFirestore.instance.collection('historico').add({
+        'usuarioId': user.uid,
+        'treinoNome': widget.nomeTreino,
+        'treinoId': widget.treinoId,
+        'data': FieldValue.serverTimestamp(), // Pega a hora exata do servidor do Google
+      });
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Treino registrado com sucesso! 💪'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      Navigator.pop(context); // Volta para a Home
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao salvar: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -139,6 +170,7 @@ class _TreinoDetalhesPageState extends State<TreinoDetalhesPage> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Treino concluído!')),
                   );
+                  _salvarHistorico();
                   Navigator.pop(context);
                 },
                 style: ElevatedButton.styleFrom(
