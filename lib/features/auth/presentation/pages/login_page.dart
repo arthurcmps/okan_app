@@ -48,7 +48,7 @@ Future<void> _fazerLogin() async {
         // 2. Sucesso! Ir para a Home
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const HomePage()),
+          MaterialPageRoute(builder: (context) => HomePage()),
         );
 
       } on FirebaseAuthException catch (e) {

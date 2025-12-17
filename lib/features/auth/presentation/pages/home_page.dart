@@ -1,24 +1,77 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'train_page.dart';
-import 'profile_page.dart';
+import 'train_page.dart'; // Sua página de detalhes
+import 'profile_page.dart'; // Sua página de perfil/histórico
 
 class HomePage extends StatelessWidget {
-  const HomePage({super.key});
+  // Removemos o 'const' aqui porque agora temos controladores
+  HomePage({super.key});
+
+  // Controladores para capturar o texto na hora de criar treino
+  final TextEditingController _nomeController = TextEditingController();
+  final TextEditingController _grupoController = TextEditingController();
+
+  // Função para abrir o formulário de criar treino
+  void _mostrarDialogoCriar(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Novo Treino"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _nomeController,
+                decoration: const InputDecoration(labelText: "Nome (ex: Treino C)"),
+              ),
+              TextField(
+                controller: _grupoController,
+                decoration: const InputDecoration(labelText: "Grupo (ex: Pernas)"),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context), // Cancelar
+              child: const Text("Cancelar"),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                // 1. Salva no Firebase (Banco padrão)
+                FirebaseFirestore.instance.collection('treinos').add({
+                  'nome': _nomeController.text.isNotEmpty ? _nomeController.text : 'Treino Novo',
+                  'grupo': _grupoController.text.isNotEmpty ? _grupoController.text : 'Geral',
+                  'qtd_exercicios': 0,
+                  'duracao': '?? min',
+                });
+
+                // 2. Limpa os campos
+                _nomeController.clear();
+                _grupoController.clear();
+
+                // 3. Fecha a janela
+                Navigator.pop(context);
+              },
+              child: const Text("Criar"),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    // 1. Pega os dados do usuário logado de forma segura
     final user = FirebaseAuth.instance.currentUser;
     final nomeUsuario = user?.displayName ?? "Atleta";
 
     return Scaffold(
       appBar: AppBar(
-        // Remove a sombra do AppBar para um visual mais limpo
         elevation: 0,
         backgroundColor: Colors.transparent,
-        foregroundColor: Colors.black, // Cor dos ícones e texto
+        foregroundColor: Colors.black,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -37,7 +90,7 @@ class HomePage extends StatelessWidget {
           ],
         ),
         actions: [
-          // BOTÃO PERFIL (NOVO)
+          // BOTÃO PERFIL (HISTÓRICO)
           IconButton(
             icon: const Icon(Icons.person),
             tooltip: 'Meu Perfil',
@@ -48,20 +101,20 @@ class HomePage extends StatelessWidget {
               );
             },
           ),
-          // Botão de Logout
+          // BOTÃO LOGOUT
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.red),
             tooltip: 'Sair',
             onPressed: () async {
               await FirebaseAuth.instance.signOut();
               if (context.mounted) {
-                // Volta para a tela de login removendo o histórico
                 Navigator.of(context).popUntil((route) => route.isFirst);
               }
             },
           ),
         ],
       ),
+      
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -73,67 +126,40 @@ class HomePage extends StatelessWidget {
             ),
             const SizedBox(height: 16),
 
-            // O StreamBuilder que ouve o Firebase
+            // LISTA DE TREINOS (STREAM)
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
-                // ATENÇÃO: O nome 'treinos' aqui tem que ser IGUAL ao do site (minúsculo/maiúsculo)
+                // Conecta ao banco padrão (Default)
                 stream: FirebaseFirestore.instance.collection('treinos').snapshots(),
                 builder: (context, snapshot) {
-                  
-                  // 1. Tratamento de ERRO
+                  // 1. Erro
                   if (snapshot.hasError) {
-                    return Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.error_outline, size: 50, color: Colors.red),
-                          const SizedBox(height: 10),
-                          Text(
-                            'Erro ao carregar:\n${snapshot.error}',
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    );
+                    return Center(child: Text('Erro: ${snapshot.error}'));
                   }
 
-                  // 2. Estado de CARREGAMENTO
+                  // 2. Carregando
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(
-                      child: CircularProgressIndicator(),
-                    );
+                    return const Center(child: CircularProgressIndicator());
                   }
 
-                  // 3. Verifica se veio VAZIO (Correção do erro Null Check)
+                  // 3. Verifica se tem dados
                   final dados = snapshot.data?.docs;
                   if (dados == null || dados.isEmpty) {
-                    return Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.fitness_center, size: 60, color: Colors.grey[300]),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Nenhum treino encontrado.\nVerifique se a coleção "treinos" existe no Firebase.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.grey[600]),
-                          ),
-                        ],
-                      ),
+                    return const Center(
+                      child: Text('Nenhum treino encontrado. Crie um no botão (+)!'),
                     );
                   }
 
-                  // 4. Lista SUCESSO
+                  // 4. Lista Sucesso
                   return ListView.builder(
                     itemCount: dados.length,
                     itemBuilder: (context, index) {
-                      // Converte o documento para Map de forma segura
                       final treino = dados[index].data() as Map<String, dynamic>;
-
-                      // Usa '??' para evitar erro se faltar campo no banco
-                      final nome = treino['nome'] ?? 'Treino sem nome';
-                      final grupo = treino['grupo'] ?? 'Geral';
-                      final duracao = treino['duracao'] ?? '--';
+                      
+                      // Tratamento de nulos com ??
+                      final nome = treino['nome']?.toString() ?? 'Treino sem nome';
+                      final grupo = treino['grupo']?.toString() ?? 'Geral';
+                      final duracao = treino['duracao']?.toString() ?? '--';
                       final qtd = treino['qtd_exercicios']?.toString() ?? '0';
 
                       return Card(
@@ -151,7 +177,7 @@ class HomePage extends StatelessWidget {
                                 builder: (context) => TreinoDetalhesPage(
                                   nomeTreino: nome,
                                   grupoMuscular: grupo,
-                                  treinoId: dados[index].id,
+                                  treinoId: dados[index].id, // Envia o ID para buscar exercícios
                                 ),
                               ),
                             );
@@ -160,7 +186,6 @@ class HomePage extends StatelessWidget {
                             padding: const EdgeInsets.all(16.0),
                             child: Row(
                               children: [
-                                // Ícone/Letra do Treino
                                 Container(
                                   width: 50,
                                   height: 50,
@@ -180,8 +205,6 @@ class HomePage extends StatelessWidget {
                                   ),
                                 ),
                                 const SizedBox(width: 16),
-                                
-                                // Textos do Treino
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -206,17 +229,11 @@ class HomePage extends StatelessWidget {
                                         children: [
                                           Icon(Icons.timer_outlined, size: 14, color: Colors.grey[500]),
                                           const SizedBox(width: 4),
-                                          Text(
-                                            duracao,
-                                            style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                                          ),
+                                          Text(duracao, style: TextStyle(fontSize: 12, color: Colors.grey[500])),
                                           const SizedBox(width: 12),
-                                          Icon(Icons.format_list_bulleted, size: 14, color: Colors.grey[500]),
+                                          Icon(Icons.fitness_center, size: 14, color: Colors.grey[500]),
                                           const SizedBox(width: 4),
-                                          Text(
-                                            "$qtd exercícios",
-                                            style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                                          ),
+                                          Text("$qtd exercícios", style: TextStyle(fontSize: 12, color: Colors.grey[500])),
                                         ],
                                       )
                                     ],
@@ -235,6 +252,15 @@ class HomePage extends StatelessWidget {
             ),
           ],
         ),
+      ),
+      
+      // BOTÃO FLUTUANTE PARA CRIAR TREINOS
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.blue,
+        child: const Icon(Icons.add, color: Colors.white),
+        onPressed: () {
+          _mostrarDialogoCriar(context);
+        },
       ),
     );
   }

@@ -20,6 +20,72 @@ class TreinoDetalhesPage extends StatefulWidget {
 }
 
 class _TreinoDetalhesPageState extends State<TreinoDetalhesPage> {
+  // 1. CONTROLADORES DE TEXTO
+  final TextEditingController _nomeExercicioController = TextEditingController();
+  final TextEditingController _seriesController = TextEditingController();
+
+  // 2. FUNÇÃO PARA ABRIR O DIÁLOGO E SALVAR
+  void _mostrarDialogoAdicionarExercicio() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Adicionar Exercício"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _nomeExercicioController,
+                decoration: const InputDecoration(labelText: "Nome (ex: Supino)"),
+              ),
+              TextField(
+                controller: _seriesController,
+                decoration: const InputDecoration(labelText: "Séries (ex: 4x12)"),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancelar"),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (_nomeExercicioController.text.isEmpty) return;
+
+                // A. Adiciona na subcoleção 'exercicios'
+                await FirebaseFirestore.instance
+                    .collection('treinos')
+                    .doc(widget.treinoId)
+                    .collection('exercicios')
+                    .add({
+                  'nome': _nomeExercicioController.text,
+                  'series': _seriesController.text,
+                  'ordem': DateTime.now().millisecondsSinceEpoch, // Ajuda a ordenar
+                });
+
+                // B. Atualiza a contagem na tela Home (Opcional mas legal)
+                // Isso incrementa o qtd_exercicios em +1
+                FirebaseFirestore.instance
+                    .collection('treinos')
+                    .doc(widget.treinoId)
+                    .update({
+                      'qtd_exercicios': FieldValue.increment(1)
+                    });
+
+                // Limpeza
+                _nomeExercicioController.clear();
+                _seriesController.clear();
+                if (context.mounted) Navigator.pop(context);
+              },
+              child: const Text("Salvar"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+  
   // Função para salvar o treino no histórico
   Future<void> _salvarHistorico() async {
     try {
@@ -113,7 +179,7 @@ class _TreinoDetalhesPageState extends State<TreinoDetalhesPage> {
                   itemBuilder: (context, index) {
                     final dados = exercicios[index].data() as Map<String, dynamic>;
                     
-                    final name = dados['name'] ?? 'Exercício';
+                    final name = dados['nome'] ?? 'Exercício';
                     final series = dados['series'] ?? '-';
                     
                     // Lógica simples de Checkbox local (não salva no banco ainda)
@@ -183,6 +249,13 @@ class _TreinoDetalhesPageState extends State<TreinoDetalhesPage> {
             ),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.blue, 
+        child: const Icon(Icons.add, color: Colors.white),
+        onPressed: () {
+          _mostrarDialogoAdicionarExercicio();
+        },
       ),
     );
   }
