@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 class TreinoDetalhesPage extends StatefulWidget {
   final String nomeTreino;
   final String grupoMuscular;
-  final String treinoId; // Novo campo para receber o ID
+  final String treinoId;
 
   const TreinoDetalhesPage({
     super.key,
     required this.nomeTreino,
     required this.grupoMuscular,
-    required this.treinoId, // Obrigatório
+    required this.treinoId,
   });
 
   @override
@@ -20,17 +20,45 @@ class TreinoDetalhesPage extends StatefulWidget {
 }
 
 class _TreinoDetalhesPageState extends State<TreinoDetalhesPage> {
-  // 1. CONTROLADORES DE TEXTO
+  // Variáveis locais para atualizar o título na tela se editar
+  late String _nomeAtual;
+  late String _grupoAtual;
+
+  // Controladores para ADICIONAR/EDITAR exercícios
   final TextEditingController _nomeExercicioController = TextEditingController();
   final TextEditingController _seriesController = TextEditingController();
 
-  // 2. FUNÇÃO PARA ABRIR O DIÁLOGO E SALVAR
-  void _mostrarDialogoAdicionarExercicio() {
+  // Controladores para EDITAR O TREINO
+  final TextEditingController _nomeTreinoController = TextEditingController();
+  final TextEditingController _grupoTreinoController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Inicializa com os dados que vieram da Home
+    _nomeAtual = widget.nomeTreino;
+    _grupoAtual = widget.grupoMuscular;
+  }
+
+  // --- FUNÇÕES DE EXERCÍCIO (Adicionar, Editar, Excluir) ---
+
+  void _mostrarDialogoExercicio({String? docId, String? nomeAtual, String? seriesAtual}) {
+    // Se vierem dados, é EDIÇÃO. Se não, é CRIAÇÃO.
+    final bool isEditando = docId != null;
+
+    if (isEditando) {
+      _nomeExercicioController.text = nomeAtual ?? "";
+      _seriesController.text = seriesAtual ?? "";
+    } else {
+      _nomeExercicioController.clear();
+      _seriesController.clear();
+    }
+
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text("Adicionar Exercício"),
+          title: Text(isEditando ? "Editar Exercício" : "Novo Exercício"),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -53,29 +81,33 @@ class _TreinoDetalhesPageState extends State<TreinoDetalhesPage> {
               onPressed: () async {
                 if (_nomeExercicioController.text.isEmpty) return;
 
-                // A. Adiciona na subcoleção 'exercicios'
-                await FirebaseFirestore.instance
+                final collection = FirebaseFirestore.instance
                     .collection('treinos')
                     .doc(widget.treinoId)
-                    .collection('exercicios')
-                    .add({
-                  'nome': _nomeExercicioController.text,
-                  'series': _seriesController.text,
-                  'ordem': DateTime.now().millisecondsSinceEpoch, // Ajuda a ordenar
-                });
+                    .collection('exercicios');
 
-                // B. Atualiza a contagem na tela Home (Opcional mas legal)
-                // Isso incrementa o qtd_exercicios em +1
-                FirebaseFirestore.instance
-                    .collection('treinos')
-                    .doc(widget.treinoId)
-                    .update({
-                      'qtd_exercicios': FieldValue.increment(1)
-                    });
+                if (isEditando) {
+                  // ATUALIZAR
+                  await collection.doc(docId).update({
+                    'nome': _nomeExercicioController.text,
+                    'series': _seriesController.text,
+                  });
+                } else {
+                  // CRIAR NOVO
+                  await collection.add({
+                    'nome': _nomeExercicioController.text,
+                    'series': _seriesController.text,
+                    'concluido': false,
+                    'ordem': DateTime.now().millisecondsSinceEpoch,
+                  });
 
-                // Limpeza
-                _nomeExercicioController.clear();
-                _seriesController.clear();
+                  // Incrementa contador no treino pai
+                  FirebaseFirestore.instance
+                      .collection('treinos')
+                      .doc(widget.treinoId)
+                      .update({'qtd_exercicios': FieldValue.increment(1)});
+                }
+
                 if (context.mounted) Navigator.pop(context);
               },
               child: const Text("Salvar"),
@@ -85,48 +117,153 @@ class _TreinoDetalhesPageState extends State<TreinoDetalhesPage> {
       },
     );
   }
-  
-  // Função para salvar o treino no histórico
+
+  Future<void> _excluirExercicio(String docId) async {
+    await FirebaseFirestore.instance
+        .collection('treinos')
+        .doc(widget.treinoId)
+        .collection('exercicios')
+        .doc(docId)
+        .delete();
+
+    // Decrementa contador (Opcional)
+    FirebaseFirestore.instance
+        .collection('treinos')
+        .doc(widget.treinoId)
+        .update({'qtd_exercicios': FieldValue.increment(-1)});
+  }
+
+  // --- FUNÇÕES DE TREINO (Editar, Excluir, Salvar Histórico) ---
+
+  void _editarTreino() {
+    _nomeTreinoController.text = _nomeAtual;
+    _grupoTreinoController.text = _grupoAtual;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Editar Treino"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _nomeTreinoController,
+              decoration: const InputDecoration(labelText: "Nome do Treino"),
+            ),
+            TextField(
+              controller: _grupoTreinoController,
+              decoration: const InputDecoration(labelText: "Grupo Muscular"),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancelar"),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              // Atualiza no Firebase
+              await FirebaseFirestore.instance
+                  .collection('treinos')
+                  .doc(widget.treinoId)
+                  .update({
+                'nome': _nomeTreinoController.text,
+                'grupo': _grupoTreinoController.text,
+              });
+
+              // Atualiza na tela atual visualmente
+              setState(() {
+                _nomeAtual = _nomeTreinoController.text;
+                _grupoAtual = _grupoTreinoController.text;
+              });
+
+              if (context.mounted) Navigator.pop(context);
+            },
+            child: const Text("Salvar"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _excluirTreino() async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Excluir Treino?"),
+        content: const Text("Isso apagará tudo. Tem certeza?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancelar")),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("Excluir", style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+
+    if (confirmar != true) return;
+
+    try {
+      final batch = FirebaseFirestore.instance.batch();
+      final exerciciosRef = FirebaseFirestore.instance.collection('treinos').doc(widget.treinoId).collection('exercicios');
+      final snapshots = await exerciciosRef.get();
+      for (var doc in snapshots.docs) { batch.delete(doc.reference); }
+      await batch.commit();
+
+      await FirebaseFirestore.instance.collection('treinos').doc(widget.treinoId).delete();
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Treino excluído!')));
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e')));
+    }
+  }
+
   Future<void> _salvarHistorico() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return; // Segurança básica
+      if (user == null) return;
 
-      // Escreve na coleção 'historico'
       await FirebaseFirestore.instance.collection('historico').add({
         'usuarioId': user.uid,
-        'treinoNome': widget.nomeTreino,
+        'treinoNome': _nomeAtual,
         'treinoId': widget.treinoId,
-        'data': FieldValue.serverTimestamp(), // Pega a hora exata do servidor do Google
+        'data': FieldValue.serverTimestamp(),
       });
 
       if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Treino registrado com sucesso! 💪'),
-          backgroundColor: Colors.green,
-        ),
-      );
-
-      Navigator.pop(context); // Volta para a Home
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Treino registrado! 💪'), backgroundColor: Colors.green));
+      Navigator.pop(context);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao salvar: $e'), backgroundColor: Colors.red),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao salvar: $e')));
     }
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.nomeTreino ?? "Treino"),
+        title: Text(_nomeAtual), // Usa a variável local que pode ser editada
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
+        actions: [
+          // Botão EDITAR TREINO
+          IconButton(
+            icon: const Icon(Icons.edit),
+            tooltip: 'Editar Informações',
+            onPressed: _editarTreino,
+          ),
+          // Botão EXCLUIR TREINO
+          IconButton(
+            icon: const Icon(Icons.delete_outline),
+            tooltip: 'Excluir Treino',
+            onPressed: _excluirTreino,
+          ),
+        ],
       ),
       body: Column(
         children: [
-          // Cabeçalho (Continua igual)
           Container(
             padding: const EdgeInsets.all(16),
             width: double.infinity,
@@ -134,128 +271,92 @@ class _TreinoDetalhesPageState extends State<TreinoDetalhesPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  "Foco de hoje:",
-                  style: TextStyle(color: Colors.blue.shade900, fontSize: 14),
-                ),
-                Text(
-                  widget.grupoMuscular ?? "Geral",
-                  style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87),
-                ),
+                Text("Foco de hoje:", style: TextStyle(color: Colors.blue.shade900, fontSize: 14)),
+                Text(_grupoAtual, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87)),
               ],
             ),
           ),
-
-          // LISTA DE EXERCÍCIOS VINDO DO FIREBASE
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              // Atenção: Conectando no banco 'okan', entrando no treino específico e pegando os exercícios
-              stream: FirebaseFirestore.instance
-                  .collection('treinos')
-                  .doc(widget.treinoId) // Usa o ID que veio da Home
-                  .collection('exercicios')
-                  .orderBy('ordem') // Ordena (se você criou o campo ordem)
-                  .snapshots(),
+              stream: FirebaseFirestore.instance.collection('treinos').doc(widget.treinoId).collection('exercicios').orderBy('ordem').snapshots(),
               builder: (context, snapshot) {
-                // 1. Carregando
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+                if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const Center(child: Text("Nenhum exercício cadastrado."));
 
-                // 2. Vazio
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return const Center(child: Text("Nenhum exercício cadastrado."));
-                }
-
-                // 3. Sucesso
                 final exercicios = snapshot.data!.docs;
 
                 return ListView.separated(
                   itemCount: exercicios.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  separatorBuilder: (_, __) => const Divider(height: 1),
                   itemBuilder: (context, index) {
-                    final dados = exercicios[index].data() as Map<String, dynamic>;
-                    
-                    final name = dados['nome'] ?? 'Exercício';
-                    final series = dados['series'] ?? '-';
-                    
-                    // Lógica simples de Checkbox local (não salva no banco ainda)
-                    // Para salvar o check, precisaríamos atualizar o documento no Firebase
-                    bool feito = false; 
+                    final doc = exercicios[index];
+                    final dados = doc.data() as Map<String, dynamic>;
+                    final nome = dados['nome']?.toString() ?? 'Sem nome';
+                    final series = dados['series']?.toString() ?? '-';
+                    final bool feito = dados['concluido'] ?? false;
 
-                    return StatefulBuilder(
-                      builder: (context, setStateItem) {
-                        return CheckboxListTile(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          title: Text(
-                            name,
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              decoration: feito ? TextDecoration.lineThrough : null,
-                              color: feito ? Colors.grey : Colors.black,
-                            ),
+                    // AQUI MUDOU: Usamos ListTile com Checkbox e PopupMenu
+                    return ListTile(
+                      contentPadding: const EdgeInsets.only(left: 8, right: 8),
+                      // Checkbox na esquerda
+                      leading: Checkbox(
+                        value: feito,
+                        activeColor: Colors.blue,
+                        onChanged: (val) {
+                          FirebaseFirestore.instance.collection('treinos').doc(widget.treinoId).collection('exercicios').doc(doc.id).update({'concluido': val});
+                        },
+                      ),
+                      // Textos no meio
+                      title: Text(
+                        nome,
+                        style: TextStyle(fontWeight: FontWeight.bold, decoration: feito ? TextDecoration.lineThrough : null, color: feito ? Colors.grey : Colors.black),
+                      ),
+                      subtitle: Text(series, style: TextStyle(color: Colors.grey[600])),
+                      
+                      // Menu de Opções na direita (Três pontinhos)
+                      trailing: PopupMenuButton<String>(
+                        onSelected: (valor) {
+                          if (valor == 'editar') {
+                            _mostrarDialogoExercicio(docId: doc.id, nomeAtual: nome, seriesAtual: series);
+                          } else if (valor == 'excluir') {
+                            _excluirExercicio(doc.id);
+                          }
+                        },
+                        itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                          const PopupMenuItem<String>(
+                            value: 'editar',
+                            child: Row(children: [Icon(Icons.edit, size: 20), SizedBox(width: 8), Text('Editar')]),
                           ),
-                          subtitle: Text(
-                            series,
-                            style: TextStyle(color: Colors.grey[600]),
+                          const PopupMenuItem<String>(
+                            value: 'excluir',
+                            child: Row(children: [Icon(Icons.delete, color: Colors.red, size: 20), SizedBox(width: 8), Text('Excluir', style: TextStyle(color: Colors.red))]),
                           ),
-                          value: feito,
-                          activeColor: Colors.blue,
-                          onChanged: (bool? valor) {
-                            setStateItem(() {
-                              feito = valor ?? false;
-                            });
-                          },
-                          secondary: CircleAvatar(
-                            backgroundColor: feito ? Colors.green.shade100 : Colors.blue.shade50,
-                            child: Icon(
-                              Icons.fitness_center,
-                              color: feito ? Colors.green : Colors.blue,
-                              size: 20,
-                            ),
-                          ),
-                        );
-                      }
+                        ],
+                      ),
                     );
                   },
                 );
               },
             ),
           ),
-
-          // Botão Finalizar
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Treino concluído!')),
-                  );
-                  _salvarHistorico();
-                  Navigator.pop(context);
-                },
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                ),
+                onPressed: _salvarHistorico,
+                style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16), backgroundColor: Colors.green, foregroundColor: Colors.white),
                 child: const Text("FINALIZAR TREINO"),
               ),
             ),
           ),
         ],
       ),
+      // Botão flutuante para ADICIONAR (chama o diálogo sem parâmetros)
       floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.blue, 
+        backgroundColor: Colors.blue,
         child: const Icon(Icons.add, color: Colors.white),
-        onPressed: () {
-          _mostrarDialogoAdicionarExercicio();
-        },
+        onPressed: () => _mostrarDialogoExercicio(),
       ),
     );
   }
