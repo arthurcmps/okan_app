@@ -5,6 +5,8 @@ import 'train_page.dart';
 import 'profile_page.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'login_page.dart';
+import 'dashboard_chart.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -103,6 +105,11 @@ class _HomePageState extends State<HomePage> {
     final user = FirebaseAuth.instance.currentUser;
     final nomeUsuario = user?.displayName ?? "Atleta";
 
+  void initState() {
+   super.initState();
+  initializeDateFormatting('pt_BR', null); // <--- Adicione isso para o gráfico funcionar em PT
+}
+
     return Scaffold(
       appBar: AppBar(
         elevation: 0,
@@ -145,6 +152,8 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            const DashboardChart(),
+            const SizedBox(height: 24),
             const Text(
               'Seus Treinos',
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),

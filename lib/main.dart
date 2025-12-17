@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import '/features/auth/presentation/pages/login_page.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 void main() async {
   // 1. Garante que o motor do Flutter esteja inicializado
@@ -10,6 +11,8 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  await initializeDateFormatting('pt_BR', null);
   runApp(OkanApp());
 }
 
