@@ -26,6 +26,7 @@ class _TreinoDetalhesPageState extends State<TreinoDetalhesPage> {
 
   final TextEditingController _nomeExercicioController = TextEditingController();
   final TextEditingController _seriesController = TextEditingController();
+  final TextEditingController _cargaController = TextEditingController(); // <--- NOVO
   final TextEditingController _nomeTreinoController = TextEditingController();
   final TextEditingController _grupoTreinoController = TextEditingController();
 
@@ -39,8 +40,6 @@ class _TreinoDetalhesPageState extends State<TreinoDetalhesPage> {
     _grupoAtual = widget.grupoMuscular;
     _carregarBiblioteca();
   }
-  
-  // NÃO PRECISAMOS MAIS DO DISPOSE DO TIMER AQUI!
 
   // --- LÓGICA DO CRONÔMETRO GLOBAL ---
   void _mostrarSeletorTempo() {
@@ -76,13 +75,11 @@ class _TreinoDetalhesPageState extends State<TreinoDetalhesPage> {
       style: ElevatedButton.styleFrom(shape: const CircleBorder(), padding: const EdgeInsets.all(20), backgroundColor: Colors.blue.shade50),
       onPressed: () {
         Navigator.pop(context);
-        // CHAMA O SERVIÇO GLOBAL
         TimerService.instance.start(seg); 
       },
       child: Text("${seg}s", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
     );
   }
-  // ----------------------------------
 
   Future<void> _carregarBiblioteca() async {
     try {
@@ -102,16 +99,18 @@ class _TreinoDetalhesPageState extends State<TreinoDetalhesPage> {
     }
   }
 
-  void _mostrarDialogoExercicio({String? docId, String? nomeAtual, String? seriesAtual}) {
+  void _mostrarDialogoExercicio({String? docId, String? nomeAtual, String? seriesAtual, String? cargaAtual}) {
     final bool isEditando = docId != null;
     _linkVideoSelecionado = null;
 
     if (isEditando) {
       _nomeExercicioController.text = nomeAtual ?? "";
       _seriesController.text = seriesAtual ?? "";
+      _cargaController.text = cargaAtual ?? ""; // <--- Carrega a carga existente
     } else {
       _nomeExercicioController.clear();
       _seriesController.clear();
+      _cargaController.clear();
     }
 
     showDialog(
@@ -122,6 +121,7 @@ class _TreinoDetalhesPageState extends State<TreinoDetalhesPage> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // 1. AUTOCOMPLETE NOME
               Autocomplete<Map<String, dynamic>>(
                 optionsBuilder: (TextEditingValue textEditingValue) {
                   if (textEditingValue.text == '') return const Iterable.empty();
@@ -143,7 +143,26 @@ class _TreinoDetalhesPageState extends State<TreinoDetalhesPage> {
                 },
               ),
               const SizedBox(height: 16),
-              TextField(controller: _seriesController, decoration: const InputDecoration(labelText: "Séries (ex: 4x12)", prefixIcon: Icon(Icons.repeat))),
+              
+              // 2. LINHA COM SÉRIES E CARGA
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _seriesController, 
+                      decoration: const InputDecoration(labelText: "Séries (4x12)", prefixIcon: Icon(Icons.repeat))
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: _cargaController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: "Carga (kg)", prefixIcon: Icon(Icons.monitor_weight_outlined)),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
           actions: [
@@ -151,18 +170,29 @@ class _TreinoDetalhesPageState extends State<TreinoDetalhesPage> {
             ElevatedButton(
               onPressed: () async {
                 if (_nomeExercicioController.text.isEmpty) return;
+                
                 final collection = FirebaseFirestore.instance.collection('treinos').doc(widget.treinoId).collection('exercicios');
                 
+                // Dados a salvar
+                final dadosParaSalvar = {
+                  'nome': _nomeExercicioController.text,
+                  'series': _seriesController.text,
+                  'carga': _cargaController.text, // <--- SALVA A CARGA
+                };
+
                 if (isEditando) {
-                  await collection.doc(docId).update({ 'nome': _nomeExercicioController.text, 'series': _seriesController.text });
+                  await collection.doc(docId).update(dadosParaSalvar);
                 } else {
                   if (_linkVideoSelecionado == null) {
                      final match = _bibliotecaExercicios.firstWhere((e) => e['nome'].toLowerCase() == _nomeExercicioController.text.toLowerCase(), orElse: () => {});
                      if (match.isNotEmpty) _linkVideoSelecionado = match['video'];
                   }
+                  
                   await collection.add({
-                    'nome': _nomeExercicioController.text, 'series': _seriesController.text, 'concluido': false,
-                    'ordem': DateTime.now().millisecondsSinceEpoch, 'videoUrl': _linkVideoSelecionado,
+                    ...dadosParaSalvar,
+                    'concluido': false,
+                    'ordem': DateTime.now().millisecondsSinceEpoch,
+                    'videoUrl': _linkVideoSelecionado,
                   });
                   FirebaseFirestore.instance.collection('treinos').doc(widget.treinoId).update({'qtd_exercicios': FieldValue.increment(1)});
                 }
@@ -176,7 +206,7 @@ class _TreinoDetalhesPageState extends State<TreinoDetalhesPage> {
     );
   }
 
-  // --- Manutenção (Excluir/Editar Treino e Histórico) ---
+  // --- Manutenção ---
   Future<void> _excluirExercicio(String docId) async {
     await FirebaseFirestore.instance.collection('treinos').doc(widget.treinoId).collection('exercicios').doc(docId).delete();
     FirebaseFirestore.instance.collection('treinos').doc(widget.treinoId).update({'qtd_exercicios': FieldValue.increment(-1)});
@@ -221,7 +251,7 @@ class _TreinoDetalhesPageState extends State<TreinoDetalhesPage> {
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
         actions: [
-          IconButton(icon: const Icon(Icons.timer), tooltip: 'Descanso', onPressed: _mostrarSeletorTempo), // CHAMA O GLOBAL
+          IconButton(icon: const Icon(Icons.timer), tooltip: 'Descanso', onPressed: _mostrarSeletorTempo), 
           IconButton(icon: const Icon(Icons.edit), onPressed: _editarTreino),
           IconButton(icon: const Icon(Icons.delete_outline), onPressed: _excluirTreino),
         ],
@@ -248,20 +278,38 @@ class _TreinoDetalhesPageState extends State<TreinoDetalhesPage> {
                     final dados = doc.data() as Map<String, dynamic>;
                     final nome = dados['nome'] ?? 'Sem nome';
                     final series = dados['series'] ?? '-';
+                    final carga = dados['carga'] ?? '-'; // <--- LÊ A CARGA
                     final bool feito = dados['concluido'] ?? false;
                     final String? videoUrl = dados['videoUrl'];
 
                     return ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 8),
                       leading: Checkbox(value: feito, activeColor: Colors.blue, onChanged: (val) => FirebaseFirestore.instance.collection('treinos').doc(widget.treinoId).collection('exercicios').doc(doc.id).update({'concluido': val})),
+                      
                       title: Text(nome, style: TextStyle(fontWeight: FontWeight.bold, decoration: feito ? TextDecoration.lineThrough : null, color: feito ? Colors.grey : Colors.black)),
-                      subtitle: Text(series, style: TextStyle(color: Colors.grey[600])),
+                      
+                      // EXIBIÇÃO DA CARGA AQUI
+                      subtitle: Row(
+                        children: [
+                          Text(series, style: TextStyle(color: Colors.grey[600])),
+                          if (carga != '-' && carga != '') ...[
+                            const SizedBox(width: 8),
+                            Container(width: 4, height: 4, decoration: const BoxDecoration(color: Colors.grey, shape: BoxShape.circle)),
+                            const SizedBox(width: 8),
+                            const Icon(Icons.monitor_weight_outlined, size: 14, color: Colors.blue),
+                            const SizedBox(width: 4),
+                            Text("$carga kg", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+                          ]
+                        ],
+                      ),
+                      
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           if (videoUrl != null && videoUrl.isNotEmpty) IconButton(icon: const Icon(Icons.play_circle_fill, color: Colors.red, size: 30), tooltip: 'Ver execução', onPressed: () => _abrirVideo(videoUrl)),
                           PopupMenuButton<String>(
-                            onSelected: (v) => v == 'excluir' ? _excluirExercicio(doc.id) : _mostrarDialogoExercicio(docId: doc.id, nomeAtual: nome, seriesAtual: series),
+                            // Passa a cargaAtual para o dialogo
+                            onSelected: (v) => v == 'excluir' ? _excluirExercicio(doc.id) : _mostrarDialogoExercicio(docId: doc.id, nomeAtual: nome, seriesAtual: series, cargaAtual: carga),
                             itemBuilder: (context) => [const PopupMenuItem(value: 'editar', child: Text("Editar")), const PopupMenuItem(value: 'excluir', child: Text("Excluir", style: TextStyle(color: Colors.red)))],
                           ),
                         ],
@@ -272,7 +320,6 @@ class _TreinoDetalhesPageState extends State<TreinoDetalhesPage> {
               },
             ),
           ),
-          // REMOVIDO: A BARRA FLUTUANTE LOCAL SAIU DAQUI. ELA ESTÁ NO MAIN.DART AGORA.
           Padding(padding: const EdgeInsets.all(16.0), child: SizedBox(width: double.infinity, child: ElevatedButton(onPressed: _salvarHistorico, style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16), backgroundColor: Colors.green, foregroundColor: Colors.white), child: const Text("FINALIZAR TREINO")))),
         ],
       ),
