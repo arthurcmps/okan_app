@@ -7,6 +7,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'login_page.dart';
 import 'dashboard_chart.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'students_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -129,6 +130,18 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
         actions: [
+          // BOTÃO MODO PERSONAL (Novo)
+          IconButton(
+            icon: const Icon(Icons.work, color: Colors.black87), // Ícone de Maleta
+            tooltip: 'Área do Personal',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const StudentsPage()),
+              );
+            },
+          ),
+          
           IconButton(
             icon: const Icon(Icons.person),
             tooltip: 'Meu Perfil',
