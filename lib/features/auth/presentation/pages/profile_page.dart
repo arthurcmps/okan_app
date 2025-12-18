@@ -1,42 +1,55 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'library_admin_page.dart'; // Certifique-se que este arquivo existe
+import 'library_admin_page.dart';
 
 class ProfilePage extends StatefulWidget {
-  const ProfilePage({super.key});
+  final String? userId; // <--- NOVO: ID opcional (se vier, é modo espião)
+
+  const ProfilePage({super.key, this.userId});
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  // Controladores de texto
   final TextEditingController _pesoController = TextEditingController();
   final TextEditingController _objetivoController = TextEditingController();
-  
-  // Variável para guardar a data temporariamente enquanto edita
   DateTime? _dataNascimentoTemp;
 
-  // Função auxiliar para calcular idade
+  // Lógica para saber quem estamos vendo
+  late String _targetUserId;
+  late bool _isReadOnly; // Se for true, esconde botões de edição
+
+  @override
+  void initState() {
+    super.initState();
+    final currentUser = FirebaseAuth.instance.currentUser;
+    
+    // Se widget.userId foi passado, usamos ele. Se não, usamos o logado.
+    if (widget.userId != null) {
+      _targetUserId = widget.userId!;
+      _isReadOnly = true; // Estamos vendo outra pessoa, então só leitura
+    } else {
+      _targetUserId = currentUser?.uid ?? '';
+      _isReadOnly = false; // É meu próprio perfil, posso editar
+    }
+  }
+
   String _calcularIdade(DateTime? nascimento) {
     if (nascimento == null) return "--";
-    
     final hoje = DateTime.now();
     int idade = hoje.year - nascimento.year;
-    
-    // Verifica se já fez aniversário este ano
-    if (hoje.month < nascimento.month || 
-       (hoje.month == nascimento.month && hoje.day < nascimento.day)) {
+    if (hoje.month < nascimento.month || (hoje.month == nascimento.month && hoje.day < nascimento.day)) {
       idade--;
     }
-    
     return idade.toString();
   }
 
-  // Função para abrir o diálogo de edição
   void _editarPerfil(DateTime? nascimentoAtual, String? pesoAtual, String? objetivoAtual) {
-    // Inicializa os dados no diálogo
+    // Se for apenas leitura, não faz nada
+    if (_isReadOnly) return;
+
     _dataNascimentoTemp = nascimentoAtual;
     _pesoController.text = pesoAtual ?? "";
     _objetivoController.text = objetivoAtual ?? "";
@@ -52,7 +65,6 @@ class _ProfilePageState extends State<ProfilePage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // CAMPO DE DATA DE NASCIMENTO
                     ListTile(
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.cake, color: Colors.grey),
@@ -60,9 +72,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         _dataNascimentoTemp == null 
                           ? "Toque para escolher a data" 
                           : "Nascido em: ${_dataNascimentoTemp!.day}/${_dataNascimentoTemp!.month}/${_dataNascimentoTemp!.year}",
-                        style: TextStyle(
-                          color: _dataNascimentoTemp == null ? Colors.grey : Colors.black
-                        ),
+                        style: TextStyle(color: _dataNascimentoTemp == null ? Colors.grey : Colors.black),
                       ),
                       onTap: () async {
                         final dataEscolhida = await showDatePicker(
@@ -71,55 +81,27 @@ class _ProfilePageState extends State<ProfilePage> {
                           firstDate: DateTime(1940),
                           lastDate: DateTime.now(),
                         );
-                        
                         if (dataEscolhida != null) {
-                          setStateDialog(() {
-                            _dataNascimentoTemp = dataEscolhida;
-                          });
+                          setStateDialog(() => _dataNascimentoTemp = dataEscolhida);
                         }
                       },
                     ),
                     const Divider(),
-                    TextField(
-                      controller: _pesoController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: "Peso (kg)", 
-                        icon: Icon(Icons.monitor_weight)
-                      ),
-                    ),
-                    TextField(
-                      controller: _objetivoController,
-                      decoration: const InputDecoration(
-                        labelText: "Objetivo", 
-                        icon: Icon(Icons.flag)
-                      ),
-                    ),
+                    TextField(controller: _pesoController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Peso (kg)", icon: Icon(Icons.monitor_weight))),
+                    TextField(controller: _objetivoController, decoration: const InputDecoration(labelText: "Objetivo", icon: Icon(Icons.flag))),
                   ],
                 ),
               ),
               actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text("Cancelar"),
-                ),
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar")),
                 ElevatedButton(
                   onPressed: () async {
-                    final user = FirebaseAuth.instance.currentUser;
-                    if (user == null) return;
-
-                    // Salva no Firestore
-                    await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-                      'birthDate': _dataNascimentoTemp != null 
-                          ? Timestamp.fromDate(_dataNascimentoTemp!) 
-                          : null,
+                    await FirebaseFirestore.instance.collection('users').doc(_targetUserId).set({
+                      'birthDate': _dataNascimentoTemp != null ? Timestamp.fromDate(_dataNascimentoTemp!) : null,
                       'weight': double.tryParse(_pesoController.text.replaceAll(',', '.')) ?? 0.0,
                       'objectives': _objetivoController.text,
                       'lastUpdate': FieldValue.serverTimestamp(),
-                      'name': user.displayName ?? "Aluno",
-                      'email': user.email,
                     }, SetOptions(merge: true));
-
                     if (context.mounted) Navigator.pop(context);
                   },
                   child: const Text("Salvar"),
@@ -134,41 +116,37 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Meu Perfil"),
-        backgroundColor: Colors.blue,
+        title: Text(_isReadOnly ? "Perfil do Aluno" : "Meu Perfil"),
+        backgroundColor: _isReadOnly ? Colors.black87 : Colors.blue, // Cor muda para diferenciar
         foregroundColor: Colors.white,
       ),
       body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance.collection('users').doc(user?.uid).snapshots(),
+        stream: FirebaseFirestore.instance.collection('users').doc(_targetUserId).snapshots(),
         builder: (context, snapshotUser) {
-          
           String idadeCalculada = "--";
           DateTime? dataNascimento;
           String peso = "--";
-          String objetivo = "Definir objetivo";
+          String objetivo = "Não definido";
+          String nomeUser = "Usuário";
           
           if (snapshotUser.hasData && snapshotUser.data!.exists) {
             final data = snapshotUser.data!.data() as Map<String, dynamic>;
-            
+            nomeUser = data['name'] ?? "Usuário";
             if (data['birthDate'] != null) {
               final Timestamp t = data['birthDate'];
               dataNascimento = t.toDate();
               idadeCalculada = _calcularIdade(dataNascimento);
             }
-
             peso = data['weight']?.toString() ?? "--";
-            objetivo = data['objectives']?.toString() ?? "Definir objetivo";
+            objetivo = data['objectives']?.toString() ?? "Não definido";
           }
 
           return Column(
             children: [
-              // --- PARTE 1: HEADER AZUL ---
               Container(
-                color: Colors.blue.shade50,
+                color: _isReadOnly ? Colors.grey.shade200 : Colors.blue.shade50, // Fundo muda também
                 padding: const EdgeInsets.all(24),
                 child: Column(
                   children: [
@@ -176,31 +154,24 @@ class _ProfilePageState extends State<ProfilePage> {
                       children: [
                         CircleAvatar(
                           radius: 35,
-                          backgroundColor: Colors.blue,
-                          child: Text(
-                            user?.displayName?.substring(0, 1).toUpperCase() ?? "A",
-                            style: const TextStyle(fontSize: 30, color: Colors.white),
-                          ),
+                          backgroundColor: _isReadOnly ? Colors.grey : Colors.blue,
+                          child: Text(nomeUser.isNotEmpty ? nomeUser[0].toUpperCase() : "U", style: const TextStyle(fontSize: 30, color: Colors.white)),
                         ),
                         const SizedBox(width: 16),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                user?.displayName ?? "Atleta",
-                                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                              ),
-                              InkWell(
-                                onTap: () => _editarPerfil(dataNascimento, peso, objetivo),
-                                child: const Row(
-                                  children: [
-                                    Icon(Icons.edit, size: 14, color: Colors.blue),
-                                    SizedBox(width: 4),
-                                    Text("Editar Perfil", style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
-                                  ],
-                                ),
-                              )
+                              Text(nomeUser, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                              
+                              // SÓ MOSTRA O LINK DE EDITAR SE NÃO FOR SOMENTE LEITURA
+                              if (!_isReadOnly)
+                                InkWell(
+                                  onTap: () => _editarPerfil(dataNascimento, peso, objetivo),
+                                  child: const Row(
+                                    children: [Icon(Icons.edit, size: 14, color: Colors.blue), SizedBox(width: 4), Text("Editar Perfil", style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold))],
+                                  ),
+                                )
                             ],
                           ),
                         ),
@@ -221,44 +192,38 @@ class _ProfilePageState extends State<ProfilePage> {
 
               const SizedBox(height: 16),
 
-              // --- PARTE 2: BOTÃO NOVO DE ADMIN (Inserido aqui!) ---
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: ListTile(
-                  tileColor: Colors.purple.shade50,
-                  leading: const Icon(Icons.admin_panel_settings, color: Colors.purple),
-                  title: const Text("Gerenciar Biblioteca (Admin)"),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const LibraryAdminPage()),
-                    );
-                  },
+              // SÓ MOSTRA O BOTÃO DE ADMIN SE FOR O DONO DO PERFIL
+              if (!_isReadOnly)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: ListTile(
+                    tileColor: Colors.purple.shade50,
+                    leading: const Icon(Icons.admin_panel_settings, color: Colors.purple),
+                    title: const Text("Gerenciar Biblioteca (Admin)"),
+                    trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LibraryAdminPage())),
+                  ),
                 ),
-              ),
-              // -----------------------------------------------------
 
-              const Padding(
-                padding: EdgeInsets.all(16.0),
+              Padding(
+                padding: const EdgeInsets.all(16.0),
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  child: Text("Histórico de Treinos", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  child: Text(_isReadOnly ? "Histórico do Aluno" : "Histórico de Treinos", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 ),
               ),
               
-              // --- PARTE 3: LISTA DE HISTÓRICO ---
               Expanded(
                 child: StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance
                       .collection('historico')
-                      .where('usuarioId', isEqualTo: user?.uid)
+                      .where('usuarioId', isEqualTo: _targetUserId) // Pega o histórico do ALVO
                       .orderBy('data', descending: true)
                       .snapshots(),
                   builder: (context, snapshotHist) {
                     if (!snapshotHist.hasData || snapshotHist.data!.docs.isEmpty) {
-                      return const Center(child: Text("Sem treinos registrados."));
+                      return const Center(child: Text("Nenhum histórico encontrado."));
                     }
                     final historico = snapshotHist.data!.docs;
                     return ListView.builder(

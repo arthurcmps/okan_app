@@ -10,7 +10,8 @@ import 'train_page.dart';
 import 'profile_page.dart';
 import 'login_page.dart';
 import 'dashboard_chart.dart';
-import 'students_page.dart'; // <--- Não esqueça de importar a página de alunos
+import 'students_page.dart';
+import 'chat_page.dart'; // <--- IMPORTANTE: Importe o Chat
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -20,7 +21,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  // Controladores
+  // Controladores para criar treino
   final TextEditingController _nomeController = TextEditingController();
   final TextEditingController _grupoController = TextEditingController();
 
@@ -30,7 +31,7 @@ class _HomePageState extends State<HomePage> {
     initializeDateFormatting('pt_BR', null);
   }
 
-  // --- FUNÇÕES DE CONVITE (NOVO) ---
+  // --- FUNÇÕES DE CONVITE (Lógica de aceitar/recusar vínculo) ---
   Future<void> _responderConvite(String personalId, String personalName, bool aceitar) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -166,56 +167,82 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
         actions: [
-          // --- SINO DE NOTIFICAÇÃO (Aqui está a mágica) ---
+          // USAMOS UM ÚNICO STREAMBUILDER PARA LER OS DADOS DO USUÁRIO E CONTROLAR OS ÍCONES
           StreamBuilder<DocumentSnapshot>(
             stream: FirebaseFirestore.instance.collection('users').doc(user?.uid).snapshots(),
             builder: (context, snapshot) {
               if (!snapshot.hasData || !snapshot.data!.exists) return const SizedBox();
               
               final dados = snapshot.data!.data() as Map<String, dynamic>;
-              // Verifica se o campo existe e não é nulo
+              
+              // Verifica se tem convite pendente
               final temConvite = dados.containsKey('inviteFromPersonalId') && dados['inviteFromPersonalId'] != null;
+              
+              // Verifica se JÁ TEM personal (para mostrar o chat)
+              final personalId = dados['personalId'];
+              final personalName = dados['personalName'];
+              final temPersonal = personalId != null && personalId.toString().isNotEmpty;
 
-              if (temConvite) {
-                final pName = dados['inviteFromPersonalName'] ?? 'Personal';
-                final pId = dados['inviteFromPersonalId'];
-                
-                return IconButton(
-                  icon: Stack(
-                    children: [
-                      const Icon(Icons.notifications, color: Colors.black87, size: 28),
-                      Positioned(
-                        right: 0, top: 0,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                          constraints: const BoxConstraints(minWidth: 10, minHeight: 10),
-                        ),
-                      )
-                    ],
-                  ),
-                  tooltip: 'Convite pendente',
-                  onPressed: () => _mostrarDialogoConvite(pId, pName),
-                );
-              }
-              return const SizedBox();
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 1. ÍCONE DE CHAT (Se tiver Personal)
+                  if (temPersonal)
+                    IconButton(
+                      icon: const Icon(Icons.chat, color: Colors.teal),
+                      tooltip: 'Falar com Personal',
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ChatPage(
+                              otherUserId: personalId,
+                              otherUserName: personalName ?? 'Personal',
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+
+                  // 2. ÍCONE DE NOTIFICAÇÃO (Se tiver Convite)
+                  if (temConvite)
+                    IconButton(
+                      icon: Stack(
+                        children: [
+                          const Icon(Icons.notifications, color: Colors.black87, size: 28),
+                          Positioned(
+                            right: 0, top: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                              constraints: const BoxConstraints(minWidth: 10, minHeight: 10),
+                            ),
+                          )
+                        ],
+                      ),
+                      tooltip: 'Convite pendente',
+                      onPressed: () => _mostrarDialogoConvite(dados['inviteFromPersonalId'], dados['inviteFromPersonalName']),
+                    ),
+                ],
+              );
             },
           ),
-          // ------------------------------------------------
-
-          // Botão Maleta (Personal)
+          
+          // Botão Maleta (Área do Personal)
           IconButton(
             icon: const Icon(Icons.work, color: Colors.black87),
             tooltip: 'Área do Personal',
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const StudentsPage())),
           ),
           
+          // Botão Perfil
           IconButton(
             icon: const Icon(Icons.person),
             tooltip: 'Meu Perfil',
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ProfilePage())),
           ),
           
+          // Botão Logout
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.red),
             tooltip: 'Sair',
