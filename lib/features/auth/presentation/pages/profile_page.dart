@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'library_admin_page.dart'; // Certifique-se que este arquivo existe
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -43,7 +44,6 @@ class _ProfilePageState extends State<ProfilePage> {
     showDialog(
       context: context,
       builder: (context) {
-        // StatefulBuilder permite atualizar a tela DO DIÁLOGO (para mostrar a data selecionada)
         return StatefulBuilder(
           builder: (context, setStateDialog) {
             return AlertDialog(
@@ -73,7 +73,6 @@ class _ProfilePageState extends State<ProfilePage> {
                         );
                         
                         if (dataEscolhida != null) {
-                          // Atualiza visualmente o diálogo
                           setStateDialog(() {
                             _dataNascimentoTemp = dataEscolhida;
                           });
@@ -111,7 +110,6 @@ class _ProfilePageState extends State<ProfilePage> {
 
                     // Salva no Firestore
                     await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-                      // Salvamos a DATA, não a idade fixa
                       'birthDate': _dataNascimentoTemp != null 
                           ? Timestamp.fromDate(_dataNascimentoTemp!) 
                           : null,
@@ -156,7 +154,6 @@ class _ProfilePageState extends State<ProfilePage> {
           if (snapshotUser.hasData && snapshotUser.data!.exists) {
             final data = snapshotUser.data!.data() as Map<String, dynamic>;
             
-            // Lógica de Data
             if (data['birthDate'] != null) {
               final Timestamp t = data['birthDate'];
               dataNascimento = t.toDate();
@@ -169,12 +166,12 @@ class _ProfilePageState extends State<ProfilePage> {
 
           return Column(
             children: [
+              // --- PARTE 1: HEADER AZUL ---
               Container(
                 color: Colors.blue.shade50,
                 padding: const EdgeInsets.all(24),
                 child: Column(
                   children: [
-                    // Avatar e Nome
                     Row(
                       children: [
                         CircleAvatar(
@@ -210,11 +207,10 @@ class _ProfilePageState extends State<ProfilePage> {
                       ],
                     ),
                     const SizedBox(height: 24),
-                    // STATUS COM CÁLCULO AUTOMÁTICO
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
-                        _buildStatItem("Idade", "$idadeCalculada anos"), // Idade calculada aqui
+                        _buildStatItem("Idade", "$idadeCalculada anos"),
                         _buildStatItem("Peso", "$peso kg"),
                         _buildStatItem("Objetivo", objetivo),
                       ],
@@ -222,6 +218,27 @@ class _ProfilePageState extends State<ProfilePage> {
                   ],
                 ),
               ),
+
+              const SizedBox(height: 16),
+
+              // --- PARTE 2: BOTÃO NOVO DE ADMIN (Inserido aqui!) ---
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: ListTile(
+                  tileColor: Colors.purple.shade50,
+                  leading: const Icon(Icons.admin_panel_settings, color: Colors.purple),
+                  title: const Text("Gerenciar Biblioteca (Admin)"),
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const LibraryAdminPage()),
+                    );
+                  },
+                ),
+              ),
+              // -----------------------------------------------------
 
               const Padding(
                 padding: EdgeInsets.all(16.0),
@@ -231,7 +248,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
               ),
               
-              // A lista de histórico continua aqui (mantive a parte visual reduzida para focar na mudança da idade)
+              // --- PARTE 3: LISTA DE HISTÓRICO ---
               Expanded(
                 child: StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance
