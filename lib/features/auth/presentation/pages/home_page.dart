@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:intl/intl.dart'; 
+import 'package:intl/date_symbol_data_local.dart';
+
+// Imports das suas páginas
 import 'train_page.dart';
 import 'profile_page.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'login_page.dart';
 import 'dashboard_chart.dart';
-import 'package:intl/date_symbol_data_local.dart';
-import 'students_page.dart';
+import 'students_page.dart'; // <--- Não esqueça de importar a página de alunos
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -21,7 +24,67 @@ class _HomePageState extends State<HomePage> {
   final TextEditingController _nomeController = TextEditingController();
   final TextEditingController _grupoController = TextEditingController();
 
-  // Função para criar novo treino
+  @override
+  void initState() {
+    super.initState();
+    initializeDateFormatting('pt_BR', null);
+  }
+
+  // --- FUNÇÕES DE CONVITE (NOVO) ---
+  Future<void> _responderConvite(String personalId, String personalName, bool aceitar) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      if (aceitar) {
+        // Aceitou: Define o personalId e limpa o convite
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+          'personalId': personalId,
+          'personalName': personalName,
+          'inviteFromPersonalId': FieldValue.delete(),
+          'inviteFromPersonalName': FieldValue.delete(),
+        });
+        if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Convite aceito! 🤝"), backgroundColor: Colors.green));
+      } else {
+        // Recusou: Apenas limpa o convite
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+          'inviteFromPersonalId': FieldValue.delete(),
+          'inviteFromPersonalName': FieldValue.delete(),
+        });
+        if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Convite recusado.")));
+      }
+    } catch (e) {
+      debugPrint("Erro ao responder convite: $e");
+    }
+  }
+
+  void _mostrarDialogoConvite(String personalId, String personalName) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Convite de Personal 🏋️"),
+        content: Text("$personalName quer ser seu treinador.\nAceitar vínculo?"),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _responderConvite(personalId, personalName, false);
+            },
+            child: const Text("Recusar", style: TextStyle(color: Colors.red)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _responderConvite(personalId, personalName, true);
+            },
+            child: const Text("Aceitar"),
+          ),
+        ],
+      ),
+    );
+  }
+  // ---------------------------------
+
   void _mostrarDialogoCriar() {
     showDialog(
       context: context,
@@ -42,25 +105,19 @@ class _HomePageState extends State<HomePage> {
             ],
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Cancelar"),
-            ),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar")),
             ElevatedButton(
               onPressed: () async {
                 final user = FirebaseAuth.instance.currentUser;
-                
-                // SEGURANÇA: Só cria se tiver usuário logado
                 if (user == null) return; 
 
-                // 1. Salva no Firebase COM O ID DO DONO
                 await FirebaseFirestore.instance.collection('treinos').add({
-                  'userId': user.uid, // <--- O SEGREDO ESTÁ AQUI 
+                  'userId': user.uid,
                   'nome': _nomeController.text.isNotEmpty ? _nomeController.text : 'Treino Novo',
                   'grupo': _grupoController.text.isNotEmpty ? _grupoController.text : 'Geral',
                   'qtd_exercicios': 0,
                   'duracao': '?? min',
-                  'criadoEm': FieldValue.serverTimestamp(), // Para ordenar depois
+                  'criadoEm': FieldValue.serverTimestamp(),
                 });
 
                 _nomeController.clear();
@@ -76,28 +133,15 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // Função de Logout completa
   Future<void> _fazerLogout() async {
     try {
-      // 1. Deslogar do Google (se estiver logado)
-      await GoogleSignIn().signOut();
-      
-      // 2. Deslogar do Firebase
+      try { await GoogleSignIn().signOut(); } catch (e) { debugPrint("Erro Google: $e"); }
       await FirebaseAuth.instance.signOut();
-      
       if (mounted) {
-        // 3. A CORREÇÃO: Navegar para Login e REMOVER tudo que ficou para trás
-        // Isso impede que o app feche ou que o botão "voltar" funcione
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginPage()),
-          (Route<dynamic> route) => false, // A regra "false" remove todas as rotas anteriores
-        );
+        Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const LoginPage()), (route) => false);
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao sair: $e')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao sair: $e')));
     }
   }
 
@@ -105,11 +149,6 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
     final nomeUsuario = user?.displayName ?? "Atleta";
-
-  void initState() {
-   super.initState();
-  initializeDateFormatting('pt_BR', null); // <--- Adicione isso para o gráfico funcionar em PT
-}
 
     return Scaffold(
       appBar: AppBar(
@@ -120,38 +159,63 @@ class _HomePageState extends State<HomePage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Olá, ${nomeUsuario.split(' ')[0]}', // Pega só o primeiro nome
+              'Olá, ${nomeUsuario.split(' ')[0]}',
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
-            Text(
-              'Bora treinar?',
-              style: TextStyle(fontSize: 14, color: Colors.grey[700], fontWeight: FontWeight.normal),
-            ),
+            Text('Bora treinar?', style: TextStyle(fontSize: 14, color: Colors.grey[700], fontWeight: FontWeight.normal)),
           ],
         ),
         actions: [
-          // BOTÃO MODO PERSONAL (Novo)
-          IconButton(
-            icon: const Icon(Icons.work, color: Colors.black87), // Ícone de Maleta
-            tooltip: 'Área do Personal',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const StudentsPage()),
-              );
+          // --- SINO DE NOTIFICAÇÃO (Aqui está a mágica) ---
+          StreamBuilder<DocumentSnapshot>(
+            stream: FirebaseFirestore.instance.collection('users').doc(user?.uid).snapshots(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData || !snapshot.data!.exists) return const SizedBox();
+              
+              final dados = snapshot.data!.data() as Map<String, dynamic>;
+              // Verifica se o campo existe e não é nulo
+              final temConvite = dados.containsKey('inviteFromPersonalId') && dados['inviteFromPersonalId'] != null;
+
+              if (temConvite) {
+                final pName = dados['inviteFromPersonalName'] ?? 'Personal';
+                final pId = dados['inviteFromPersonalId'];
+                
+                return IconButton(
+                  icon: Stack(
+                    children: [
+                      const Icon(Icons.notifications, color: Colors.black87, size: 28),
+                      Positioned(
+                        right: 0, top: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                          constraints: const BoxConstraints(minWidth: 10, minHeight: 10),
+                        ),
+                      )
+                    ],
+                  ),
+                  tooltip: 'Convite pendente',
+                  onPressed: () => _mostrarDialogoConvite(pId, pName),
+                );
+              }
+              return const SizedBox();
             },
+          ),
+          // ------------------------------------------------
+
+          // Botão Maleta (Personal)
+          IconButton(
+            icon: const Icon(Icons.work, color: Colors.black87),
+            tooltip: 'Área do Personal',
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const StudentsPage())),
           ),
           
           IconButton(
             icon: const Icon(Icons.person),
             tooltip: 'Meu Perfil',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const ProfilePage()),
-              );
-            },
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ProfilePage())),
           ),
+          
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.red),
             tooltip: 'Sair',
@@ -167,24 +231,18 @@ class _HomePageState extends State<HomePage> {
           children: [
             const DashboardChart(),
             const SizedBox(height: 24),
-            const Text(
-              'Seus Treinos',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
+
+            const Text('Seus Treinos', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
 
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
-                // FILTRO DE SEGURANÇA: Traz apenas treinos do meu ID
                 stream: FirebaseFirestore.instance
                     .collection('treinos')
                     .where('userId', isEqualTo: user?.uid) 
-                    // .orderBy('criadoEm', descending: true) // Se descomentar, vai pedir índice!
                     .snapshots(),
                 builder: (context, snapshot) {
-                  if (snapshot.hasError) return Center(child: Text('Erro: ${snapshot.error}'));
                   if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-
                   final dados = snapshot.data?.docs;
                   
                   if (dados == null || dados.isEmpty) {
@@ -195,7 +253,6 @@ class _HomePageState extends State<HomePage> {
                           Icon(Icons.fitness_center, size: 60, color: Colors.grey[300]),
                           const SizedBox(height: 16),
                           const Text('Nenhum treino encontrado.', style: TextStyle(color: Colors.grey)),
-                          const Text('Clique no (+) para criar o seu primeiro!', style: TextStyle(color: Colors.grey)),
                         ],
                       ),
                     );
@@ -216,16 +273,7 @@ class _HomePageState extends State<HomePage> {
                         child: InkWell(
                           borderRadius: BorderRadius.circular(16),
                           onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => TreinoDetalhesPage(
-                                  nomeTreino: nome,
-                                  grupoMuscular: grupo,
-                                  treinoId: dados[index].id,
-                                ),
-                              ),
-                            );
+                            Navigator.push(context, MaterialPageRoute(builder: (context) => TreinoDetalhesPage(nomeTreino: nome, grupoMuscular: grupo, treinoId: dados[index].id)));
                           },
                           child: Padding(
                             padding: const EdgeInsets.all(16.0),
