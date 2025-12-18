@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'student_detail_page.dart';
-import 'chat_page.dart';
+import 'chat_page.dart'; // <--- IMPORTANTE: Chat importado
 
 class StudentsPage extends StatefulWidget {
   const StudentsPage({super.key});
@@ -15,7 +15,7 @@ class _StudentsPageState extends State<StudentsPage> {
   final TextEditingController _emailController = TextEditingController();
   bool _isLoading = false;
 
-  // --- Lógica de Enviar Convite (Mantida igual) ---
+  // --- Lógica de Enviar Convite ---
   Future<void> _enviarConvite() async {
     if (_emailController.text.isEmpty) return;
 
@@ -114,7 +114,7 @@ class _StudentsPageState extends State<StudentsPage> {
     );
   }
 
-  // --- Lógica de Desvincular (Agora chamada pelo ícone de lixeira) ---
+  // --- Lógica de Desvincular ---
   void _removerAluno(String alunoId, String nome) {
     showDialog(
       context: context,
@@ -180,12 +180,14 @@ class _StudentsPageState extends State<StudentsPage> {
               
               final String nome = dados['name'] ?? 'Aluno';
               final String email = dados['email'] ?? '';
+              
+              // --- VERIFICA SE TEM MENSAGEM NÃO LIDA ---
+              final bool temMensagem = dados['unreadByPersonal'] == true;
 
               return Card(
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 elevation: 2,
                 child: ListTile(
-                  // Ícone ou Foto do Aluno à esquerda
                   leading: CircleAvatar(
                     backgroundColor: Colors.black12,
                     child: Text(
@@ -197,7 +199,7 @@ class _StudentsPageState extends State<StudentsPage> {
                   title: Text(nome, style: const TextStyle(fontWeight: FontWeight.bold)),
                   subtitle: Text(email),
                   
-                  // 1. AÇÃO DE NAVEGAR (Clique Simples)
+                  // Ação de Navegar (Perfil/Treinos)
                   onTap: () {
                     Navigator.push(
                       context,
@@ -211,13 +213,26 @@ class _StudentsPageState extends State<StudentsPage> {
                     );
                   },
 
-                  // 2. AÇÕES (CHAT + EXCLUIR)
+                  // Ações (Chat + Excluir)
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Botão Chat
+                      // --- BOTÃO DE CHAT COM NOTIFICAÇÃO ---
                       IconButton(
-                        icon: const Icon(Icons.chat_bubble_outline, color: Colors.teal),
+                        icon: Stack(
+                          children: [
+                            const Icon(Icons.chat_bubble_outline, color: Colors.teal),
+                            if (temMensagem) // <--- MOSTRA A BOLINHA VERMELHA
+                              Positioned(
+                                right: 0, top: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                                  constraints: const BoxConstraints(minWidth: 10, minHeight: 10),
+                                ),
+                              ),
+                          ],
+                        ),
                         tooltip: 'Enviar mensagem',
                         onPressed: () {
                           Navigator.push(
@@ -226,12 +241,14 @@ class _StudentsPageState extends State<StudentsPage> {
                               builder: (context) => ChatPage(
                                 otherUserId: doc.id,
                                 otherUserName: nome,
+                                studentId: doc.id, // <--- Importante: Passa o ID do aluno
                               ),
                             ),
                           );
                         },
                       ),
-                      // Botão Excluir
+                      
+                      // --- BOTÃO DE EXCLUIR ---
                       IconButton(
                         icon: const Icon(Icons.delete_outline, color: Colors.red),
                         tooltip: 'Desvincular aluno',

@@ -167,7 +167,6 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
         actions: [
-          // USAMOS UM ÚNICO STREAMBUILDER PARA LER OS DADOS DO USUÁRIO E CONTROLAR OS ÍCONES
           StreamBuilder<DocumentSnapshot>(
             stream: FirebaseFirestore.instance.collection('users').doc(user?.uid).snapshots(),
             builder: (context, snapshot) {
@@ -175,21 +174,37 @@ class _HomePageState extends State<HomePage> {
               
               final dados = snapshot.data!.data() as Map<String, dynamic>;
               
-              // Verifica se tem convite pendente
+              // Verifica convite
               final temConvite = dados.containsKey('inviteFromPersonalId') && dados['inviteFromPersonalId'] != null;
               
-              // Verifica se JÁ TEM personal (para mostrar o chat)
+              // Verifica Personal
               final personalId = dados['personalId'];
               final personalName = dados['personalName'];
               final temPersonal = personalId != null && personalId.toString().isNotEmpty;
 
+              // --- NOVA LÓGICA DE NOTIFICAÇÃO ---
+              final bool temMensagemNaoLida = dados['unreadByStudent'] == true;
+
               return Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // 1. ÍCONE DE CHAT (Se tiver Personal)
+                  // ÍCONE DE CHAT COM BOLINHA
                   if (temPersonal)
                     IconButton(
-                      icon: const Icon(Icons.chat, color: Colors.teal),
+                      icon: Stack(
+                        children: [
+                          const Icon(Icons.chat, color: Colors.teal),
+                          if (temMensagemNaoLida) // <--- MOSTRA A BOLINHA
+                            Positioned(
+                              right: 0, top: 0,
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                                constraints: const BoxConstraints(minWidth: 10, minHeight: 10),
+                              ),
+                            )
+                        ],
+                      ),
                       tooltip: 'Falar com Personal',
                       onPressed: () {
                         Navigator.push(
@@ -198,6 +213,7 @@ class _HomePageState extends State<HomePage> {
                             builder: (context) => ChatPage(
                               otherUserId: personalId,
                               otherUserName: personalName ?? 'Personal',
+                              studentId: user!.uid, // <--- Sou o aluno, passo meu ID
                             ),
                           ),
                         );
