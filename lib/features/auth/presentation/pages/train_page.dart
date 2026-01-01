@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/services/time_service.dart';
+import '../../../../core/widgets/universal_video_player.dart';
 
 class TreinoDetalhesPage extends StatefulWidget {
   final String nomeTreino;
@@ -92,11 +93,39 @@ class _TreinoDetalhesPageState extends State<TreinoDetalhesPage> {
     } catch (e) { debugPrint("Erro biblioteca: $e"); }
   }
 
-  Future<void> _abrirVideo(String url) async {
-    final Uri uri = Uri.parse(url);
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erro ao abrir vídeo.')));
-    }
+  void _abrirVideo(String url) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: Colors.black, // Fundo preto para cinema
+          insetPadding: EdgeInsets.zero, // Ocupa quase a tela toda se quiser
+          child: Stack(
+            children: [
+              // O PLAYER
+              SizedBox(
+                width: double.infinity,
+                height: 300, // Altura fixa ou use AspectRatio
+                child: UniversalVideoPlayer(videoUrl: url),
+              ),
+              
+              // BOTÃO DE FECHAR (X)
+              Positioned(
+                top: 10,
+                right: 10,
+                child: CircleAvatar(
+                  backgroundColor: Colors.black54,
+                  child: IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   void _mostrarDialogoExercicio({String? docId, String? nomeAtual, String? seriesAtual, String? cargaAtual}) {

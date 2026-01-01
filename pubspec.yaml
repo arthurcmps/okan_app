@@ -31,6 +31,11 @@ dependencies:
   flutter:
     sdk: flutter
 
+  #Vídeos
+  youtube_player_flutter: ^9.0.1
+  video_player: ^2.8.1
+  chewie: ^1.7.1
+
   # Ícones do Material Design
   cupertino_icons: ^1.0.8
 
