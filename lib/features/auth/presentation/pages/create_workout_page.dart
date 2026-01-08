@@ -3,7 +3,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class CreateWorkoutPage extends StatefulWidget {
-  const CreateWorkoutPage({super.key});
+  final String? treinoId; // Se vier, é edição
+  final Map<String, dynamic>? treinoDados; // Dados para preencher
+
+  const CreateWorkoutPage({
+    super.key,
+    this.treinoId,
+    this.treinoDados,
+  });
 
   @override
   State<CreateWorkoutPage> createState() => _CreateWorkoutPageState();
@@ -16,6 +23,21 @@ class _CreateWorkoutPageState extends State<CreateWorkoutPage> {
   final List<Map<String, dynamic>> _exerciciosSelecionados = [];
   bool _isLoading = false;
 
+  @override
+  void initState() {
+    super.initState();
+    // Se for edição, preenche os campos
+    if (widget.treinoDados != null) {
+      _nomeTreinoController.text = widget.treinoDados!['nome'] ?? '';
+      _grupoMuscularController.text = widget.treinoDados!['grupoMuscular'] ?? '';
+      if (widget.treinoDados!['exercicios'] != null) {
+        _exerciciosSelecionados.addAll(
+          List<Map<String, dynamic>>.from(widget.treinoDados!['exercicios']),
+        );
+      }
+    }
+  }
+
   Future<void> _salvarTreino() async {
     if (!_formKey.currentState!.validate()) return;
     if (_exerciciosSelecionados.isEmpty) {
@@ -24,18 +46,40 @@ class _CreateWorkoutPageState extends State<CreateWorkoutPage> {
     }
 
     setState(() => _isLoading = true);
+    final user = FirebaseAuth.instance.currentUser;
+
     try {
-      await FirebaseFirestore.instance.collection('workouts').add({
-        'personalId': FirebaseAuth.instance.currentUser?.uid,
+      final dadosTreino = {
         'nome': _nomeTreinoController.text.trim(),
         'grupoMuscular': _grupoMuscularController.text.trim(),
         'exercicios': _exerciciosSelecionados,
-        'criadoEm': FieldValue.serverTimestamp(),
-      });
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Treino Criado!"), backgroundColor: Colors.green));
+        // Mantém o 'criadoEm' se for edição, ou cria novo se for criação
+        'criadoEm': widget.treinoId != null ? widget.treinoDados!['criadoEm'] : FieldValue.serverTimestamp(),
+        'atualizadoEm': FieldValue.serverTimestamp(),
+        'personalId': user?.uid, // Garante que o dono é mantido
+      };
+
+      if (widget.treinoId != null) {
+        // --- MODO EDIÇÃO: ATUALIZA ---
+        await FirebaseFirestore.instance
+            .collection('workouts')
+            .doc(widget.treinoId)
+            .update(dadosTreino);
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Treino atualizado!")));
+        }
+      } else {
+        // --- MODO CRIAÇÃO: ADICIONA ---
+        await FirebaseFirestore.instance.collection('workouts').add(dadosTreino);
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Treino criado!")));
+        }
       }
+
+      if (mounted) Navigator.pop(context);
+
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro: $e")));
     } finally {
@@ -47,6 +91,7 @@ class _CreateWorkoutPageState extends State<CreateWorkoutPage> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) {
         return DraggableScrollableSheet(
           initialChildSize: 0.8,
@@ -55,15 +100,13 @@ class _CreateWorkoutPageState extends State<CreateWorkoutPage> {
           builder: (context, scrollController) {
             return Column(
               children: [
-                const Padding(padding: EdgeInsets.all(16), child: Text("Selecione um Exercício", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+                const Padding(padding: EdgeInsets.all(16), child: Text("Selecione da Biblioteca", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
                 Expanded(
                   child: StreamBuilder<QuerySnapshot>(
-                    // AQUI ESTÁ O SEGREDO: Buscando de 'exercises'
                     stream: FirebaseFirestore.instance.collection('exercises').orderBy('nome').snapshots(),
                     builder: (context, snapshot) {
                       if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-                      if (snapshot.data!.docs.isEmpty) return const Center(child: Text("Nenhum exercício cadastrado na biblioteca."));
-
+                      
                       return ListView.builder(
                         controller: scrollController,
                         itemCount: snapshot.data!.docs.length,
@@ -94,6 +137,7 @@ class _CreateWorkoutPageState extends State<CreateWorkoutPage> {
   void _configurarSeries(Map<String, dynamic> exercicio) {
     final seriesCtrl = TextEditingController(text: "3");
     final repsCtrl = TextEditingController(text: "12");
+    final obsCtrl = TextEditingController();
     
     showDialog(
       context: context,
@@ -104,6 +148,7 @@ class _CreateWorkoutPageState extends State<CreateWorkoutPage> {
           children: [
             TextField(controller: seriesCtrl, decoration: const InputDecoration(labelText: "Séries"), keyboardType: TextInputType.number),
             TextField(controller: repsCtrl, decoration: const InputDecoration(labelText: "Repetições"), keyboardType: TextInputType.number),
+            TextField(controller: obsCtrl, decoration: const InputDecoration(labelText: "Observação (Opcional)")),
           ],
         ),
         actions: [
@@ -116,6 +161,7 @@ class _CreateWorkoutPageState extends State<CreateWorkoutPage> {
                   'videoUrl': exercicio['videoUrl'] ?? '',
                   'series': seriesCtrl.text,
                   'repeticoes': repsCtrl.text,
+                  'observacao': obsCtrl.text,
                 });
               });
               Navigator.pop(context);
@@ -129,8 +175,10 @@ class _CreateWorkoutPageState extends State<CreateWorkoutPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isEditing = widget.treinoId != null;
+
     return Scaffold(
-      appBar: AppBar(title: const Text("Criar Treino")),
+      appBar: AppBar(title: Text(isEditing ? "Editar Treino" : "Criar Treino")),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Form(
@@ -139,8 +187,9 @@ class _CreateWorkoutPageState extends State<CreateWorkoutPage> {
             children: [
               TextFormField(controller: _nomeTreinoController, decoration: const InputDecoration(labelText: "Nome do Treino"), validator: (v) => v!.isEmpty ? "Obrigatório" : null),
               const SizedBox(height: 10),
-              TextFormField(controller: _grupoMuscularController, decoration: const InputDecoration(labelText: "Grupo Muscular")),
+              TextFormField(controller: _grupoMuscularController, decoration: const InputDecoration(labelText: "Grupo Muscular (Ex: Costas)")),
               const SizedBox(height: 20),
+              
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -148,6 +197,8 @@ class _CreateWorkoutPageState extends State<CreateWorkoutPage> {
                   IconButton(icon: const Icon(Icons.add_box, size: 30, color: Colors.blue), onPressed: _adicionarExercicioModal),
                 ],
               ),
+              const Divider(),
+              
               Expanded(
                 child: ReorderableListView(
                   onReorder: (oldIndex, newIndex) {
@@ -160,15 +211,28 @@ class _CreateWorkoutPageState extends State<CreateWorkoutPage> {
                   children: [
                     for (int i = 0; i < _exerciciosSelecionados.length; i++)
                       ListTile(
-                        key: ValueKey(i),
+                        key: ValueKey("ex_$i${_exerciciosSelecionados[i]['nome']}"), // Chave única
+                        tileColor: Colors.grey.shade50,
+                        leading: CircleAvatar(child: Text("${i + 1}")),
                         title: Text(_exerciciosSelecionados[i]['nome']),
                         subtitle: Text("${_exerciciosSelecionados[i]['series']}x ${_exerciciosSelecionados[i]['repeticoes']}"),
-                        trailing: IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => setState(() => _exerciciosSelecionados.removeAt(i))),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red), 
+                          onPressed: () => setState(() => _exerciciosSelecionados.removeAt(i))
+                        ),
                       )
                   ],
                 ),
               ),
-              SizedBox(width: double.infinity, child: ElevatedButton(onPressed: _isLoading ? null : _salvarTreino, child: const Text("SALVAR TREINO"))),
+              
+              SizedBox(
+                width: double.infinity, 
+                child: ElevatedButton(
+                  onPressed: _isLoading ? null : _salvarTreino, 
+                  style: ElevatedButton.styleFrom(backgroundColor: isEditing ? Colors.orange : Colors.blue),
+                  child: Text(isEditing ? "ATUALIZAR TREINO" : "SALVAR TREINO", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
+                )
+              ),
             ],
           ),
         ),
