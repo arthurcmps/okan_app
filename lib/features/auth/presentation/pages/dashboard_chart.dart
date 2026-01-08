@@ -1,137 +1,217 @@
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 
-class DashboardChart extends StatelessWidget {
+class DashboardChart extends StatefulWidget {
   const DashboardChart({super.key});
 
-  // Função auxiliar para verificar se duas datas são o mesmo dia
-  bool _isSameDay(DateTime d1, DateTime d2) {
-    return d1.year == d2.year && d1.month == d2.month && d1.day == d2.day;
+  @override
+  State<DashboardChart> createState() => _DashboardChartState();
+}
+
+class _DashboardChartState extends State<DashboardChart> {
+  // Cores do gráfico
+  final Color barBackgroundColor = Colors.grey.shade200;
+  final Color barColor = Colors.blueAccent;
+  final Color touchedBarColor = Colors.deepPurple;
+
+  int touchedIndex = -1;
+
+  // Mapa para guardar contagem: { 0: 1, 1: 0, ... }
+  Map<int, int> _treinosPorDia = {};
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _carregarDadosSemanais();
   }
 
-  // Pega o início da semana (Domingo)
-  DateTime _getStartOfWeek() {
-    final now = DateTime.now();
-    return now.subtract(Duration(days: now.weekday % 7));
+  Future<void> _carregarDadosSemanais() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final agora = DateTime.now();
+    // Pega o início do dia de 6 dias atrás para ter uma semana completa
+    final inicioSemana = DateTime(agora.year, agora.month, agora.day).subtract(const Duration(days: 6));
+
+    try {
+      final query = await FirebaseFirestore.instance
+          .collection('historico')
+          .where('usuarioId', isEqualTo: user.uid)
+          .where('data', isGreaterThanOrEqualTo: Timestamp.fromDate(inicioSemana))
+          .get();
+
+      // Inicializa o mapa com 0 para os últimos 7 dias (0 a 6)
+      Map<int, int> contagem = {0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0};
+
+      for (var doc in query.docs) {
+        final dataTreino = (doc['data'] as Timestamp).toDate();
+        
+        // Calcula a diferença em dias. Se hoje (0), diferença é 0.
+        // Vamos inverter para o gráfico onde 6 é hoje.
+        final diferencaDias = agora.difference(dataTreino).inDays;
+        
+        if (diferencaDias >= 0 && diferencaDias <= 6) {
+          final indexBarra = 6 - diferencaDias; 
+          contagem[indexBarra] = (contagem[indexBarra] ?? 0) + 1;
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _treinosPorDia = contagem;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint("Erro ao carregar gráfico: $e");
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return const SizedBox();
+    if (_isLoading) {
+      return const SizedBox(
+        height: 200, 
+        child: Center(child: CircularProgressIndicator())
+      );
+    }
 
-    final startOfWeek = _getStartOfWeek();
-    // Cria lista com os 7 dias da semana atual
-    final weekDays = List.generate(7, (index) => startOfWeek.add(Duration(days: index)));
-
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('historico')
-          .where('usuarioId', isEqualTo: user.uid)
-          .where('data', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfWeek))
-          .snapshots(),
-      builder: (context, snapshot) {
-        // Lista de dias que o usuário treinou
-        final treinosRealizados = <DateTime>[];
-
-        if (snapshot.hasData) {
-          for (var doc in snapshot.data!.docs) {
-            final data = (doc['data'] as Timestamp).toDate();
-            treinosRealizados.add(data);
-          }
-        }
-
-        // Calcula frequência (quantos dias únicos treinou na semana)
-        final diasUnicosTreinados = weekDays.where((day) {
-          return treinosRealizados.any((treino) => _isSameDay(treino, day));
-        }).length;
-
-        return Card(
-          // O Card Theme já foi definido no main.dart, não precisa repetir cor/sombra
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text("Atividade Semanal", style: TextStyle(fontSize: 14, color: Colors.grey)),
-                        SizedBox(height: 4),
-                        Text("Frequência", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFEFF6FF), // Azul bem clarinho
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        "$diasUnicosTreinados/7 dias",
-                        style: const TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold),
-                      ),
-                    )
-                  ],
+    return AspectRatio(
+      aspectRatio: 1.5,
+      child: Card(
+        elevation: 4,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        color: Colors.white,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Sua Atividade Semanal',
+                style: TextStyle(
+                  color: Colors.black87,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
                 ),
-                const SizedBox(height: 24),
-                
-                // O GRÁFICO DE BARRAS
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.end, // Alinha as barras por baixo
-                  children: weekDays.map((day) {
-                    final bool treinouHoje = treinosRealizados.any((t) => _isSameDay(t, day));
-                    final bool isToday = _isSameDay(day, DateTime.now());
-                    
-                    // Letra do dia (D, S, T, Q...)
-                    String diaSemana = DateFormat('E', 'pt_BR').format(day)[0].toUpperCase();
-
-                    return Column(
-                      children: [
-                        // A Barra
-                        AnimatedContainer(
-                          duration: const Duration(milliseconds: 500),
-                          curve: Curves.easeOutBack,
-                          width: 12,
-                          height: treinouHoje ? 60 : 20, // Altura muda se treinou
-                          decoration: BoxDecoration(
-                            // Se treinou: Degradê Azul. Se não: Cinza.
-                            gradient: treinouHoje 
-                                ? const LinearGradient(
-                                    colors: [Color(0xFF2563EB), Color(0xFF60A5FA)],
-                                    begin: Alignment.bottomCenter,
-                                    end: Alignment.topCenter,
-                                  )
-                                : null,
-                            color: treinouHoje ? null : Colors.grey.shade200,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        // A Letra do dia
-                        Text(
-                          diaSemana,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
-                            color: isToday ? const Color(0xFF2563EB) : Colors.grey,
-                          ),
-                        ),
-                      ],
-                    );
-                  }).toList(),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Treinos realizados nos últimos 7 dias',
+                style: TextStyle(
+                  color: Colors.grey,
+                  fontSize: 12,
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 24),
+              Expanded(
+                child: BarChart(
+                  mainBarData(),
+                ),
+              ),
+            ],
           ),
-        );
-      },
+        ),
+      ),
+    );
+  }
+
+  BarChartData mainBarData() {
+    return BarChartData(
+      barTouchData: BarTouchData(
+        touchTooltipData: BarTouchTooltipData(
+          // CORREÇÃO AQUI: Voltamos para o parâmetro compatível com sua versão
+          tooltipBgColor: Colors.blueGrey, 
+          getTooltipItem: (group, groupIndex, rod, rodIndex) {
+            return BarTooltipItem(
+              '${rod.toY.toInt()} Treinos',
+              const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            );
+          },
+        ),
+        touchCallback: (FlTouchEvent event, barTouchResponse) {
+          setState(() {
+            if (!event.isInterestedForInteractions ||
+                barTouchResponse == null ||
+                barTouchResponse.spot == null) {
+              touchedIndex = -1;
+              return;
+            }
+            touchedIndex = barTouchResponse.spot!.touchedBarGroupIndex;
+          });
+        },
+      ),
+      titlesData: FlTitlesData(
+        show: true,
+        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        bottomTitles: AxisTitles(
+          sideTitles: SideTitles(
+            showTitles: true,
+            getTitlesWidget: getTitles,
+            reservedSize: 30,
+          ),
+        ),
+        leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+      ),
+      borderData: FlBorderData(show: false),
+      barGroups: showingGroups(),
+      gridData: const FlGridData(show: false),
+    );
+  }
+
+  Widget getTitles(double value, TitleMeta meta) {
+    const style = TextStyle(
+      color: Colors.grey,
+      fontWeight: FontWeight.bold,
+      fontSize: 12,
+    );
+    
+    // Calcula o dia da semana
+    final hoje = DateTime.now();
+    final diaDaBarra = hoje.subtract(Duration(days: 6 - value.toInt()));
+    final nomeDia = DateFormat('E', 'pt_BR').format(diaDaBarra);
+    
+    final text = nomeDia.substring(0, 1).toUpperCase();
+
+    return SideTitleWidget(
+      axisSide: meta.axisSide,
+      space: 10,
+      child: Text(text, style: style),
+    );
+  }
+
+  List<BarChartGroupData> showingGroups() {
+    return List.generate(7, (i) {
+      final double valor = (_treinosPorDia[i] ?? 0).toDouble();
+      return makeGroupData(i, valor, isTouched: i == touchedIndex);
+    });
+  }
+
+  BarChartGroupData makeGroupData(int x, double y, {bool isTouched = false}) {
+    return BarChartGroupData(
+      x: x,
+      barRods: [
+        BarChartRodData(
+          toY: y,
+          color: isTouched ? touchedBarColor : barColor,
+          width: 22,
+          borderSide: isTouched
+              ? const BorderSide(color: Colors.deepPurple, width: 2)
+              : const BorderSide(color: Colors.white, width: 0),
+          backDrawRodData: BackgroundBarChartRodData(
+            show: true,
+            toY: 5, 
+            color: barBackgroundColor,
+          ),
+        ),
+      ],
+      showingTooltipIndicators: isTouched ? [0] : [],
     );
   }
 }

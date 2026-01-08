@@ -158,20 +158,49 @@ class _HomePageState extends State<HomePage> {
               
               // Acessar Treino Dinâmico
               _buildActionCard(
-                icon: Icons.fitness_center,
+                icon: Icons.calendar_today, // Ícone mudou para calendário
                 color: Colors.green,
                 title: "Treino de Hoje",
-                subtitle: "Acessar ficha atual",
+                subtitle: "Verificar cronograma",
                 onTap: () async {
                   if (user != null) {
-                    final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-                    final currentWorkoutId = doc.data()?['currentWorkoutId'];
-                    if (mounted) {
-                      if (currentWorkoutId != null && currentWorkoutId.isNotEmpty) {
-                        Navigator.push(context, MaterialPageRoute(builder: (context) => TrainPage(workoutId: currentWorkoutId)));
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Nenhum treino atribuído ainda."), backgroundColor: Colors.orange));
+                    try {
+                      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+                      
+                      // 1. Descobrir que dia é hoje (1=Segunda ... 7=Domingo)
+                      final hoje = DateTime.now().weekday.toString();
+                      
+                      // 2. Buscar o mapa de treinos
+                      final data = doc.data();
+                      final weeklyWorkouts = data != null && data['weeklyWorkouts'] != null 
+                          ? Map<String, dynamic>.from(data['weeklyWorkouts']) 
+                          : {};
+
+                      // 3. Verificar se tem treino hoje
+                      final treinoHoje = weeklyWorkouts[hoje];
+
+                      if (mounted) {
+                        if (treinoHoje == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("Nenhum treino agendado para hoje. Fale com seu personal."), backgroundColor: Colors.orange)
+                          );
+                        } else if (treinoHoje['id'] == 'rest') {
+                          // Se for dia de descanso
+                          showDialog(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text("Dia de Descanso 😴"),
+                              content: const Text("Hoje é dia de recuperar! Aproveite para descansar."),
+                              actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Beleza!"))],
+                            ),
+                          );
+                        } else {
+                          // Se tiver treino, abre a execução
+                          Navigator.push(context, MaterialPageRoute(builder: (context) => TrainPage(workoutId: treinoHoje['id'])));
+                        }
                       }
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro ao carregar: $e")));
                     }
                   }
                 },
