@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'train_page.dart';
-import 'profile_page.dart';
+import 'package:intl/intl.dart';
+import 'chat_page.dart'; // Importante para o botão de Chat
 
-class StudentDetailPage extends StatefulWidget {
+class StudentDetailPage extends StatelessWidget {
   final String studentId;
   final String studentName;
   final String studentEmail;
@@ -15,58 +15,54 @@ class StudentDetailPage extends StatefulWidget {
     required this.studentEmail,
   });
 
-  @override
-  State<StudentDetailPage> createState() => _StudentDetailPageState();
-}
-
-class _StudentDetailPageState extends State<StudentDetailPage> {
-  final TextEditingController _nomeController = TextEditingController();
-  final TextEditingController _grupoController = TextEditingController();
-
-  // Função para criar treino PARA O ALUNO
-  void _mostrarDialogoCriarParaAluno() {
-    showDialog(
+  // Função para abrir o modal e escolher um treino da coleção 'workouts'
+  void _atribuirTreino(BuildContext context) {
+    showModalBottomSheet(
       context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) {
-        return AlertDialog(
-          title: Text("Treino para ${widget.studentName.split(' ')[0]}"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: _nomeController,
-                decoration: const InputDecoration(labelText: "Nome (ex: Hipertrofia A)"),
-              ),
-              TextField(
-                controller: _grupoController,
-                decoration: const InputDecoration(labelText: "Foco (ex: Pernas)"),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Cancelar"),
+        return Column(
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16), 
+              child: Text("Selecione um Treino para Atribuir", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))
             ),
-            ElevatedButton(
-              onPressed: () async {
-                // AQUI ESTÁ O SEGREDO:
-                // Salvamos o treino com o userId DO ALUNO, não o meu.
-                await FirebaseFirestore.instance.collection('treinos').add({
-                  'userId': widget.studentId, // <--- ID do Aluno
-                  'personalId': 'EU', // Opcional: para saber quem criou
-                  'nome': _nomeController.text.isNotEmpty ? _nomeController.text : 'Novo Treino',
-                  'grupo': _grupoController.text.isNotEmpty ? _grupoController.text : 'Geral',
-                  'qtd_exercicios': 0,
-                  'criadoEm': FieldValue.serverTimestamp(),
-                });
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance.collection('workouts').orderBy('criadoEm', descending: true).snapshots(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                  if (snapshot.data!.docs.isEmpty) return const Center(child: Text("Nenhum treino criado ainda. Vá em 'Criar Novo Treino'."));
 
-                _nomeController.clear();
-                _grupoController.clear();
+                  return ListView.builder(
+                    itemCount: snapshot.data!.docs.length,
+                    itemBuilder: (context, index) {
+                      final treino = snapshot.data!.docs[index];
+                      final dadosTreino = treino.data() as Map<String, dynamic>;
 
-                if (context.mounted) Navigator.pop(context);
-              },
-              child: const Text("Criar"),
+                      return ListTile(
+                        leading: const Icon(Icons.fitness_center, color: Colors.blue),
+                        title: Text(dadosTreino['nome'] ?? 'Sem nome'),
+                        subtitle: Text(dadosTreino['grupoMuscular'] ?? ''),
+                        onTap: () async {
+                          // SALVA O ID E NOME DO TREINO NO PERFIL DO ALUNO
+                          await FirebaseFirestore.instance.collection('users').doc(studentId).update({
+                            'currentWorkoutId': treino.id,
+                            'currentWorkoutName': dadosTreino['nome'], 
+                          });
+                          
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text("Treino '${dadosTreino['nome']}' atribuído com sucesso!"))
+                            );
+                          }
+                        },
+                      );
+                    },
+                  );
+                },
+              ),
             ),
           ],
         );
@@ -77,104 +73,99 @@ class _StudentDetailPageState extends State<StudentDetailPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(widget.studentName, style: const TextStyle(fontSize: 16)),
-            Text(widget.studentEmail, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal)),
-          ],
-        ),
-        backgroundColor: Colors.black87,
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.info_outline),
-            tooltip: 'Ver Perfil do Aluno',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ProfilePage(userId: widget.studentId), // Passamos o ID dele!
-                ),
-              );
-            },
-          ),
-        ],
+      appBar: AppBar(title: Text(studentName)),
+      
+      // BOTÃO FLUTUANTE PARA CHAT
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.blue,
+        child: const Icon(Icons.chat, color: Colors.white),
+        onPressed: () {
+          // Navega para o chat passando os dados deste aluno
+          Navigator.push(context, MaterialPageRoute(builder: (context) => ChatPage(
+            otherUserId: studentId,
+            otherUserName: studentName,
+          )));
+        },
       ),
+
       body: Column(
         children: [
-          // Cabeçalho Simples
+          // CABEÇALHO COM DADOS DO ALUNO
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
             width: double.infinity,
-            color: Colors.grey.shade200,
-            child: const Text("Fichas de Treino Ativas", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
-          ),
-
-          // LISTA DE TREINOS DO ALUNO
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              // FILTRO: Traz apenas treinos onde userId == ID DO ALUNO
-              stream: FirebaseFirestore.instance
-                  .collection('treinos')
-                  .where('userId', isEqualTo: widget.studentId)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.description_outlined, size: 60, color: Colors.grey),
-                        const SizedBox(height: 16),
-                        Text("${widget.studentName} não tem treinos ainda."),
-                      ],
-                    ),
-                  );
-                }
-
-                final dados = snapshot.data!.docs;
-
-                return ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: dados.length,
-                  itemBuilder: (context, index) {
-                    final treino = dados[index].data() as Map<String, dynamic>;
-                    final nome = treino['nome'] ?? 'Sem nome';
-                    final grupo = treino['grupo'] ?? 'Geral';
-                    final qtd = treino['qtd_exercicios'] ?? 0;
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              border: Border(bottom: BorderSide(color: Colors.blue.shade100)),
+            ),
+            child: Column(
+              children: [
+                CircleAvatar(radius: 35, backgroundColor: Colors.blue, child: Text(studentName[0].toUpperCase(), style: const TextStyle(fontSize: 28, color: Colors.white))),
+                const SizedBox(height: 10),
+                Text(studentName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                Text(studentEmail, style: TextStyle(color: Colors.grey[700])),
+                const SizedBox(height: 20),
+                
+                // CARD DO TREINO ATUAL
+                StreamBuilder<DocumentSnapshot>(
+                  stream: FirebaseFirestore.instance.collection('users').doc(studentId).snapshots(),
+                  builder: (context, snapshot) {
+                    String treinoAtual = "Nenhum treino definido";
+                    if (snapshot.hasData && snapshot.data!.exists) {
+                      final data = snapshot.data!.data() as Map<String, dynamic>;
+                      treinoAtual = data['currentWorkoutName'] ?? "Nenhum treino definido";
+                    }
 
                     return Card(
                       elevation: 2,
-                      margin: const EdgeInsets.only(bottom: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: Colors.blue.shade100,
-                          child: Text(nome[0].toUpperCase(), style: const TextStyle(color: Colors.blue)),
+                        leading: const Icon(Icons.run_circle_outlined, color: Colors.orange, size: 30),
+                        title: const Text("Treino Atual", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                        subtitle: Text(treinoAtual, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                        trailing: ElevatedButton(
+                          onPressed: () => _atribuirTreino(context),
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
+                          child: const Text("Alterar"),
                         ),
-                        title: Text(nome, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text("$grupo • $qtd exercícios"),
-                        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                        onTap: () {
-                          // Abre a mesma tela de detalhes que já criamos
-                          // Como ela lê o banco pelo ID do treino, funciona igual!
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => TreinoDetalhesPage(
-                                nomeTreino: nome,
-                                grupoMuscular: grupo,
-                                treinoId: dados[index].id,
-                              ),
-                            ),
-                          );
-                        },
                       ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
+            child: Align(alignment: Alignment.centerLeft, child: Text("Histórico de Execuções", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+          ),
+
+          // LISTA DE HISTÓRICO DE TREINOS FEITOS
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('historico')
+                  .where('usuarioId', isEqualTo: studentId)
+                  .orderBy('data', descending: true)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                if (snapshot.data!.docs.isEmpty) return const Center(child: Text("O aluno ainda não completou nenhum treino."));
+
+                return ListView.separated(
+                  itemCount: snapshot.data!.docs.length,
+                  separatorBuilder: (_,__) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final treino = snapshot.data!.docs[index].data() as Map<String, dynamic>;
+                    final data = (treino['data'] as Timestamp?)?.toDate() ?? DateTime.now();
+                    final qtdExercicios = treino['exerciciosConcluidos'] ?? 0;
+
+                    return ListTile(
+                      leading: const Icon(Icons.check_circle, color: Colors.green),
+                      title: Text(treino['treinoNome'] ?? 'Treino'),
+                      subtitle: Text(DateFormat("dd/MM/yyyy 'às' HH:mm").format(data)),
+                      trailing: Text("$qtdExercicios concluídos", style: const TextStyle(fontSize: 12, color: Colors.grey)),
                     );
                   },
                 );
@@ -182,12 +173,6 @@ class _StudentDetailPageState extends State<StudentDetailPage> {
             ),
           ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: Colors.black87,
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text("Novo Treino", style: TextStyle(color: Colors.white)),
-        onPressed: _mostrarDialogoCriarParaAluno,
       ),
     );
   }

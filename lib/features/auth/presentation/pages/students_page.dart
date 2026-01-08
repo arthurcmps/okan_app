@@ -241,7 +241,6 @@ class _StudentsPageState extends State<StudentsPage> {
                               builder: (context) => ChatPage(
                                 otherUserId: doc.id,
                                 otherUserName: nome,
-                                studentId: doc.id, // <--- Importante: Passa o ID do aluno
                               ),
                             ),
                           );

@@ -1,9 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../../../../core/services/auth_service.dart'; // Importe o seu serviço aqui
-import 'train_page.dart'; // Sua página de treino
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../../core/services/auth_service.dart';
+
+// IMPORTS DAS PÁGINAS (Certifique-se de que os arquivos existem)
 import 'login_page.dart';
-import 'dashboard_chart.dart'; // O gráfico que criamos
+import 'dashboard_chart.dart';
+import 'train_page.dart';
+import 'profile_page.dart';
+import 'create_workout_page.dart';
+import 'students_page.dart';
+import 'invite_student_page.dart'; 
+import 'notifications_page.dart';
+import 'chat_page.dart'; 
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -15,7 +24,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final AuthService _authService = AuthService();
   String _nomeUsuario = "Atleta";
-  String _tipoUsuario = "aluno"; // 'personal' ou 'aluno'
+  String _tipoUsuario = "aluno"; 
   bool _isLoading = true;
 
   @override
@@ -27,10 +36,7 @@ class _HomePageState extends State<HomePage> {
   Future<void> _carregarDadosUsuario() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      // Pega o nome (pode vir do Auth ou do Firestore se quiser mais completo)
       final nome = user.displayName ?? user.email?.split('@')[0] ?? "Atleta";
-      
-      // Pega o tipo (Personal ou Aluno) usando nosso serviço
       final tipo = await _authService.obterTipoUsuario();
 
       if (mounted) {
@@ -43,23 +49,12 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  void _deslogar() async {
-    await _authService.deslogar();
-    if (mounted) {
-      Navigator.pushReplacement(
-        context, 
-        MaterialPageRoute(builder: (context) => const LoginPage())
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
+    if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
     final isPersonal = _tipoUsuario == 'personal';
+    final user = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
       appBar: AppBar(
@@ -71,9 +66,43 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
         actions: [
+          // 1. SINO DE NOTIFICAÇÕES (Só aparece para o Aluno)
+          if (!isPersonal) 
+            StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance.collection('invites')
+                  .where('toStudentEmail', isEqualTo: user?.email)
+                  .where('status', isEqualTo: 'pending')
+                  .snapshots(),
+              builder: (context, snapshot) {
+                final int count = snapshot.hasData ? snapshot.data!.docs.length : 0;
+                return IconButton(
+                  icon: Badge(
+                    isLabelVisible: count > 0,
+                    label: Text("$count"),
+                    child: const Icon(Icons.notifications_none, size: 28),
+                  ),
+                  onPressed: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const NotificationsPage()));
+                  },
+                );
+              },
+            ),
+
+          // 2. PERFIL
+          IconButton(
+            icon: const Icon(Icons.account_circle, size: 28),
+            tooltip: "Meu Perfil",
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ProfilePage())),
+          ),
+
+          // 3. SAIR
           IconButton(
             icon: const Icon(Icons.exit_to_app, color: Colors.redAccent),
-            onPressed: _deslogar,
+            tooltip: "Sair",
+            onPressed: () async {
+              await _authService.deslogar();
+              if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginPage()));
+            },
           )
         ],
       ),
@@ -82,54 +111,102 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 1. O GRÁFICO (Visível para todos ou só para aluno?)
-            // Vamos deixar para todos por enquanto
+            // Gráfico de atividades (Comum a todos)
             const DashboardChart(),
             
             const SizedBox(height: 24),
 
-            // 2. SEÇÃO ESPECÍFICA DO TIPO DE USUÁRIO
+            // --- ÁREA ESPECÍFICA DO TIPO DE USUÁRIO ---
             if (isPersonal) ...[
               _buildSectionTitle("Gerenciamento"),
+              
+              // Convidar Aluno
+              _buildActionCard(
+                icon: Icons.person_add,
+                color: Colors.orange,
+                title: "Convidar Aluno",
+                subtitle: "Enviar solicitação por e-mail",
+                onTap: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => const InviteStudentPage()));
+                },
+              ),
+
+              // Ver Lista de Alunos
               _buildActionCard(
                 icon: Icons.people_alt,
                 color: Colors.blue,
                 title: "Meus Alunos",
-                subtitle: "Gerenciar fichas e progressão",
+                subtitle: "Gerenciar fichas e chat",
                 onTap: () {
-                  // TODO: Navegar para lista de alunos
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Em breve: Lista de Alunos")));
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => const StudentsPage()));
                 },
               ),
+
+              // Criar Treino (CRUD)
               _buildActionCard(
                 icon: Icons.add_circle_outline,
-                color: Colors.orange,
+                color: Colors.purple,
                 title: "Criar Novo Treino",
-                subtitle: "Montar template de treino",
+                subtitle: "Montar template de exercícios",
                 onTap: () {
-                  // TODO: Navegar para criador de treino
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => const CreateWorkoutPage()));
                 },
               ),
+
             ] else ...[
               _buildSectionTitle("Seu Plano"),
+              
+              // Acessar Treino Dinâmico
               _buildActionCard(
                 icon: Icons.fitness_center,
                 color: Colors.green,
                 title: "Treino de Hoje",
-                subtitle: "Peito e Tríceps (Exemplo)", // Futuramente dinâmico
-                onTap: () {
-                  // Vai para a tela de treino que já criamos
-                   Navigator.push(context, MaterialPageRoute(builder: (context) => 
-                     const TreinoDetalhesPage(nomeTreino: "Treino A", grupoMuscular: "Peito", treinoId: "id_fixo_teste")
-                   ));
+                subtitle: "Acessar ficha atual",
+                onTap: () async {
+                  if (user != null) {
+                    final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+                    final currentWorkoutId = doc.data()?['currentWorkoutId'];
+                    if (mounted) {
+                      if (currentWorkoutId != null && currentWorkoutId.isNotEmpty) {
+                        Navigator.push(context, MaterialPageRoute(builder: (context) => TrainPage(workoutId: currentWorkoutId)));
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Nenhum treino atribuído ainda."), backgroundColor: Colors.orange));
+                      }
+                    }
+                  }
                 },
               ),
+
+              // Falar com o Personal (Chat)
               _buildActionCard(
-                icon: Icons.person_pin,
+                icon: Icons.chat,
                 color: Colors.purple,
                 title: "Meu Personal",
                 subtitle: "Falar com o coach",
-                onTap: () {},
+                onTap: () async {
+                  if (user != null) {
+                    // Busca quem é o personal deste aluno
+                    final studentDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+                    final personalId = studentDoc.data()?['personalId'];
+
+                    if (mounted) {
+                      if (personalId != null && personalId.isNotEmpty) {
+                        // Busca o nome do personal para exibir na topo do chat
+                        final personalDoc = await FirebaseFirestore.instance.collection('users').doc(personalId).get();
+                        final personalName = personalDoc.data()?['nome'] ?? personalDoc.data()?['name'] ?? "Personal";
+
+                        Navigator.push(context, MaterialPageRoute(builder: (context) => ChatPage(
+                          otherUserId: personalId,
+                          otherUserName: personalName,
+                        )));
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text("Você ainda não tem um personal vinculado."), backgroundColor: Colors.orange)
+                        );
+                      }
+                    }
+                  }
+                },
               ),
             ],
           ],
@@ -149,7 +226,8 @@ class _HomePageState extends State<HomePage> {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       child: Card(
-        // O CardTheme do main.dart vai estilizar isso automaticamente
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(20),
