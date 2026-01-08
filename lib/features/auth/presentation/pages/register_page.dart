@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:okan_app/core/services/auth_service.dart';
+import '../../../../core/services/auth_service.dart';
+import 'home_page.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -12,89 +11,66 @@ class RegisterPage extends StatefulWidget {
 
 class _RegisterPageState extends State<RegisterPage> {
   final _formKey = GlobalKey<FormState>();
-  
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
+  final _birthDateController = TextEditingController();
+  
+  String _selectedRole = 'aluno';
+  bool _isLoading = false;
+  final AuthService _authService = AuthService();
 
-  DateTime? _dataNascimento; // <--- Variável para guardar a data
-  bool _isPasswordVisible = false;
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _emailController.dispose();
-    _passwordController.dispose();
-    _confirmPasswordController.dispose();
-    super.dispose();
+  void _formatDate(String text) {
+    text = text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (text.length > 8) text = text.substring(0, 8);
+    
+    String formatted = "";
+    if (text.isNotEmpty) {
+      if (text.length <= 2) {
+        formatted = text;
+      } else if (text.length <= 4) {
+        formatted = "${text.substring(0, 2)}/${text.substring(2)}";
+      } else {
+        formatted = "${text.substring(0, 2)}/${text.substring(2, 4)}/${text.substring(4)}";
+      }
+    }
+    
+    _birthDateController.value = TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
   }
 
-  Future<void> _fazerCadastro() async {
-    // Validação extra para a data
-    if (_dataNascimento == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Por favor, informe sua data de nascimento.'), backgroundColor: Colors.orange),
-      );
-      return;
-    }
-
+  Future<void> _register() async {
     if (_formKey.currentState!.validate()) {
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Criando a sua conta...')),
+      setState(() => _isLoading = true);
+
+      DateTime? birthDate;
+      try {
+        final parts = _birthDateController.text.split('/');
+        if (parts.length == 3) {
+          birthDate = DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+        }
+      } catch (e) {
+        // Data inválida ignorada
+      }
+
+      // CHAMADA CORRIGIDA
+      final erro = await _authService.cadastrarUsuario(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+        nome: _nameController.text.trim(),      // <--- Corrigido (era name)
+        tipo: _selectedRole,                    // <--- Corrigido (era role)
+        dataNascimento: birthDate,              // <--- Corrigido (era birthDate)
       );
 
-      try {
-        // 1. Criar Auth (Login/Senha)
-        final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-          email: _emailController.text.trim(),
-          password: _passwordController.text.trim(),
-        );
+      setState(() => _isLoading = false);
 
-        final user = userCredential.user;
-
-        // 2. Atualizar Nome no Auth
-        await user?.updateDisplayName(_nameController.text.trim());
-
-        // 3. SALVAR NO FIRESTORE (A Mágica acontece aqui)
-        // Isso cria o perfil inicial para que a tela de Perfil não fique vazia
-        if (user != null) {
-          await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-            'name': _nameController.text.trim(),
-            'email': _emailController.text.trim(),
-            'birthDate': Timestamp.fromDate(_dataNascimento!), // Salva a data
-            'role': 'aluno', // Conforme documento técnico
-            'createdAt': FieldValue.serverTimestamp(),
-            // Campos opcionais começam zerados ou vazios
-            'weight': 0.0,
-            'objectives': 'Definir objetivo',
-          });
-        }
-
-        if (!mounted) return;
-
+      if (erro == null && mounted) {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const HomePage()));
+      } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Conta criada com sucesso!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        
-        // Pode voltar para o Login ou ir direto para Home, depende do seu fluxo.
-        Navigator.pop(context); 
-
-      } on FirebaseAuthException catch (e) {
-        String mensagemErro = 'Ocorreu um erro ao registar.';
-        if (e.code == 'weak-password') {
-          mensagemErro = 'A senha é muito fraca.';
-        } else if (e.code == 'email-already-in-use') {
-          mensagemErro = 'Este e-mail já está em uso.';
-        } else if (e.code == 'invalid-email') {
-          mensagemErro = 'O e-mail é inválido.';
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(mensagemErro), backgroundColor: Colors.red),
+          SnackBar(content: Text(erro ?? "Erro desconhecido"), backgroundColor: Colors.red),
         );
       }
     }
@@ -103,126 +79,94 @@ class _RegisterPageState extends State<RegisterPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Crie sua conta"),
-        backgroundColor: Colors.transparent,
-        foregroundColor: Colors.black,
-        elevation: 0,
-      ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Icon(Icons.person_add, size: 80, color: Colors.blue),
-                const SizedBox(height: 24),
-                
-                // Campo Nome
-                TextFormField(
-                  controller: _nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Nome Completo',
-                    prefixIcon: Icon(Icons.person),
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (value) => (value == null || value.isEmpty) ? 'Digite seu nome' : null,
-                ),
-                const SizedBox(height: 16),
+      appBar: AppBar(title: const Text("Criar Conta")),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24.0),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text("Vamos começar!", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+              const SizedBox(height: 8),
+              const Text("Preencha seus dados abaixo", style: TextStyle(color: Colors.grey), textAlign: TextAlign.center),
+              const SizedBox(height: 32),
 
-                // --- NOVO CAMPO: DATA DE NASCIMENTO ---
-                InkWell(
-                  onTap: () async {
-                    final dataEscolhida = await showDatePicker(
-                      context: context,
-                      initialDate: DateTime(2000),
-                      firstDate: DateTime(1940),
-                      lastDate: DateTime.now(),
-                    );
-                    if (dataEscolhida != null) {
-                      setState(() {
-                        _dataNascimento = dataEscolhida;
-                      });
-                    }
-                  },
-                  child: InputDecorator(
-                    decoration: const InputDecoration(
-                      labelText: 'Data de Nascimento',
-                      prefixIcon: Icon(Icons.calendar_today),
-                      border: OutlineInputBorder(),
-                    ),
-                    child: Text(
-                      _dataNascimento == null
-                          ? 'Toque para selecionar'
-                          : '${_dataNascimento!.day}/${_dataNascimento!.month}/${_dataNascimento!.year}',
-                      style: TextStyle(
-                        color: _dataNascimento == null ? Colors.grey : Colors.black,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
+              const Text("Eu sou:", style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(child: _buildRoleCard(label: "Aluno", value: "aluno", icon: Icons.fitness_center, color: Colors.blue)),
+                  const SizedBox(width: 16),
+                  Expanded(child: _buildRoleCard(label: "Personal", value: "personal", icon: Icons.assignment_ind, color: Colors.purple)),
+                ],
+              ),
+              const SizedBox(height: 24),
 
-                // Campo Email
-                TextFormField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'E-mail',
-                    prefixIcon: Icon(Icons.email),
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (value) {
-                    if (value == null || !value.contains('@')) return 'Email inválido';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
+              TextFormField(
+                controller: _nameController,
+                decoration: const InputDecoration(labelText: "Nome Completo", prefixIcon: Icon(Icons.person)),
+                validator: (v) => v!.isEmpty ? "Campo obrigatório" : null,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(labelText: "E-mail", prefixIcon: Icon(Icons.email)),
+                validator: (v) => v!.contains('@') ? null : "E-mail inválido",
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: "Senha", prefixIcon: Icon(Icons.lock)),
+                validator: (v) => v!.length < 6 ? "Mínimo 6 caracteres" : null,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _birthDateController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: "Data de Nascimento (dd/mm/aaaa)", prefixIcon: Icon(Icons.calendar_today)),
+                onChanged: _formatDate,
+                validator: (v) => v!.length < 10 ? "Data inválida" : null,
+              ),
+              const SizedBox(height: 32),
 
-                // Campo Senha
-                TextFormField(
-                  controller: _passwordController,
-                  obscureText: !_isPasswordVisible,
-                  decoration: InputDecoration(
-                    labelText: 'Senha',
-                    prefixIcon: const Icon(Icons.lock),
-                    border: const OutlineInputBorder(),
-                    suffixIcon: IconButton(
-                      icon: Icon(_isPasswordVisible ? Icons.visibility_off : Icons.visibility),
-                      onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
-                    ),
-                  ),
-                  validator: (value) => (value == null || value.length < 6) ? 'Mínimo 6 caracteres' : null,
+              ElevatedButton(
+                onPressed: _isLoading ? null : _register,
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  backgroundColor: _selectedRole == 'personal' ? Colors.purple : Colors.blue,
                 ),
-                const SizedBox(height: 16),
-
-                // Campo Confirmar Senha
-                TextFormField(
-                  controller: _confirmPasswordController,
-                  obscureText: !_isPasswordVisible,
-                  decoration: const InputDecoration(
-                    labelText: 'Confirmar Senha',
-                    prefixIcon: Icon(Icons.lock_outline),
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (value) {
-                    if (value != _passwordController.text) return 'As senhas não coincidem';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 24),
-
-                // Botão Cadastrar
-                FilledButton(
-                  onPressed: _fazerCadastro,
-                  style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
-                  child: const Text('CADASTRAR', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ),
+                child: _isLoading 
+                  ? const CircularProgressIndicator(color: Colors.white) 
+                  : const Text("CRIAR CONTA", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
+            ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRoleCard({required String label, required String value, required IconData icon, required Color color}) {
+    final isSelected = _selectedRole == value;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedRole = value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          color: isSelected ? color.withOpacity(0.1) : Colors.white,
+          border: Border.all(color: isSelected ? color : Colors.grey.shade300, width: 2),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, size: 32, color: isSelected ? color : Colors.grey),
+            const SizedBox(height: 8),
+            Text(label, style: TextStyle(color: isSelected ? color : Colors.grey, fontWeight: FontWeight.bold)),
+            if (isSelected) const Padding(padding: EdgeInsets.only(top: 4), child: Icon(Icons.check_circle, size: 16, color: Colors.green))
+          ],
         ),
       ),
     );

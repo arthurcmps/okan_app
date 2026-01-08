@@ -5,31 +5,32 @@ class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // --- CADASTRO (Agora com TIPO: Personal ou Aluno) ---
+  // --- CADASTRO ATUALIZADO ---
   Future<String?> cadastrarUsuario({
     required String nome,
     required String email,
     required String password,
     required String tipo, // 'personal' ou 'aluno'
+    DateTime? dataNascimento, // <--- NOVO CAMPO ADICIONADO
   }) async {
     try {
-      // 1. Cria o usuário no sistema de Login do Firebase
+      // 1. Cria o usuário no Auth
       UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
 
-      // 2. Cria a ficha do usuário no Banco de Dados (Firestore)
-      // É aqui que salvamos se ele é PERSONAL ou ALUNO
+      // 2. Salva os dados no Firestore
       await _firestore.collection('users').doc(userCredential.user!.uid).set({
         'uid': userCredential.user!.uid,
         'nome': nome,
         'email': email,
-        'tipo': tipo, // <--- O CAMPO IMPORTANTE
+        'tipo': tipo,
+        'dataNascimento': dataNascimento, // <--- SALVANDO NO BANCO
         'criadoEm': FieldValue.serverTimestamp(),
       });
 
-      return null; // Retorna null se deu tudo certo
+      return null;
     } on FirebaseAuthException catch (e) {
       if (e.code == 'weak-password') return 'A senha é muito fraca.';
       if (e.code == 'email-already-in-use') return 'Este e-mail já está em uso.';
@@ -46,9 +47,8 @@ class AuthService {
   }) async {
     try {
       await _auth.signInWithEmailAndPassword(email: email, password: password);
-      return null; // Sucesso
+      return null;
     } on FirebaseAuthException catch (e) {
-      // Traduzindo erros comuns para português
       if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
         return 'E-mail ou senha incorretos.';
       }
@@ -65,21 +65,19 @@ class AuthService {
     await _auth.signOut();
   }
 
-  // --- DESCOBRIR QUEM É O USUÁRIO ---
-  // Essa função vai ajudar a Home a decidir o que mostrar
+  // --- DESCOBRIR TIPO DE USUÁRIO ---
   Future<String> obterTipoUsuario() async {
     final user = _auth.currentUser;
-    if (user == null) return 'erro';
+    if (user == null) return 'aluno';
     
     try {
       final doc = await _firestore.collection('users').doc(user.uid).get();
-      // Retorna 'personal', 'aluno' ou 'aluno' se não tiver nada
-      return doc.data()?['tipo'] ?? 'aluno'; 
+      // Tenta pegar 'tipo' (padrão novo) ou 'role' (se tiver algum antigo)
+      return doc.data()?['tipo'] ?? doc.data()?['role'] ?? 'aluno'; 
     } catch (e) {
-      return 'aluno'; // Na dúvida, trata como aluno
+      return 'aluno';
     }
   }
   
-  // Pega o usuário atual logado
   User? get usuarioAtual => _auth.currentUser;
 }
