@@ -13,6 +13,7 @@ import 'students_page.dart';
 import 'invite_student_page.dart'; 
 import 'notifications_page.dart';
 import 'chat_page.dart'; 
+import 'manage_workouts_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -128,6 +129,16 @@ class _HomePageState extends State<HomePage> {
                 subtitle: "Enviar solicitação por e-mail",
                 onTap: () {
                   Navigator.push(context, MaterialPageRoute(builder: (context) => const InviteStudentPage()));
+                },
+              ),
+
+              _buildActionCard(
+                icon: Icons.folder_copy_outlined,
+                color: Colors.teal,
+                title: "Meus Modelos",
+                subtitle: "Ver e excluir treinos criados",
+                onTap: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => const ManageWorkoutsPage()));
                 },
               ),
 

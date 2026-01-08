@@ -15,7 +15,6 @@ class StudentDetailPage extends StatelessWidget {
     required this.studentEmail,
   });
 
-  // Mapa auxiliar para nomes dos dias
   final Map<int, String> _diasSemana = const {
     1: "Segunda-feira",
     2: "Terça-feira",
@@ -26,7 +25,6 @@ class StudentDetailPage extends StatelessWidget {
     7: "Domingo",
   };
 
-  // Função para definir treino de um dia específico
   void _definirTreinoParaDia(BuildContext context, int diaSemana) {
     showModalBottomSheet(
       context: context,
@@ -36,28 +34,34 @@ class StudentDetailPage extends StatelessWidget {
           children: [
             Padding(
               padding: const EdgeInsets.all(16), 
-              child: Text("Treino de ${_diasSemana[diaSemana]}", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))
+              child: Text("Agenda de ${_diasSemana[diaSemana]}", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))
             ),
             
-            // Opção de DESCANSO
             ListTile(
-              leading: const Icon(Icons.hotel, color: Colors.grey),
+              leading: const Icon(Icons.hotel, color: Colors.green),
               title: const Text("Definir como Descanso"),
               onTap: () async {
                 await FirebaseFirestore.instance.collection('users').doc(studentId).set({
                   'weeklyWorkouts': {
-                    diaSemana.toString(): {
-                      'id': 'rest',
-                      'name': 'Descanso'
-                    }
+                    diaSemana.toString(): { 'id': 'rest', 'name': 'Descanso' }
                   }
-                }, SetOptions(merge: true)); // Merge true para não apagar os outros dias
+                }, SetOptions(merge: true));
+                if (context.mounted) Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: Colors.red),
+              title: const Text("Limpar dia (Sem treino)"),
+              onTap: () async {
+                await FirebaseFirestore.instance.collection('users').doc(studentId).update({
+                  'weeklyWorkouts.$diaSemana': FieldValue.delete()
+                });
                 if (context.mounted) Navigator.pop(context);
               },
             ),
             const Divider(),
+            const Padding(padding: EdgeInsets.only(left: 16, bottom: 8), child: Align(alignment: Alignment.centerLeft, child: Text("Selecionar Modelo de Treino:", style: TextStyle(color: Colors.grey)))),
 
-            // Lista de Treinos Disponíveis
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance.collection('workouts').orderBy('nome').snapshots(),
@@ -76,7 +80,6 @@ class StudentDetailPage extends StatelessWidget {
                         title: Text(dadosTreino['nome'] ?? 'Sem nome'),
                         subtitle: Text(dadosTreino['grupoMuscular'] ?? ''),
                         onTap: () async {
-                          // SALVA O TREINO NO DIA ESPECÍFICO
                           await FirebaseFirestore.instance.collection('users').doc(studentId).set({
                             'weeklyWorkouts': {
                               diaSemana.toString(): {
@@ -88,9 +91,7 @@ class StudentDetailPage extends StatelessWidget {
                           
                           if (context.mounted) {
                             Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text("Treino agendado para ${_diasSemana[diaSemana]}!"))
-                            );
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Agendado: ${dadosTreino['nome']}")));
                           }
                         },
                       );
@@ -124,7 +125,6 @@ class StudentDetailPage extends StatelessWidget {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // CABEÇALHO
             Container(
               padding: const EdgeInsets.all(20),
               width: double.infinity,
@@ -144,53 +144,62 @@ class StudentDetailPage extends StatelessWidget {
               child: Align(alignment: Alignment.centerLeft, child: Text("Cronograma Semanal", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
             ),
 
-            // LISTA DA SEMANA (1=Segunda a 7=Domingo)
             StreamBuilder<DocumentSnapshot>(
               stream: FirebaseFirestore.instance.collection('users').doc(studentId).snapshots(),
               builder: (context, snapshot) {
                 Map<String, dynamic> weeklyWorkouts = {};
-                
                 if (snapshot.hasData && snapshot.data!.exists) {
                   final data = snapshot.data!.data() as Map<String, dynamic>;
-                  weeklyWorkouts = data['weeklyWorkouts'] != null 
-                      ? Map<String, dynamic>.from(data['weeklyWorkouts']) 
-                      : {};
+                  weeklyWorkouts = data['weeklyWorkouts'] != null ? Map<String, dynamic>.from(data['weeklyWorkouts']) : {};
                 }
 
-                return ListView.separated(
+                return ListView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: 7,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
                   itemBuilder: (context, index) {
-                    final diaNum = index + 1; // 1 a 7
+                    final diaNum = index + 1;
                     final dadosDia = weeklyWorkouts[diaNum.toString()];
                     
-                    String nomeTreino = "Não definido";
+                    String nomeTreino = "Toque para definir";
+                    Color corFundo = Colors.transparent;
+                    IconData icone = Icons.add_circle_outline;
                     Color corIcone = Colors.grey;
-                    IconData icone = Icons.calendar_today;
 
                     if (dadosDia != null) {
                       if (dadosDia['id'] == 'rest') {
                         nomeTreino = "Descanso";
-                        corIcone = Colors.green;
+                        corFundo = Colors.green.shade50;
                         icone = Icons.hotel;
+                        corIcone = Colors.green;
                       } else {
                         nomeTreino = dadosDia['name'] ?? "Treino";
-                        corIcone = Colors.blue;
+                        corFundo = Colors.blue.shade50; // Destaque suave
                         icone = Icons.fitness_center;
+                        corIcone = Colors.blue;
                       }
                     }
 
-                    return ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: corIcone.withOpacity(0.1),
-                        child: Icon(icone, color: corIcone, size: 20),
+                    return Card(
+                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      elevation: dadosDia != null ? 1 : 0,
+                      color: dadosDia != null ? Colors.white : Colors.grey.shade50,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          color: corFundo.withOpacity(0.3), // Aplica cor de fundo se houver
+                        ),
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: Colors.white,
+                            child: Icon(icone, color: corIcone, size: 20),
+                          ),
+                          title: Text(_diasSemana[diaNum]!, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                          subtitle: Text(nomeTreino, style: TextStyle(color: dadosDia != null ? Colors.black87 : Colors.grey)),
+                          trailing: const Icon(Icons.edit, size: 18, color: Colors.grey),
+                          onTap: () => _definirTreinoParaDia(context, diaNum),
+                        ),
                       ),
-                      title: Text(_diasSemana[diaNum]!),
-                      subtitle: Text(nomeTreino, style: TextStyle(fontWeight: dadosDia != null ? FontWeight.bold : FontWeight.normal)),
-                      trailing: const Icon(Icons.edit, size: 16, color: Colors.grey),
-                      onTap: () => _definirTreinoParaDia(context, diaNum),
                     );
                   },
                 );
@@ -202,7 +211,6 @@ class StudentDetailPage extends StatelessWidget {
               child: Align(alignment: Alignment.centerLeft, child: Text("Histórico Recente", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
             ),
 
-            // HISTÓRICO SIMPLIFICADO
             StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('historico')
@@ -223,9 +231,9 @@ class StudentDetailPage extends StatelessWidget {
                     final data = (treino['data'] as Timestamp?)?.toDate() ?? DateTime.now();
                     return ListTile(
                       dense: true,
-                      leading: const Icon(Icons.check, color: Colors.green, size: 20),
+                      leading: const Icon(Icons.check_circle_outline, color: Colors.green),
                       title: Text(treino['treinoNome'] ?? 'Treino'),
-                      trailing: Text(DateFormat("dd/MM").format(data)),
+                      trailing: Text(DateFormat("dd/MM - HH:mm").format(data)),
                     );
                   },
                 );
