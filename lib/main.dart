@@ -1,49 +1,62 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'package:flutter/services.dart'; // Para travar a orientação (opcional)
+import 'package:flutter/services.dart'; 
+import 'package:provider/provider.dart';
 
 // Configurações do Firebase
 import 'firebase_options.dart';
 
-// Páginas e Serviços
+// Importações das suas Features
 import 'features/auth/presentation/pages/login_page.dart';
 import 'core/services/time_service.dart';
 
+// --- IMPORTANTE: Ajuste estes caminhos se necessário ---
+// Importando a nova feature de Tarefas que criamos
+import 'features/auth/presentation/pages/tarefas_page.dart';
+import 'features/auth/presentation/controllers/tarefa_controller.dart';
+
 // --- PALETA SPORT MODERN ---
 class AppColors {
-  static const Color background = Color(0xFFF1F5F9); // Cinza Slate Claro
-  static const Color surface = Color(0xFFFFFFFF);    // Branco Puro
-  static const Color primary = Color(0xFF2563EB);    // Azul Royal Vibrante
-  static const Color secondary = Color(0xFF0EA5E9);  // Azul Céu
-  static const Color textMain = Color(0xFF1E293B);   // Azul Noturno
-  static const Color textSub = Color(0xFF64748B);    // Cinza Azulado
-  static const Color success = Color(0xFF10B981);    // Verde Esmeralda
-  static const Color error = Color(0xFFEF4444);      // Vermelho Alerta
+  static const Color background = Color(0xFFF1F5F9); 
+  static const Color surface = Color(0xFFFFFFFF);    
+  static const Color primary = Color(0xFF2563EB);    
+  static const Color secondary = Color(0xFF0EA5E9);  
+  static const Color textMain = Color(0xFF1E293B);   
+  static const Color textSub = Color(0xFF64748B);    
+  static const Color success = Color(0xFF10B981);    
+  static const Color error = Color(0xFFEF4444);      
 }
 
-// --- PONTO DE ENTRADA (COM TRATAMENTO DE ERRO) ---
+// --- PONTO DE ENTRADA ---
 void main() async {
-  // Garante que o motor do Flutter está pronto
   WidgetsFlutterBinding.ensureInitialized();
-
-  // (Opcional) Trava o app em modo Retrato
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
   try {
-    // 1. Tenta Iniciar o Firebase
+    // 1. Inicia Firebase
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
 
-    // 2. Tenta Configurar Datas
+    // 2. Configura Datas
     await initializeDateFormatting('pt_BR', null);
 
-    // 3. Se tudo der certo, roda o app normal
-    runApp(const OkanApp());
+    // 3. Roda o App injetando os Providers (Controladores)
+    runApp(
+      MultiProvider(
+        providers: [
+          // Injetando o Controller de Tarefas
+          ChangeNotifierProvider(
+            create: (_) => TarefaController()..iniciarEscuta(),
+          ),
+        ],
+        child: const OkanApp(),
+      ),
+    );
 
   } catch (e, stackTrace) {
-    // 4. SE DER ERRO (Principalmente no Release), MOSTRA TELA DE DEBUG
+    // 4. Tela de Erro de Inicialização
     runApp(AppErrorScreen(error: e, stackTrace: stackTrace));
   }
 }
@@ -133,22 +146,20 @@ class OkanApp extends StatelessWidget {
       title: 'Okan App',
       debugShowCheckedModeBanner: false,
       theme: sportTheme,
-      home: const LoginPage(),
-      // O Builder permite colocar o Timer Global por cima de tudo
+      
+      // --- AQUI VOCÊ ESCOLHE A TELA INICIAL ---
+      // Para testar o CRUD de Tarefas, deixe TarefasPage.
+      // Para voltar ao login, troque para const LoginPage().
+      home: const LoginPage(), 
+
       builder: (context, child) {
         return Scaffold(
-          // Importante: backgroundColor transparente para não tapar o app real
           backgroundColor: Colors.transparent, 
           body: Stack(
             children: [
-              // O App em si (Navegação)
               if (child != null) child!, 
-              
-              // O Timer Flutuante Global
               const Positioned(
-                bottom: 0, 
-                left: 0, 
-                right: 0, 
+                bottom: 0, left: 0, right: 0, 
                 child: GlobalTimerBar()
               ),
             ],
@@ -185,16 +196,15 @@ class _GlobalTimerBarState extends State<GlobalTimerBar> {
 
   @override
   Widget build(BuildContext context) {
-    // Só mostra se o timer estiver ativo
     if (!TimerService.instance.isActive) return const SizedBox.shrink();
 
     return SafeArea(
       top: false,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16), // Margem inferior
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E293B), // Card escuro (Slate 800)
+          color: const Color(0xFF1E293B),
           borderRadius: BorderRadius.circular(30),
           boxShadow: [
             BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5))
@@ -203,7 +213,7 @@ class _GlobalTimerBarState extends State<GlobalTimerBar> {
         child: Material(
           color: Colors.transparent,
           child: Row(
-            mainAxisSize: MainAxisSize.min, // Não ocupa a largura toda se não precisar
+            mainAxisSize: MainAxisSize.min,
             children: [
               const Icon(Icons.timer_outlined, color: Colors.amberAccent),
               const SizedBox(width: 12),
@@ -217,14 +227,12 @@ class _GlobalTimerBarState extends State<GlobalTimerBar> {
                 )
               ),
               const Spacer(),
-              // Botão Adicionar Tempo (+10s)
               IconButton(
                 icon: const Icon(Icons.add_circle_outline, color: Colors.blueAccent), 
                 tooltip: "+10s",
                 onPressed: () => TimerService.instance.addTime(10)
               ),
               const SizedBox(width: 4),
-              // Botão Fechar/Parar
               InkWell(
                 onTap: () => TimerService.instance.stop(), 
                 borderRadius: BorderRadius.circular(20),
@@ -242,7 +250,7 @@ class _GlobalTimerBarState extends State<GlobalTimerBar> {
   }
 }
 
-// --- TELA DE ERRO (TELA AZUL) PARA DEBUG NO CELULAR ---
+// --- TELA DE ERRO ---
 class AppErrorScreen extends StatelessWidget {
   final Object error;
   final StackTrace? stackTrace;
@@ -263,45 +271,13 @@ class AppErrorScreen extends StatelessWidget {
                 children: [
                   const Icon(Icons.bug_report_outlined, size: 64, color: Colors.white),
                   const SizedBox(height: 16),
-                  const Text(
-                    "ERRO NA INICIALIZAÇÃO",
-                    style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
+                  const Text("ERRO NA INICIALIZAÇÃO", style: TextStyle(color: Colors.white, fontSize: 20)),
                   const SizedBox(height: 8),
-                  const Text(
-                    "Tire um print desta tela e envie para o suporte.",
-                    style: TextStyle(color: Colors.white70, fontSize: 14),
-                    textAlign: TextAlign.center,
-                  ),
-                  const Divider(color: Colors.white24, height: 40),
                   Container(
                     padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.black26,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.white12),
-                    ),
-                    child: Text(
-                      error.toString(),
-                      style: const TextStyle(color: Colors.amberAccent, fontFamily: 'monospace', fontSize: 13),
-                    ),
+                    decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(8)),
+                    child: Text(error.toString(), style: const TextStyle(color: Colors.amberAccent)),
                   ),
-                  if (stackTrace != null) ...[
-                    const SizedBox(height: 10),
-                    const Align(alignment: Alignment.centerLeft, child: Text("Stack Trace:", style: TextStyle(color: Colors.white54, fontSize: 12))),
-                    const SizedBox(height: 4),
-                    Container(
-                      height: 150, // Limita altura
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(8)),
-                      child: SingleChildScrollView(
-                        child: Text(
-                          stackTrace.toString(),
-                          style: const TextStyle(color: Colors.white60, fontFamily: 'monospace', fontSize: 10),
-                        ),
-                      ),
-                    ),
-                  ]
                 ],
               ),
             ),

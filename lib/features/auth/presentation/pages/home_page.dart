@@ -14,6 +14,7 @@ import 'invite_student_page.dart';
 import 'notifications_page.dart';
 import 'chat_page.dart'; 
 import 'manage_workouts_page.dart';
+import 'tarefas_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -116,6 +117,16 @@ class _HomePageState extends State<HomePage> {
             const DashboardChart(),
             
             const SizedBox(height: 24),
+
+            _buildActionCard(
+              icon: Icons.check_circle_outline,
+              color: Colors.green, // Ou AppColors.success se tiver acesso
+              title: "Minhas Tarefas & Metas",
+              subtitle: "Organize seu dia e objetivos",
+              onTap: () {
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const TarefasPage()));
+              },
+            ),
 
             // --- ÁREA ESPECÍFICA DO TIPO DE USUÁRIO ---
             if (isPersonal) ...[
