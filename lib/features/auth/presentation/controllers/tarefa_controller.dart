@@ -27,37 +27,33 @@ class TarefaController extends ChangeNotifier {
     await _db.collection('tarefas').add({
       'titulo': titulo,
       'concluida': false,
-      // Dica: Futuramente você pode adicionar um campo 'dataCriacao' aqui para ordenar
+      'dataCriacao': Timestamp.now(), // Grava a hora de agora
+      'dataConclusao': null, // Ainda não tem data de conclusão
     });
   }
 
   // --- 3. ALTERNAR STATUS (UPDATE) ---
   // Marca como feito ou pendente
   Future<void> alternarConclusao(Tarefa tarefa) async {
+    final novoStatus = !tarefa.concluida;
     await _db.collection('tarefas').doc(tarefa.id).update({
-      'concluida': !tarefa.concluida,
+      'concluida': novoStatus,
+      // Se concluiu, grava a data. Se desmarcou, apaga a data (null).
+      'dataConclusao': novoStatus ? Timestamp.now() : null, 
     });
   }
 
-  // --- 4. REMOVER (DELETE) ---
   Future<void> remover(String id) async {
     await _db.collection('tarefas').doc(id).delete();
   }
 
-  // --- 5. EDITAR TÍTULO (NOVO) ---
-  // Permite corrigir o nome da tarefa
   Future<void> atualizarTitulo(Tarefa tarefa, String novoTitulo) async {
-    await _db.collection('tarefas').doc(tarefa.id).update({
-      'titulo': novoTitulo,
-    });
+    await _db.collection('tarefas').doc(tarefa.id).update({'titulo': novoTitulo});
   }
 
   // --- 6. DESFAZER EXCLUSÃO (NOVO) ---
-  // Readiciona uma tarefa que foi apagada recentemente
+  // --- DESFAZER (RESTAURA AS DATAS ORIGINAIS) ---
   Future<void> desfazerExclusao(Tarefa tarefa) async {
-    await _db.collection('tarefas').add({
-      'titulo': tarefa.titulo,
-      'concluida': tarefa.concluida,
-    });
+    await _db.collection('tarefas').add(tarefa.toMap());
   }
 }

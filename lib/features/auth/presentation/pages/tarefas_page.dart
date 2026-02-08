@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../controllers/tarefa_controller.dart';
 import '../../data/models/tarefa_controller.dart';
+import 'package:intl/intl.dart';
 
 class TarefasPage extends StatelessWidget {
   const TarefasPage({super.key});
@@ -102,28 +103,26 @@ class TarefasPage extends StatelessWidget {
   }
 
   // --- O CARD COM DESLIZE (SWIPE) ---
+
   Widget _buildTaskCard(BuildContext context, Tarefa tarefa, TarefaController controller) {
+    // Formatador de data (Ex: 10 fev - 14:30)
+    final dateFormat = DateFormat("dd MMM 'às' HH:mm", 'pt_BR');
+
     return Dismissible(
-      key: Key(tarefa.id), // Identificador único para a animação
-      direction: DismissDirection.endToStart, // Só arrasta para esquerda
+      key: Key(tarefa.id),
+      direction: DismissDirection.endToStart,
       background: Container(
         margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(
-          color: Colors.red[400],
-          borderRadius: BorderRadius.circular(16),
-        ),
+        decoration: BoxDecoration(color: Colors.red[400], borderRadius: BorderRadius.circular(16)),
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
         child: const Icon(Icons.delete_outline, color: Colors.white, size: 30),
       ),
       onDismissed: (direction) {
-        // 1. Remove do banco
         controller.remover(tarefa.id);
-
-        // 2. Mostra SnackBar com opção de desfazer
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("Tarefa '${tarefa.titulo}' excluída"),
+            content: const Text("Meta excluída"),
             action: SnackBarAction(
               label: "DESFAZER",
               textColor: Colors.yellow,
@@ -140,8 +139,7 @@ class TarefasPage extends StatelessWidget {
           boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 5, offset: const Offset(0, 2))],
         ),
         child: ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          // Checkbox
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           leading: Transform.scale(
             scale: 1.2,
             child: Checkbox(
@@ -151,7 +149,6 @@ class TarefasPage extends StatelessWidget {
               onChanged: (_) => controller.alternarConclusao(tarefa),
             ),
           ),
-          // Título clicável para editar
           title: Text(
             tarefa.titulo,
             style: TextStyle(
@@ -161,7 +158,23 @@ class TarefasPage extends StatelessWidget {
               color: tarefa.concluida ? Colors.grey[400] : const Color(0xFF1E293B),
             ),
           ),
-          onTap: () => _mostrarDialogo(context, controller, tarefa), // Abre edição ao clicar
+          // --- AQUI ESTÁ A MUDANÇA VISUAL ---
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Row(
+              children: [
+                Icon(Icons.calendar_today, size: 12, color: Colors.grey[400]),
+                const SizedBox(width: 4),
+                Text(
+                  tarefa.concluida && tarefa.dataConclusao != null
+                      ? "Concluída em: ${dateFormat.format(tarefa.dataConclusao!)}"
+                      : "Iniciada em: ${dateFormat.format(tarefa.dataCriacao)}",
+                  style: TextStyle(fontSize: 12, color: tarefa.concluida ? const Color(0xFF10B981) : Colors.grey[500]),
+                ),
+              ],
+            ),
+          ),
+          onTap: () => _mostrarDialogo(context, controller, tarefa),
         ),
       ),
     );
