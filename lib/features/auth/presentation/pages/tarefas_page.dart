@@ -10,7 +10,6 @@ class TarefasPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final controller = Provider.of<TarefaController>(context);
     
-    // Separando as listas
     final pendentes = controller.tarefas.where((t) => !t.concluida).toList();
     final concluidas = controller.tarefas.where((t) => t.concluida).toList();
     
@@ -20,17 +19,17 @@ class TarefasPage extends StatelessWidget {
     final progresso = total == 0 ? 0.0 : feitos / total;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF1F5F9), // AppColors.background
+      backgroundColor: const Color(0xFFF1F5F9),
       appBar: AppBar(
         title: const Text("Minhas Tarefas", style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
-        foregroundColor: const Color(0xFF1E293B), // Cor do texto
+        foregroundColor: const Color(0xFF1E293B),
       ),
       body: Column(
         children: [
-          // --- BARRA DE PROGRESSO ---
+          // BARRA DE PROGRESSO
           Container(
             margin: const EdgeInsets.all(20),
             padding: const EdgeInsets.all(20),
@@ -52,54 +51,35 @@ class TarefasPage extends StatelessWidget {
                 LinearProgressIndicator(
                   value: progresso,
                   backgroundColor: Colors.grey[200],
-                  color: const Color(0xFF2563EB), // AppColors.primary
+                  color: const Color(0xFF2563EB),
                   minHeight: 8,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  "$feitos de $total tarefas concluídas",
-                  style: TextStyle(color: Colors.grey[500], fontSize: 12),
-                )
               ],
             ),
           ),
 
-          // --- LISTA DE TAREFAS ---
+          // LISTA
           Expanded(
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               children: [
                 if (pendentes.isNotEmpty) ...[
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 8),
-                    child: Text("PENDENTES", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey, fontSize: 12)),
-                  ),
+                  _buildSectionTitle("PENDENTES"),
                   ...pendentes.map((t) => _buildTaskCard(context, t, controller)),
                 ],
 
                 if (concluidas.isNotEmpty) ...[
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 8),
-                    child: Text("CONCLUÍDAS", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey, fontSize: 12)),
-                  ),
+                  _buildSectionTitle("CONCLUÍDAS"),
                   ...concluidas.map((t) => _buildTaskCard(context, t, controller)),
                 ],
                 
                 if (controller.tarefas.isEmpty)
                   const Padding(
                     padding: EdgeInsets.only(top: 50),
-                    child: Center(
-                      child: Column(
-                        children: [
-                          Icon(Icons.assignment_turned_in_outlined, size: 60, color: Colors.grey),
-                          SizedBox(height: 10),
-                          Text("Nenhuma tarefa ainda!", style: TextStyle(color: Colors.grey)),
-                        ],
-                      ),
-                    ),
+                    child: Center(child: Text("Nenhuma tarefa ainda!", style: TextStyle(color: Colors.grey))),
                   ),
-                 const SizedBox(height: 80), // Espaço para o FAB
+                 const SizedBox(height: 80),
               ],
             ),
           ),
@@ -109,60 +89,101 @@ class TarefasPage extends StatelessWidget {
         backgroundColor: const Color(0xFF2563EB),
         icon: const Icon(Icons.add, color: Colors.white),
         label: const Text("Nova Tarefa", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        onPressed: () => _mostrarDialogoAdicionar(context, controller),
+        onPressed: () => _mostrarDialogo(context, controller, null),
       ),
     );
   }
 
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey, fontSize: 12)),
+    );
+  }
+
+  // --- O CARD COM DESLIZE (SWIPE) ---
   Widget _buildTaskCard(BuildContext context, Tarefa tarefa, TarefaController controller) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 5, offset: const Offset(0, 2))],
+    return Dismissible(
+      key: Key(tarefa.id), // Identificador único para a animação
+      direction: DismissDirection.endToStart, // Só arrasta para esquerda
+      background: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: Colors.red[400],
+          borderRadius: BorderRadius.circular(16),
+        ),
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        child: const Icon(Icons.delete_outline, color: Colors.white, size: 30),
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: Transform.scale(
-          scale: 1.2,
-          child: Checkbox(
-            value: tarefa.concluida,
-            activeColor: const Color(0xFF10B981), // Verde Sucesso
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
-            onChanged: (_) => controller.alternarConclusao(tarefa),
+      onDismissed: (direction) {
+        // 1. Remove do banco
+        controller.remover(tarefa.id);
+
+        // 2. Mostra SnackBar com opção de desfazer
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Tarefa '${tarefa.titulo}' excluída"),
+            action: SnackBarAction(
+              label: "DESFAZER",
+              textColor: Colors.yellow,
+              onPressed: () => controller.desfazerExclusao(tarefa),
+            ),
           ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 5, offset: const Offset(0, 2))],
         ),
-        title: Text(
-          tarefa.titulo,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            decoration: tarefa.concluida ? TextDecoration.lineThrough : null,
-            color: tarefa.concluida ? Colors.grey[400] : const Color(0xFF1E293B),
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          // Checkbox
+          leading: Transform.scale(
+            scale: 1.2,
+            child: Checkbox(
+              value: tarefa.concluida,
+              activeColor: const Color(0xFF10B981),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+              onChanged: (_) => controller.alternarConclusao(tarefa),
+            ),
           ),
-        ),
-        trailing: IconButton(
-          icon: Icon(Icons.delete_outline, color: Colors.red[300]),
-          onPressed: () => controller.remover(tarefa.id),
+          // Título clicável para editar
+          title: Text(
+            tarefa.titulo,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              decoration: tarefa.concluida ? TextDecoration.lineThrough : null,
+              color: tarefa.concluida ? Colors.grey[400] : const Color(0xFF1E293B),
+            ),
+          ),
+          onTap: () => _mostrarDialogo(context, controller, tarefa), // Abre edição ao clicar
         ),
       ),
     );
   }
 
-  void _mostrarDialogoAdicionar(BuildContext context, TarefaController controller) {
-    final textoController = TextEditingController();
+  // Dialogo único para CRIAR ou EDITAR
+  void _mostrarDialogo(BuildContext context, TarefaController controller, Tarefa? tarefaExistente) {
+    final textoController = TextEditingController(text: tarefaExistente?.titulo ?? "");
+    final isEditando = tarefaExistente != null;
+
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text("Nova Tarefa"),
+          title: Text(isEditando ? "Editar Tarefa" : "Nova Tarefa"),
           content: TextField(
             controller: textoController,
             autofocus: true,
+            textCapitalization: TextCapitalization.sentences,
             decoration: InputDecoration(
-              hintText: "Ex: Tomar creatina...",
+              hintText: "Ex: Treinar Peito...",
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               filled: true,
               fillColor: Colors.grey[50],
@@ -180,11 +201,15 @@ class TarefasPage extends StatelessWidget {
               ),
               onPressed: () {
                 if (textoController.text.isNotEmpty) {
-                  controller.adicionar(textoController.text);
+                  if (isEditando) {
+                    controller.atualizarTitulo(tarefaExistente, textoController.text);
+                  } else {
+                    controller.adicionar(textoController.text);
+                  }
                   Navigator.pop(context);
                 }
               },
-              child: const Text("Salvar", style: TextStyle(color: Colors.white)),
+              child: Text(isEditando ? "Atualizar" : "Salvar", style: const TextStyle(color: Colors.white)),
             )
           ],
         );
