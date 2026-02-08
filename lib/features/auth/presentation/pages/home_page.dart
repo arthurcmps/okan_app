@@ -90,11 +90,36 @@ class _HomePageState extends State<HomePage> {
               },
             ),
 
-          // 2. PERFIL
-          IconButton(
-            icon: const Icon(Icons.account_circle, size: 28),
-            tooltip: "Meu Perfil",
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ProfilePage())),
+          // 2. PERFIL (COM FOTO)
+          Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: GestureDetector(
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ProfilePage())),
+              child: StreamBuilder<DocumentSnapshot>(
+                stream: FirebaseFirestore.instance.collection('users').doc(user?.uid).snapshots(),
+                builder: (context, snapshot) {
+                  // Se tiver foto, mostra ela. Se não, mostra ícone padrão.
+                  if (snapshot.hasData && snapshot.data!.exists) {
+                    final data = snapshot.data!.data() as Map<String, dynamic>;
+                    final photoUrl = data['photoUrl'];
+                    
+                    if (photoUrl != null && photoUrl.isNotEmpty) {
+                      return CircleAvatar(
+                        radius: 20, // Tamanho da bolinha
+                        backgroundImage: NetworkImage(photoUrl),
+                        backgroundColor: Colors.grey[200],
+                      );
+                    }
+                  }
+                  // Ícone padrão (se não tiver foto)
+                  return const CircleAvatar(
+                    radius: 20,
+                    backgroundColor: Colors.grey,
+                    child: Icon(Icons.person, color: Colors.white),
+                  );
+                },
+              ),
+            ),
           ),
 
           // 3. SAIR

@@ -71,18 +71,36 @@ class _ChatPageState extends State<ChatPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            CircleAvatar(child: Text(widget.otherUserName[0].toUpperCase())),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                widget.otherUserName, 
-                style: const TextStyle(fontSize: 16),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
+        titleSpacing: 0, // Remove o espaço extra do botão de voltar
+        title: StreamBuilder<DocumentSnapshot>(
+          stream: FirebaseFirestore.instance.collection('users').doc(widget.otherUserId).snapshots(),
+          builder: (context, snapshot) {
+            String photoUrl = "";
+            if (snapshot.hasData && snapshot.data!.exists) {
+              final data = snapshot.data!.data() as Map<String, dynamic>;
+              photoUrl = data['photoUrl'] ?? "";
+            }
+
+            return Row(
+              children: [
+                // FOTO DA OUTRA PESSOA
+                CircleAvatar(
+                  radius: 18,
+                  backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+                  backgroundColor: Colors.grey[300],
+                  child: photoUrl.isEmpty ? const Icon(Icons.person, color: Colors.grey) : null,
+                ),
+                const SizedBox(width: 10),
+                // NOME DA PESSOA
+                Expanded(
+                  child: Text(
+                    widget.otherUserName,
+                    style: const TextStyle(fontSize: 16, overflow: TextOverflow.ellipsis),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
       body: Column(

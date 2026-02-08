@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'student_detail_page.dart';
-import 'chat_page.dart'; // <--- IMPORTANTE: Chat importado
+import 'chat_page.dart';
 
 class StudentsPage extends StatefulWidget {
   const StudentsPage({super.key});
@@ -24,8 +24,6 @@ class _StudentsPageState extends State<StudentsPage> {
     final emailBusca = _emailController.text.trim();
 
     try {
-      debugPrint("Buscando usuário: '$emailBusca'...");
-      
       final querySnapshot = await FirebaseFirestore.instance
           .collection('users')
           .where('email', isEqualTo: emailBusca)
@@ -114,7 +112,6 @@ class _StudentsPageState extends State<StudentsPage> {
     );
   }
 
-  // --- Lógica de Desvincular ---
   void _removerAluno(String alunoId, String nome) {
     showDialog(
       context: context,
@@ -180,26 +177,49 @@ class _StudentsPageState extends State<StudentsPage> {
               
               final String nome = dados['name'] ?? 'Aluno';
               final String email = dados['email'] ?? '';
-              
-              // --- VERIFICA SE TEM MENSAGEM NÃO LIDA ---
               final bool temMensagem = dados['unreadByPersonal'] == true;
 
               return Card(
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 elevation: 2,
                 child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: Colors.black12,
-                    child: Text(
-                      nome.isNotEmpty ? nome[0].toUpperCase() : 'A',
-                      style: const TextStyle(color: Colors.black87),
+                  // --- FOTO DO ALUNO (CORRIGIDA) ---
+                    leading: FutureBuilder<DocumentSnapshot>(
+                      future: FirebaseFirestore.instance.collection('users').doc(doc.id).get(),
+                      builder: (context, snapshot) {
+                        
+                        // Enquanto carrega, mostra inicial usando a variável 'dados' (que já temos fora)
+                        if (!snapshot.hasData || !snapshot.data!.exists) {
+                          return CircleAvatar(
+                            backgroundColor: Colors.blue.shade100,
+                            child: Text(nome.isNotEmpty ? nome[0].toUpperCase() : '?',
+                                style: TextStyle(color: Colors.blue.shade800)),
+                          );
+                        }
+
+                        final userData = snapshot.data!.data() as Map<String, dynamic>;
+                        final photoUrl = userData['photoUrl'];
+
+                        // Se tiver foto, mostra ela
+                        if (photoUrl != null && photoUrl.isNotEmpty) {
+                          return CircleAvatar(
+                            backgroundImage: NetworkImage(photoUrl),
+                            backgroundColor: Colors.grey[200],
+                          );
+                        }
+
+                        // Se não tiver foto, mostra inicial
+                        return CircleAvatar(
+                          backgroundColor: Colors.blue.shade100,
+                          child: Text(nome.isNotEmpty ? nome[0].toUpperCase() : '?',
+                              style: TextStyle(color: Colors.blue.shade800)),
+                        );
+                      },
                     ),
-                  ),
                   
                   title: Text(nome, style: const TextStyle(fontWeight: FontWeight.bold)),
                   subtitle: Text(email),
                   
-                  // Ação de Navegar (Perfil/Treinos)
                   onTap: () {
                     Navigator.push(
                       context,
@@ -213,16 +233,15 @@ class _StudentsPageState extends State<StudentsPage> {
                     );
                   },
 
-                  // Ações (Chat + Excluir)
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // --- BOTÃO DE CHAT COM NOTIFICAÇÃO ---
+                      // --- BOTÃO DE CHAT ---
                       IconButton(
                         icon: Stack(
                           children: [
                             const Icon(Icons.chat_bubble_outline, color: Colors.teal),
-                            if (temMensagem) // <--- MOSTRA A BOLINHA VERMELHA
+                            if (temMensagem)
                               Positioned(
                                 right: 0, top: 0,
                                 child: Container(
