@@ -35,9 +35,20 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            // Sintaxe correta para Kotlin DSL (.kts)
+            
+            // 1. Assinatura (usa = e getByName)
             signingConfig = signingConfigs.getByName("debug")
+            
+            // 2. Minificação (usa is... = false)
+            isMinifyEnabled = false
+            isShrinkResources = false
+            
+            // 3. Proguard (usa parenteses e aspas duplas)
+            proguardFiles(
+                getDefaultProguardFile("proguard-android.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 }
