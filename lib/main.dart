@@ -12,7 +12,7 @@ import 'features/auth/presentation/pages/login_page.dart';
 import 'core/services/time_service.dart';
 
 // --- IMPORTANTE: Ajuste estes caminhos se necessário ---
-// Importando a nova feature de Tarefas que criamos
+// Importando a nova feature de Tarefas
 import 'features/auth/presentation/pages/tarefas_page.dart';
 import 'features/auth/presentation/controllers/tarefa_controller.dart';
 
@@ -227,12 +227,14 @@ class _GlobalTimerBarState extends State<GlobalTimerBar> {
                 )
               ),
               const Spacer(),
+              // BOTÃO DE ADICIONAR TEMPO
               IconButton(
                 icon: const Icon(Icons.add_circle_outline, color: Colors.blueAccent), 
-                tooltip: "+10s",
+                // REMOVIDO: tooltip: "+10s", (Causava o erro de Overlay)
                 onPressed: () => TimerService.instance.addTime(10)
               ),
               const SizedBox(width: 4),
+              // BOTÃO DE FECHAR
               InkWell(
                 onTap: () => TimerService.instance.stop(), 
                 borderRadius: BorderRadius.circular(20),
