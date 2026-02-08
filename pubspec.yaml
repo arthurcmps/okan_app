@@ -10,48 +10,61 @@ dependencies:
   flutter:
     sdk: flutter
   
-  # --- TRADUÇÕES (Causa do erro anterior) ---
+  # --- TRADUÇÕES ---
   flutter_localizations:
     sdk: flutter
-  
-  # CORREÇÃO: Atualizado para 0.20.2 para funcionar com o Flutter atual
-  intl: ^0.20.2
-  # -------------------------------------------
+  intl: ^0.20.2 # <--- VOLTAMOS PARA A VERSÃO CORRETA AQUI
 
-  # Vídeos
+  # --- VÍDEOS ---
   youtube_player_flutter: ^9.0.1
   video_player: ^2.8.1
   chewie: ^1.7.1
 
-  # Ícones
-  cupertino_icons: ^1.0.8
-
-  # Firebase
+  # --- FIREBASE ---
   firebase_core: ^3.15.2
   firebase_auth: ^5.7.0
   cloud_firestore: ^5.6.12
+  firebase_storage: ^12.4.0
   
-  # --- PACOTES QUE ESTAVAM FALTANDO ---
-  firebase_storage: ^12.4.0  # Versão compatível com firebase_core ^3
-  image_picker: ^1.1.2       # Para pegar foto da galeria
-  # ------------------------------------
-
+  # --- UTILITÁRIOS E UI ---
+  image_picker: ^1.1.2
   google_sign_in: ^6.1.0
   fl_chart: ^0.66.0
   url_launcher: ^6.2.0
 
-  # Gerência de Estado e Injeção
+  # --- GERÊNCIA DE ESTADO E INJEÇÃO ---
   provider: ^6.1.2
   get_it: ^7.7.0
   
-  # Utilitários
+  # --- LÓGICA ---
   equatable: ^2.0.5
   uuid: ^4.4.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^6.0.0
+  flutter_lints: ^3.0.0
+
+  # PACOTES DE DESENVOLVIMENTO
+  flutter_launcher_icons: ^0.13.1
+  flutter_native_splash: ^2.3.1
 
 flutter:
   uses-material-design: true
+
+# ----------------------------------------------------------
+# CONFIGURAÇÕES (TOTALMENTE À ESQUERDA)
+# ----------------------------------------------------------
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "flutter_01.png"
+  min_sdk_android: 21
+
+flutter_native_splash:
+  color: "#F1F5F9"
+  image: "flutter_01.png"
+  android_12:
+    image: "flutter_01.png"
+    color: "#F1F5F9"
