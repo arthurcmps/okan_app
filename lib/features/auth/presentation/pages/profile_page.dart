@@ -2,8 +2,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart'; // Importante para upload
+import 'package:image_picker/image_picker.dart'; // Importante para Câmera/Galeria
+
 import '../../../../core/services/auth_service.dart';
-import '../../../../core/services/storage_service.dart'; // <--- Importe o novo serviço
+import '../../../../core/widgets/user_avatar.dart'; // <--- O componente mágico que criamos
 import 'library_admin_page.dart';
 import 'login_page.dart';
 
@@ -16,37 +19,104 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   final AuthService _authService = AuthService();
-  final StorageService _storageService = StorageService(); // <--- Instância do Storage
   final User? user = FirebaseAuth.instance.currentUser;
   bool _isUploading = false;
 
-  Future<void> _trocarFoto() async {
-    // 1. Seleciona
-    final File? imagem = await _storageService.selecionarImagem();
-    if (imagem == null) return; // Usuário cancelou
+  // --- LÓGICA DE FOTO (CÂMERA E GALERIA) ---
+  
+  // 1. Mostra o menu para escolher
+  void _mostrarOpcoesFoto() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) {
+        return SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_library, color: Colors.blue),
+                title: const Text('Escolher da Galeria'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _atualizarFoto(ImageSource.gallery);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.camera_alt, color: Colors.blue),
+                title: const Text('Tirar Foto Agora'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _atualizarFoto(ImageSource.camera);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
-    setState(() => _isUploading = true);
+  // 2. Processa a imagem e faz upload
+  Future<void> _atualizarFoto(ImageSource source) async {
+    final picker = ImagePicker();
+    // imageQuality: 50 reduz o tamanho do arquivo para economizar dados
+    final pickedFile = await picker.pickImage(source: source, imageQuality: 50);
 
-    // 2. Faz Upload
-    final url = await _storageService.uploadFotoPerfil(imagem);
+    if (pickedFile == null) return;
 
-    setState(() => _isUploading = false);
+    File imagem = File(pickedFile.path);
+    String userId = user!.uid;
 
-    if (url != null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Foto atualizada com sucesso!")));
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Erro ao enviar foto."), backgroundColor: Colors.red));
+    try {
+      setState(() => _isUploading = true);
+
+      // A. Upload para o Firebase Storage
+      final ref = FirebaseStorage.instance
+          .ref()
+          .child('user_photos')
+          .child('$userId.jpg');
+      
+      await ref.putFile(imagem);
+      final url = await ref.getDownloadURL();
+
+      // B. Atualiza no Firestore (Banco de Dados)
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .update({'photoUrl': url});
+
+      // C. Atualiza no Auth (Sessão atual) para refletir rápido
+      await FirebaseAuth.instance.currentUser!.updatePhotoURL(url);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Foto de perfil atualizada! 📸"), backgroundColor: Colors.green)
+        );
+      }
+
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Erro ao enviar foto: $e"), backgroundColor: Colors.red)
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isUploading = false);
     }
   }
 
-  // ... (Função _editarDados continua igual)
+  // --- LÓGICA DE EDITAR DADOS (PESO/ALTURA) ---
   Future<void> _editarDados(BuildContext context, String campo, String valorAtual) async {
-    final controller = TextEditingController(text: valorAtual);
+    final controller = TextEditingController(text: valorAtual.replaceAll(RegExp(r'[^0-9.,]'), '')); // Limpa texto extra
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: Text("Editar $campo"),
-        content: TextField(controller: controller, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: "Novo $campo")),
+        content: TextField(
+          controller: controller, 
+          keyboardType: TextInputType.number, 
+          decoration: InputDecoration(labelText: "Novo $campo", suffixText: campo == "Altura" ? "cm" : "kg")
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar")),
           ElevatedButton(
@@ -70,6 +140,7 @@ class _ProfilePageState extends State<ProfilePage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Meu Perfil"),
+        centerTitle: true,
         elevation: 0,
         backgroundColor: Colors.transparent,
         foregroundColor: Colors.black,
@@ -85,7 +156,6 @@ class _ProfilePageState extends State<ProfilePage> {
           final String tipo = data['tipo'] ?? "aluno";
           final String peso = data['peso'] ?? "--";
           final String altura = data['altura'] ?? "--";
-          // Pega a URL da foto (pode ser null)
           final String? photoUrl = data['photoUrl']; 
 
           final bool isPersonal = tipo == 'personal';
@@ -97,35 +167,55 @@ class _ProfilePageState extends State<ProfilePage> {
                 Center(
                   child: Column(
                     children: [
-                      // --- ÁREA DA FOTO ---
+                      // --- ÁREA DA FOTO (OTIMIZADA) ---
                       Stack(
                         children: [
-                          _buildAvatar(photoUrl, nome, isPersonal),
+                          // 1. O Avatar com Cache
+                          UserAvatar(
+                            photoUrl: photoUrl, 
+                            name: nome, 
+                            radius: 60, // Tamanho grande
+                            onTap: _mostrarOpcoesFoto, // Clica na foto para editar
+                          ),
+
+                          // 2. Loading enquanto sobe a foto
                           if (_isUploading)
-                            const Positioned.fill(child: CircularProgressIndicator()),
+                            const Positioned.fill(
+                              child: CircularProgressIndicator(color: Colors.white),
+                            ),
+                          
+                          // 3. Ícone de Câmera Pequeno
                           Positioned(
                             bottom: 0,
                             right: 0,
-                            child: CircleAvatar(
-                              backgroundColor: Colors.white,
-                              radius: 18,
-                              child: IconButton(
-                                icon: const Icon(Icons.camera_alt, size: 18, color: Colors.blueGrey),
-                                onPressed: _trocarFoto, // <--- Botão de Trocar
+                            child: GestureDetector(
+                              onTap: _mostrarOpcoesFoto,
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.blueAccent,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.white, width: 2),
+                                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 4)]
+                                ),
+                                child: const Icon(Icons.camera_alt, size: 20, color: Colors.white),
                               ),
                             ),
                           )
                         ],
                       ),
-                      // --------------------
+                      // --------------------------------
+
                       const SizedBox(height: 16),
                       Text(nome, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                      
                       Container(
                         margin: const EdgeInsets.only(top: 8),
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                         decoration: BoxDecoration(color: isPersonal ? Colors.purple : Colors.blue, borderRadius: BorderRadius.circular(20)),
                         child: Text(isPersonal ? "PERSONAL TRAINER" : "ALUNO", style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                       ),
+                      
                       Text(email, style: const TextStyle(color: Colors.grey, height: 2)),
                     ],
                   ),
@@ -133,34 +223,51 @@ class _ProfilePageState extends State<ProfilePage> {
                 
                 const SizedBox(height: 30),
                 
-                // ... (O Restante do código de Dados Físicos e Configurações continua igual)
+                // --- DADOS FÍSICOS (SÓ PARA ALUNO) ---
                 if (!isPersonal) ...[
                   const Align(alignment: Alignment.centerLeft, child: Text("Dados Físicos", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
                   const SizedBox(height: 10),
                   Row(
                     children: [
-                      Expanded(child: _buildInfoCard(icon: Icons.monitor_weight_outlined, title: "Peso", value: "$peso kg", onTap: () => _editarDados(context, "Peso", peso))),
+                      Expanded(
+                        child: _buildInfoCard(
+                          icon: Icons.monitor_weight_outlined, 
+                          title: "Peso", 
+                          value: "$peso kg", 
+                          onTap: () => _editarDados(context, "Peso", peso)
+                        )
+                      ),
                       const SizedBox(width: 16),
-                      Expanded(child: _buildInfoCard(icon: Icons.height, title: "Altura", value: "$altura cm", onTap: () => _editarDados(context, "Altura", altura))),
+                      Expanded(
+                        child: _buildInfoCard(
+                          icon: Icons.height, 
+                          title: "Altura", 
+                          value: "$altura cm", 
+                          onTap: () => _editarDados(context, "Altura", altura)
+                        )
+                      ),
                     ],
                   ),
                   const SizedBox(height: 30),
                 ],
 
+                // --- CONFIGURAÇÕES ---
                 const Align(alignment: Alignment.centerLeft, child: Text("Configurações", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
                 const SizedBox(height: 10),
                 
                 if (isPersonal)
                   ListTile(
-                    leading: const Icon(Icons.library_books, color: Colors.purple),
-                    title: const Text("Gerenciar Biblioteca"),
-                    trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                    contentPadding: EdgeInsets.zero,
+                    leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.purple.shade50, borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.library_books, color: Colors.purple)),
+                    title: const Text("Gerenciar Biblioteca de Exercícios"),
+                    trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LibraryAdminPage())),
                   ),
 
                 ListTile(
-                  leading: const Icon(Icons.logout, color: Colors.red),
-                  title: const Text("Sair da Conta", style: TextStyle(color: Colors.red)),
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.logout, color: Colors.red)),
+                  title: const Text("Sair da Conta", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
                   onTap: () async {
                     await _authService.deslogar();
                     if (mounted) Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const LoginPage()), (route) => false);
@@ -174,38 +281,24 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  // Widget Auxiliar para exibir o Avatar (Imagem ou Letra)
-  Widget _buildAvatar(String? url, String nome, bool isPersonal) {
-    if (url != null && url.isNotEmpty) {
-      return CircleAvatar(
-        radius: 50,
-        backgroundImage: NetworkImage(url),
-        backgroundColor: Colors.grey.shade200,
-      );
-    }
-    return CircleAvatar(
-      radius: 50,
-      backgroundColor: isPersonal ? Colors.purple.shade100 : Colors.blue.shade100,
-      child: Text(
-        nome.isNotEmpty ? nome[0].toUpperCase() : 'U',
-        style: TextStyle(fontSize: 40, color: isPersonal ? Colors.purple : Colors.blue),
-      ),
-    );
-  }
-
+  // Widget Auxiliar para os Cards de Peso/Altura
   Widget _buildInfoCard({required IconData icon, required String title, required String value, required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade300)),
+        decoration: BoxDecoration(
+          color: Colors.white, 
+          borderRadius: BorderRadius.circular(16), 
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))]
+        ),
         child: Column(
           children: [
-            Icon(icon, size: 30, color: Colors.grey.shade700),
+            Icon(icon, size: 30, color: Colors.blueAccent),
             const SizedBox(height: 8),
-            Text(title, style: const TextStyle(color: Colors.grey)),
+            Text(title, style: const TextStyle(color: Colors.grey, fontSize: 12)),
             const SizedBox(height: 4),
-            Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87)),
           ],
         ),
       ),

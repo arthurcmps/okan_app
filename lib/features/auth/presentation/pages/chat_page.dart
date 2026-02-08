@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:intl/intl.dart';
+import '../../../../core/widgets/user_avatar.dart'; // <--- IMPORTANTE
 
 class ChatPage extends StatefulWidget {
   final String otherUserId;   // ID da outra pessoa (Personal ou Aluno)
@@ -50,7 +50,7 @@ class _ChatPageState extends State<ChatPage> {
       'timestamp': FieldValue.serverTimestamp(),
     });
 
-    // Atualiza metadados do chat (para listar conversas recentes se precisar no futuro)
+    // Atualiza metadados do chat
     await FirebaseFirestore.instance.collection('chats').doc(_chatId).set({
       'users': [_currentUserId, widget.otherUserId],
       'lastMessage': msg,
@@ -60,7 +60,7 @@ class _ChatPageState extends State<ChatPage> {
     // Rola para o fim
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
-        0, // Porque a lista é invertida (reverse: true)
+        0, 
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOut,
       );
@@ -83,14 +83,15 @@ class _ChatPageState extends State<ChatPage> {
 
             return Row(
               children: [
-                // FOTO DA OUTRA PESSOA
-                CircleAvatar(
+                // FOTO DA OUTRA PESSOA (USANDO COMPONENTE OTIMIZADO)
+                UserAvatar(
+                  photoUrl: photoUrl, 
+                  name: widget.otherUserName,
                   radius: 18,
-                  backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
-                  backgroundColor: Colors.grey[300],
-                  child: photoUrl.isEmpty ? const Icon(Icons.person, color: Colors.grey) : null,
                 ),
+                
                 const SizedBox(width: 10),
+                
                 // NOME DA PESSOA
                 Expanded(
                   child: Text(

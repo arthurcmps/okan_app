@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../../../core/widgets/user_avatar.dart'; // <--- IMPORTANTE
 import 'student_detail_page.dart';
 import 'chat_page.dart';
 
@@ -183,39 +184,26 @@ class _StudentsPageState extends State<StudentsPage> {
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 elevation: 2,
                 child: ListTile(
-                  // --- FOTO DO ALUNO (CORRIGIDA) ---
-                    leading: FutureBuilder<DocumentSnapshot>(
-                      future: FirebaseFirestore.instance.collection('users').doc(doc.id).get(),
-                      builder: (context, snapshot) {
-                        
-                        // Enquanto carrega, mostra inicial usando a variável 'dados' (que já temos fora)
-                        if (!snapshot.hasData || !snapshot.data!.exists) {
-                          return CircleAvatar(
-                            backgroundColor: Colors.blue.shade100,
-                            child: Text(nome.isNotEmpty ? nome[0].toUpperCase() : '?',
-                                style: TextStyle(color: Colors.blue.shade800)),
-                          );
-                        }
-
-                        final userData = snapshot.data!.data() as Map<String, dynamic>;
-                        final photoUrl = userData['photoUrl'];
-
-                        // Se tiver foto, mostra ela
-                        if (photoUrl != null && photoUrl.isNotEmpty) {
-                          return CircleAvatar(
-                            backgroundImage: NetworkImage(photoUrl),
-                            backgroundColor: Colors.grey[200],
-                          );
-                        }
-
-                        // Se não tiver foto, mostra inicial
-                        return CircleAvatar(
-                          backgroundColor: Colors.blue.shade100,
-                          child: Text(nome.isNotEmpty ? nome[0].toUpperCase() : '?',
-                              style: TextStyle(color: Colors.blue.shade800)),
-                        );
-                      },
-                    ),
+                  // --- FOTO DO ALUNO (ATUALIZADO COM USERAVATAR) ---
+                  leading: FutureBuilder<DocumentSnapshot>(
+                    future: FirebaseFirestore.instance.collection('users').doc(doc.id).get(),
+                    builder: (context, snapshot) {
+                      String? photoUrl;
+                      
+                      // Tenta pegar a foto mais recente
+                      if (snapshot.hasData && snapshot.data!.exists) {
+                         final userData = snapshot.data!.data() as Map<String, dynamic>;
+                         photoUrl = userData['photoUrl'];
+                      }
+                      
+                      // Componente Otimizado
+                      return UserAvatar(
+                        photoUrl: photoUrl, 
+                        name: nome,
+                        radius: 25,
+                      );
+                    },
+                  ),
                   
                   title: Text(nome, style: const TextStyle(fontWeight: FontWeight.bold)),
                   subtitle: Text(email),
