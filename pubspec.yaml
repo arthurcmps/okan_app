@@ -41,6 +41,7 @@ dependencies:
   # --- LÓGICA ---
   equatable: ^2.0.5
   uuid: ^4.4.0
+  vibration: ^3.1.5
 
 dev_dependencies:
   flutter_test:
@@ -53,6 +54,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+vibration: ^1.9.0
 
 # ----------------------------------------------------------
 # CONFIGURAÇÕES (TOTALMENTE À ESQUERDA)

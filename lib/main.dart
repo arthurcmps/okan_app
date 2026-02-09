@@ -9,6 +9,7 @@ import 'firebase_options.dart';
 
 // Importações das suas Features
 import 'features/auth/presentation/pages/login_page.dart';
+import 'features/auth/presentation/pages/auth_check.dart'; // <--- IMPORTANTE: Tela de verificação de login
 import 'core/services/time_service.dart';
 
 // --- IMPORTANTE: Ajuste estes caminhos se necessário ---
@@ -147,10 +148,9 @@ class OkanApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: sportTheme,
       
-      // --- AQUI VOCÊ ESCOLHE A TELA INICIAL ---
-      // Para testar o CRUD de Tarefas, deixe TarefasPage.
-      // Para voltar ao login, troque para const LoginPage().
-      home: const LoginPage(), 
+      // --- TELA INICIAL COM VERIFICAÇÃO DE LOGIN ---
+      // AuthCheck decide se vai para Home ou Login
+      home: const AuthCheck(), 
 
       builder: (context, child) {
         return Scaffold(
@@ -227,14 +227,14 @@ class _GlobalTimerBarState extends State<GlobalTimerBar> {
                 )
               ),
               const Spacer(),
-              // BOTÃO DE ADICIONAR TEMPO
+              // BOTÃO ADICIONAR TEMPO
               IconButton(
                 icon: const Icon(Icons.add_circle_outline, color: Colors.blueAccent), 
-                // REMOVIDO: tooltip: "+10s", (Causava o erro de Overlay)
+                // REMOVIDO: tooltip (causava erro de overlay fora da rota)
                 onPressed: () => TimerService.instance.addTime(10)
               ),
               const SizedBox(width: 4),
-              // BOTÃO DE FECHAR
+              // BOTÃO FECHAR
               InkWell(
                 onTap: () => TimerService.instance.stop(), 
                 borderRadius: BorderRadius.circular(20),

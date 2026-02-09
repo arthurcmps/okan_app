@@ -1,232 +1,221 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../data/models/tarefa_model.dart';
 import '../controllers/tarefa_controller.dart';
-import '../../data/models/tarefa_controller.dart';
-import 'package:intl/intl.dart';
 
-class TarefasPage extends StatelessWidget {
+class TarefasPage extends StatefulWidget {
   const TarefasPage({super.key});
 
   @override
+  State<TarefasPage> createState() => _TarefasPageState();
+}
+
+class _TarefasPageState extends State<TarefasPage> {
+  final TextEditingController _taskController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Garante que carregamos as tarefas DO USUÁRIO ATUAL ao abrir a tela
+    Future.microtask(() {
+      if (mounted) {
+        context.read<TarefaController>().iniciarEscuta();
+      }
+    });
+  }
+
+  // --- FUNÇÃO SEGURA PARA ADICIONAR ---
+  void _adicionarTarefaSegura(BuildContext context, TarefaController controller) {
+    final texto = _taskController.text.trim();
+    if (texto.isEmpty) return;
+
+    // 1. Fecha o teclado PRIMEIRO para evitar conflito de UI
+    FocusScope.of(context).unfocus();
+
+    // 2. Chama o controller
+    controller.adicionar(texto);
+
+    // 3. Limpa o campo
+    _taskController.clear();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final controller = Provider.of<TarefaController>(context);
-    
+    final controller = context.watch<TarefaController>();
+
     final pendentes = controller.tarefas.where((t) => !t.concluida).toList();
     final concluidas = controller.tarefas.where((t) => t.concluida).toList();
-    
-    // Cálculo de progresso
-    final total = controller.tarefas.length;
-    final feitos = concluidas.length;
-    final progresso = total == 0 ? 0.0 : feitos / total;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF1F5F9),
       appBar: AppBar(
-        title: const Text("Minhas Tarefas", style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: true,
-        foregroundColor: const Color(0xFF1E293B),
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("Minhas Metas"),
+            Text(
+              "Foco no resultado! 🚀",
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.normal),
+            ),
+          ],
+        ),
       ),
       body: Column(
         children: [
-          // BARRA DE PROGRESSO
-          Container(
-            margin: const EdgeInsets.all(20),
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
-            ),
-            child: Column(
+          // --- ÁREA DE INPUT ---
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text("Progresso Diário", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                    Text("${(progresso * 100).toInt()}%", style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2563EB))),
-                  ],
+                Expanded(
+                  child: TextField(
+                    controller: _taskController,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: InputDecoration(
+                      hintText: "Nova meta ou tarefa...",
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      prefixIcon: const Icon(Icons.check_circle_outline),
+                    ),
+                    onSubmitted: (_) => _adicionarTarefaSegura(context, controller),
+                  ),
                 ),
-                const SizedBox(height: 10),
-                LinearProgressIndicator(
-                  value: progresso,
-                  backgroundColor: Colors.grey[200],
-                  color: const Color(0xFF2563EB),
-                  minHeight: 8,
-                  borderRadius: BorderRadius.circular(10),
+                const SizedBox(width: 8),
+                FloatingActionButton.small(
+                  backgroundColor: Colors.blueAccent,
+                  child: const Icon(Icons.add, color: Colors.white),
+                  onPressed: () => _adicionarTarefaSegura(context, controller),
                 ),
               ],
             ),
           ),
 
-          // LISTA
+          // --- LISTA DE TAREFAS ---
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              children: [
-                if (pendentes.isNotEmpty) ...[
-                  _buildSectionTitle("PENDENTES"),
-                  ...pendentes.map((t) => _buildTaskCard(context, t, controller)),
-                ],
+            child: controller.isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : ListView(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    children: [
+                      // Pendentes
+                      if (pendentes.isNotEmpty) ...[
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: Text("PENDENTES", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+                        ),
+                        ...pendentes.map((t) => _buildTaskCard(context, t, controller)),
+                      ],
 
-                if (concluidas.isNotEmpty) ...[
-                  _buildSectionTitle("CONCLUÍDAS"),
-                  ...concluidas.map((t) => _buildTaskCard(context, t, controller)),
-                ],
-                
-                if (controller.tarefas.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 50),
-                    child: Center(child: Text("Nenhuma tarefa ainda!", style: TextStyle(color: Colors.grey))),
+                      // Concluídas
+                      if (concluidas.isNotEmpty) ...[
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: Text("CONCLUÍDAS", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                        ),
+                        ...concluidas.map((t) => _buildTaskCard(context, t, controller)),
+                      ],
+
+                      // Vazio
+                      if (controller.tarefas.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 50),
+                          child: Center(
+                            child: Column(
+                              children: [
+                                Icon(Icons.list_alt, size: 60, color: Colors.black12),
+                                SizedBox(height: 10),
+                                Text("Nenhuma meta ainda.", style: TextStyle(color: Colors.grey)),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
-                 const SizedBox(height: 80),
-              ],
-            ),
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFF2563EB),
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text("Nova Tarefa", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        onPressed: () => _mostrarDialogo(context, controller, null),
-      ),
     );
   }
-
-  Widget _buildSectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey, fontSize: 12)),
-    );
-  }
-
-  // --- O CARD COM DESLIZE (SWIPE) ---
 
   Widget _buildTaskCard(BuildContext context, Tarefa tarefa, TarefaController controller) {
-    // Formatador de data (Ex: 10 fev - 14:30)
-    final dateFormat = DateFormat("dd MMM 'às' HH:mm", 'pt_BR');
-
     return Dismissible(
       key: Key(tarefa.id),
       direction: DismissDirection.endToStart,
       background: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(color: Colors.red[400], borderRadius: BorderRadius.circular(16)),
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
-        child: const Icon(Icons.delete_outline, color: Colors.white, size: 30),
+        color: Colors.red,
+        child: const Icon(Icons.delete, color: Colors.white),
       ),
       onDismissed: (direction) {
         controller.remover(tarefa.id);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text("Meta excluída"),
+            content: const Text("Tarefa removida"),
             action: SnackBarAction(
               label: "DESFAZER",
-              textColor: Colors.yellow,
               onPressed: () => controller.desfazerExclusao(tarefa),
             ),
           ),
         );
       },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 5, offset: const Offset(0, 2))],
-        ),
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         child: ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          leading: Transform.scale(
-            scale: 1.2,
-            child: Checkbox(
-              value: tarefa.concluida,
-              activeColor: const Color(0xFF10B981),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
-              onChanged: (_) => controller.alternarConclusao(tarefa),
-            ),
+          leading: Checkbox(
+            value: tarefa.concluida,
+            activeColor: Colors.green,
+            shape: const CircleBorder(),
+            onChanged: (_) => controller.alternarConclusao(tarefa),
           ),
           title: Text(
             tarefa.titulo,
             style: TextStyle(
               fontSize: 16,
-              fontWeight: FontWeight.w600,
               decoration: tarefa.concluida ? TextDecoration.lineThrough : null,
-              color: tarefa.concluida ? Colors.grey[400] : const Color(0xFF1E293B),
+              color: tarefa.concluida ? Colors.grey : Colors.black87,
             ),
           ),
-          // --- AQUI ESTÁ A MUDANÇA VISUAL ---
-          subtitle: Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Row(
-              children: [
-                Icon(Icons.calendar_today, size: 12, color: Colors.grey[400]),
-                const SizedBox(width: 4),
-                Text(
-                  tarefa.concluida && tarefa.dataConclusao != null
-                      ? "Concluída em: ${dateFormat.format(tarefa.dataConclusao!)}"
-                      : "Iniciada em: ${dateFormat.format(tarefa.dataCriacao)}",
-                  style: TextStyle(fontSize: 12, color: tarefa.concluida ? const Color(0xFF10B981) : Colors.grey[500]),
-                ),
-              ],
-            ),
+          trailing: IconButton(
+            icon: const Icon(Icons.edit_outlined, color: Colors.grey),
+            onPressed: () => _mostrarDialogoEditar(context, tarefa, controller),
           ),
-          onTap: () => _mostrarDialogo(context, controller, tarefa),
         ),
       ),
     );
   }
 
-  // Dialogo único para CRIAR ou EDITAR
-  void _mostrarDialogo(BuildContext context, TarefaController controller, Tarefa? tarefaExistente) {
-    final textoController = TextEditingController(text: tarefaExistente?.titulo ?? "");
-    final isEditando = tarefaExistente != null;
-
+  void _mostrarDialogoEditar(BuildContext context, Tarefa tarefa, TarefaController controller) {
+    final textoController = TextEditingController(text: tarefa.titulo);
     showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text(isEditando ? "Editar Tarefa" : "Nova Tarefa"),
-          content: TextField(
-            controller: textoController,
-            autofocus: true,
-            textCapitalization: TextCapitalization.sentences,
-            decoration: InputDecoration(
-              hintText: "Ex: Treinar Peito...",
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              filled: true,
-              fillColor: Colors.grey[50],
-            ),
+      builder: (context) => AlertDialog(
+        title: const Text("Editar Tarefa"),
+        content: TextField(
+          controller: textoController,
+          autofocus: true,
+          decoration: const InputDecoration(border: OutlineInputBorder()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancelar"),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Cancelar", style: TextStyle(color: Colors.grey)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2563EB),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              onPressed: () {
-                if (textoController.text.isNotEmpty) {
-                  if (isEditando) {
-                    controller.atualizarTitulo(tarefaExistente, textoController.text);
-                  } else {
-                    controller.adicionar(textoController.text);
-                  }
-                  Navigator.pop(context);
-                }
-              },
-              child: Text(isEditando ? "Atualizar" : "Salvar", style: const TextStyle(color: Colors.white)),
-            )
-          ],
-        );
-      },
+          ElevatedButton(
+            onPressed: () {
+              if (textoController.text.trim().isNotEmpty) {
+                controller.atualizarTitulo(tarefa, textoController.text);
+                Navigator.pop(context);
+              }
+            },
+            child: const Text("Salvar"),
+          ),
+        ],
+      ),
     );
   }
 }
