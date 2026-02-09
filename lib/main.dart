@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // Necessário para o AuthCheck
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter/services.dart'; 
 import 'package:provider/provider.dart';
 
 // Configurações do Firebase
+// Se der erro aqui, certifique-se de ter rodado "flutterfire configure"
 import 'firebase_options.dart';
 
 // Importações das suas Features
 import 'features/auth/presentation/pages/login_page.dart';
-import 'features/auth/presentation/pages/auth_check.dart'; // <--- IMPORTANTE: Tela de verificação de login
+import 'features/auth/presentation/pages/home_page.dart'; // Importante para o redirecionamento
+// import 'features/auth/presentation/pages/auth_check.dart'; // Removi pois criei a classe abaixo
 import 'core/services/time_service.dart';
 
-// --- IMPORTANTE: Ajuste estes caminhos se necessário ---
 // Importando a nova feature de Tarefas
 import 'features/auth/presentation/pages/tarefas_page.dart';
 import 'features/auth/presentation/controllers/tarefa_controller.dart';
@@ -148,13 +150,14 @@ class OkanApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: sportTheme,
       
-      // --- TELA INICIAL COM VERIFICAÇÃO DE LOGIN ---
-      // AuthCheck decide se vai para Home ou Login
+      // Define a AuthCheck como a tela inicial
       home: const AuthCheck(), 
 
+      // Builder global para o Timer flutuante
       builder: (context, child) {
         return Scaffold(
           backgroundColor: Colors.transparent, 
+          // Stack permite que o timer fique sobre qualquer tela
           body: Stack(
             children: [
               if (child != null) child!, 
@@ -165,6 +168,31 @@ class OkanApp extends StatelessWidget {
             ],
           ),
         );
+      },
+    );
+  }
+}
+
+// --- CLASSE AUTH CHECK (O GUARDA DE TRÂNSITO) ---
+// Adicionei aqui para evitar erros de importação
+class AuthCheck extends StatelessWidget {
+  const AuthCheck({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        // 1. Verificando...
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+        // 2. Tem Usuário? Vai pra Home
+        if (snapshot.hasData) {
+          return const HomePage();
+        }
+        // 3. Não tem? Vai pro Login
+        return const LoginPage();
       },
     );
   }
@@ -181,6 +209,7 @@ class _GlobalTimerBarState extends State<GlobalTimerBar> {
   @override
   void initState() {
     super.initState();
+    // Escuta mudanças no serviço de tempo
     TimerService.instance.addListener(_atualizar);
   }
   
@@ -196,6 +225,7 @@ class _GlobalTimerBarState extends State<GlobalTimerBar> {
 
   @override
   Widget build(BuildContext context) {
+    // Se o timer não estiver ativo, não mostra nada
     if (!TimerService.instance.isActive) return const SizedBox.shrink();
 
     return SafeArea(
@@ -230,7 +260,6 @@ class _GlobalTimerBarState extends State<GlobalTimerBar> {
               // BOTÃO ADICIONAR TEMPO
               IconButton(
                 icon: const Icon(Icons.add_circle_outline, color: Colors.blueAccent), 
-                // REMOVIDO: tooltip (causava erro de overlay fora da rota)
                 onPressed: () => TimerService.instance.addTime(10)
               ),
               const SizedBox(width: 4),

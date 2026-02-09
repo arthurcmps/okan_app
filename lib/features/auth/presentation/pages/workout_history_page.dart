@@ -17,7 +17,7 @@ class WorkoutHistoryPage extends StatelessWidget {
         stream: FirebaseFirestore.instance
             .collection('workout_history')
             .where('studentId', isEqualTo: studentId)
-            .orderBy('dataRealizacao', descending: true)
+           // .orderBy('dataRealizacao', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
