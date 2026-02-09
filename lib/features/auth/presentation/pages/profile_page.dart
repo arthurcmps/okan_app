@@ -2,13 +2,14 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart'; // Importante para upload
-import 'package:image_picker/image_picker.dart'; // Importante para Câmera/Galeria
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/services/auth_service.dart';
-import '../../../../core/widgets/user_avatar.dart'; // <--- O componente mágico que criamos
+import '../../../../core/widgets/user_avatar.dart';
 import 'library_admin_page.dart';
 import 'login_page.dart';
+import 'workout_history_page.dart'; // <--- IMPORTANTE: Nova importação
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -22,9 +23,7 @@ class _ProfilePageState extends State<ProfilePage> {
   final User? user = FirebaseAuth.instance.currentUser;
   bool _isUploading = false;
 
-  // --- LÓGICA DE FOTO (CÂMERA E GALERIA) ---
-  
-  // 1. Mostra o menu para escolher
+  // --- LÓGICA DE FOTO ---
   void _mostrarOpcoesFoto() {
     showModalBottomSheet(
       context: context,
@@ -56,10 +55,8 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  // 2. Processa a imagem e faz upload
   Future<void> _atualizarFoto(ImageSource source) async {
     final picker = ImagePicker();
-    // imageQuality: 50 reduz o tamanho do arquivo para economizar dados
     final pickedFile = await picker.pickImage(source: source, imageQuality: 50);
 
     if (pickedFile == null) return;
@@ -70,22 +67,11 @@ class _ProfilePageState extends State<ProfilePage> {
     try {
       setState(() => _isUploading = true);
 
-      // A. Upload para o Firebase Storage
-      final ref = FirebaseStorage.instance
-          .ref()
-          .child('user_photos')
-          .child('$userId.jpg');
-      
+      final ref = FirebaseStorage.instance.ref().child('user_photos').child('$userId.jpg');
       await ref.putFile(imagem);
       final url = await ref.getDownloadURL();
 
-      // B. Atualiza no Firestore (Banco de Dados)
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .update({'photoUrl': url});
-
-      // C. Atualiza no Auth (Sessão atual) para refletir rápido
+      await FirebaseFirestore.instance.collection('users').doc(userId).update({'photoUrl': url});
       await FirebaseAuth.instance.currentUser!.updatePhotoURL(url);
 
       if (mounted) {
@@ -93,7 +79,6 @@ class _ProfilePageState extends State<ProfilePage> {
           const SnackBar(content: Text("Foto de perfil atualizada! 📸"), backgroundColor: Colors.green)
         );
       }
-
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -105,9 +90,9 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  // --- LÓGICA DE EDITAR DADOS (PESO/ALTURA) ---
+  // --- LÓGICA DE DADOS ---
   Future<void> _editarDados(BuildContext context, String campo, String valorAtual) async {
-    final controller = TextEditingController(text: valorAtual.replaceAll(RegExp(r'[^0-9.,]'), '')); // Limpa texto extra
+    final controller = TextEditingController(text: valorAtual.replaceAll(RegExp(r'[^0-9.,]'), ''));
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -167,24 +152,17 @@ class _ProfilePageState extends State<ProfilePage> {
                 Center(
                   child: Column(
                     children: [
-                      // --- ÁREA DA FOTO (OTIMIZADA) ---
+                      // FOTO
                       Stack(
                         children: [
-                          // 1. O Avatar com Cache
                           UserAvatar(
                             photoUrl: photoUrl, 
                             name: nome, 
-                            radius: 60, // Tamanho grande
-                            onTap: _mostrarOpcoesFoto, // Clica na foto para editar
+                            radius: 60,
+                            onTap: _mostrarOpcoesFoto,
                           ),
-
-                          // 2. Loading enquanto sobe a foto
                           if (_isUploading)
-                            const Positioned.fill(
-                              child: CircularProgressIndicator(color: Colors.white),
-                            ),
-                          
-                          // 3. Ícone de Câmera Pequeno
+                            const Positioned.fill(child: CircularProgressIndicator(color: Colors.white)),
                           Positioned(
                             bottom: 0,
                             right: 0,
@@ -204,18 +182,14 @@ class _ProfilePageState extends State<ProfilePage> {
                           )
                         ],
                       ),
-                      // --------------------------------
-
                       const SizedBox(height: 16),
                       Text(nome, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                      
                       Container(
                         margin: const EdgeInsets.only(top: 8),
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                         decoration: BoxDecoration(color: isPersonal ? Colors.purple : Colors.blue, borderRadius: BorderRadius.circular(20)),
                         child: Text(isPersonal ? "PERSONAL TRAINER" : "ALUNO", style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                       ),
-                      
                       Text(email, style: const TextStyle(color: Colors.grey, height: 2)),
                     ],
                   ),
@@ -223,38 +197,33 @@ class _ProfilePageState extends State<ProfilePage> {
                 
                 const SizedBox(height: 30),
                 
-                // --- DADOS FÍSICOS (SÓ PARA ALUNO) ---
+                // DADOS FÍSICOS (Só Aluno)
                 if (!isPersonal) ...[
                   const Align(alignment: Alignment.centerLeft, child: Text("Dados Físicos", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
                   const SizedBox(height: 10),
                   Row(
                     children: [
-                      Expanded(
-                        child: _buildInfoCard(
-                          icon: Icons.monitor_weight_outlined, 
-                          title: "Peso", 
-                          value: "$peso kg", 
-                          onTap: () => _editarDados(context, "Peso", peso)
-                        )
-                      ),
+                      Expanded(child: _buildInfoCard(icon: Icons.monitor_weight_outlined, title: "Peso", value: "$peso kg", onTap: () => _editarDados(context, "Peso", peso))),
                       const SizedBox(width: 16),
-                      Expanded(
-                        child: _buildInfoCard(
-                          icon: Icons.height, 
-                          title: "Altura", 
-                          value: "$altura cm", 
-                          onTap: () => _editarDados(context, "Altura", altura)
-                        )
-                      ),
+                      Expanded(child: _buildInfoCard(icon: Icons.height, title: "Altura", value: "$altura cm", onTap: () => _editarDados(context, "Altura", altura))),
                     ],
                   ),
                   const SizedBox(height: 30),
                 ],
 
-                // --- CONFIGURAÇÕES ---
+                // CONFIGURAÇÕES E MENU
                 const Align(alignment: Alignment.centerLeft, child: Text("Configurações", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
                 const SizedBox(height: 10),
                 
+                // --- NOVO BOTÃO DE HISTÓRICO (Para o próprio usuário ver) ---
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.history, color: Colors.orange)),
+                  title: const Text("Meu Histórico de Treinos"),
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => WorkoutHistoryPage(studentId: user!.uid))),
+                ),
+
                 if (isPersonal)
                   ListTile(
                     contentPadding: EdgeInsets.zero,
@@ -281,7 +250,6 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  // Widget Auxiliar para os Cards de Peso/Altura
   Widget _buildInfoCard({required IconData icon, required String title, required String value, required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
