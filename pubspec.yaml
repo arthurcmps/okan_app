@@ -54,8 +54,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-
-vibration: ^1.9.0
+  assets:
+    - assets/images/
 
 # ----------------------------------------------------------
 # CONFIGURAÇÕES (TOTALMENTE À ESQUERDA)
@@ -64,12 +64,12 @@ vibration: ^1.9.0
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
-  image_path: "flutter_01.png"
+  image_path: "assets/images/icon_app.png"
   min_sdk_android: 21
 
 flutter_native_splash:
-  color: "#F1F5F9"
-  image: "flutter_01.png"
+  color: "#1E1B2E"
+  image: "assets/images/splash_logo.png"
   android_12:
-    image: "flutter_01.png"
-    color: "#F1F5F9"
+    image: "assets/images/splash_logo.png"
+    color: "#1E1B2E"

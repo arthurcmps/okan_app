@@ -4,6 +4,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../../core/widgets/universal_video_player.dart';
 import '../../../../core/services/time_service.dart';
 
+// Importe suas cores. Se der erro, apague e digite "AppColors" para o VS Code sugerir
+import '../../../../core/theme/app_colors.dart';
+
 class TrainPage extends StatefulWidget {
   final String workoutId;
 
@@ -45,8 +48,8 @@ class _TrainPageState extends State<TrainPage> {
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text("Treino Concluído! Parabéns! 🔥"), 
-        backgroundColor: Colors.green
+        content: Text("Treino Salvo! 🔥", style: TextStyle(color: Colors.black)), 
+        backgroundColor: AppColors.secondary,
       ));
       Navigator.pop(context);
     }
@@ -64,7 +67,10 @@ class _TrainPageState extends State<TrainPage> {
             Center(child: UniversalVideoPlayer(videoUrl: url)),
             Positioned(
               top: 20, right: 20,
-              child: IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: () => Navigator.pop(context)),
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white), 
+                onPressed: () => Navigator.pop(context)
+              ),
             ),
           ],
         ),
@@ -72,30 +78,34 @@ class _TrainPageState extends State<TrainPage> {
     );
   }
 
-  // --- NOVA FUNÇÃO: INICIAR DESCANSO MANUALMENTE ---
   void _iniciarDescansoManual() {
-    // Inicia 60 segundos (pode ajustar esse valor se quiser)
+    print("Iniciando descanso..."); // Log para debug
     TimerService.instance.start(60);
-    
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-      content: Text("Descanso iniciado: 60s ⏱️"),
-      duration: Duration(seconds: 2),
-      backgroundColor: Colors.blueGrey,
+      content: Text("Descanso: 60s ⏱️"),
+      duration: Duration(seconds: 1),
+      backgroundColor: AppColors.surface,
     ));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Hora do Treino 🔥")),
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: const Text("Hora do Treino 🔥"), 
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: true,
+      ),
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance.collection('workouts').doc(widget.workoutId).snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: AppColors.secondary));
           
           if (!snapshot.hasData || !snapshot.data!.exists) {
-            return const Center(child: Text("Treino não encontrado ou excluído."));
+            return const Center(child: Text("Treino não encontrado.", style: TextStyle(color: AppColors.textSub)));
           }
 
           final dados = snapshot.data!.data() as Map<String, dynamic>;
@@ -104,112 +114,151 @@ class _TrainPageState extends State<TrainPage> {
 
           return Column(
             children: [
+              // HEADER
               Container(
                 padding: const EdgeInsets.all(16.0),
                 width: double.infinity,
-                color: Colors.blue.withOpacity(0.1),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.05))),
+                ),
                 child: Column(
                   children: [
-                    Text(nomeTreino.toUpperCase(), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
-                    Text("${listaExercicios.length} exercícios", style: TextStyle(color: Colors.grey[700])),
+                    Text(
+                      nomeTreino.toUpperCase(), 
+                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 1.1, color: AppColors.secondary)
+                    ),
+                    Text("${listaExercicios.length} exercícios", style: const TextStyle(color: AppColors.textSub)),
                   ],
                 ),
               ),
               
+              // LISTA
               Expanded(
                 child: ListView.builder(
-                  padding: const EdgeInsets.only(bottom: 100),
+                  padding: const EdgeInsets.only(bottom: 100, top: 10),
                   itemCount: listaExercicios.length,
                   itemBuilder: (context, index) {
                     final ex = listaExercicios[index];
                     final isDone = _concluidos[index] ?? false;
 
                     return Card(
-                      color: isDone ? Colors.green.shade50 : Colors.white,
-                      elevation: 2,
+                      color: isDone ? const Color(0xFF1B3B28) : AppColors.surface,
+                      elevation: 0,
                       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: isDone ? BorderSide(color: Colors.green.shade200) : BorderSide.none),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16), 
+                        side: isDone 
+                            ? const BorderSide(color: AppColors.secondary, width: 1) 
+                            : BorderSide(color: Colors.white.withOpacity(0.05))
+                      ),
                       child: Padding(
-                        padding: const EdgeInsets.all(12.0),
+                        padding: const EdgeInsets.all(12.0), // Padding interno reduzido
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
-                              crossAxisAlignment: CrossAxisAlignment.center, // Alinhamento centralizado
+                              crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
-                                // 1. CHECKBOX (SÓ MARCA)
+                                // CHECKBOX
                                 Transform.scale(
-                                  scale: 1.3,
+                                  scale: 1.2,
                                   child: Checkbox(
                                     value: isDone,
-                                    activeColor: Colors.green,
+                                    activeColor: AppColors.secondary,
+                                    checkColor: AppColors.background,
                                     shape: const CircleBorder(),
+                                    side: const BorderSide(color: AppColors.textSub, width: 2),
                                     onChanged: (val) {
                                       setState(() => _concluidos[index] = val!);
-                                      // REMOVIDO: O timer automático que causava erro
                                     },
                                   ),
                                 ),
                                 const SizedBox(width: 8),
                                 
-                                // 2. TEXTOS
+                                // TEXTO + REPS
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text(ex['nome'], style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, decoration: isDone ? TextDecoration.lineThrough : null, color: isDone ? Colors.grey : Colors.black87)),
+                                      Text(
+                                        ex['nome'], 
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold, 
+                                          fontSize: 16, 
+                                          decoration: isDone ? TextDecoration.lineThrough : null, 
+                                          color: isDone ? AppColors.textSub.withOpacity(0.5) : AppColors.textMain
+                                        )
+                                      ),
                                       const SizedBox(height: 4),
-                                      Row(
-                                        children: [
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                            decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(4)),
-                                            child: Text("${ex['series']} x ${ex['repeticoes']}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          if (ex['observacao'] != null && ex['observacao'].isNotEmpty)
-                                            Expanded(child: Text(ex['observacao'], style: TextStyle(fontStyle: FontStyle.italic, color: Colors.orange.shade800, fontSize: 12), overflow: TextOverflow.ellipsis)),
-                                        ],
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.primary.withOpacity(0.2),
+                                          borderRadius: BorderRadius.circular(4)
+                                        ),
+                                        child: Text(
+                                          "${ex['series']} x ${ex['repeticoes']}", 
+                                          style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary, fontSize: 12)
+                                        ),
                                       ),
                                     ],
                                   ),
                                 ),
 
-                                // 3. BOTÃO DE TIMER MANUAL (NOVO)
-                                IconButton(
-                                  icon: const Icon(Icons.timer_outlined, color: Colors.blueGrey, size: 28),
-                                  tooltip: "Iniciar Descanso (60s)",
-                                  onPressed: _iniciarDescansoManual, // Chama a função manual
+                                // --- BOTÃO CRONÔMETRO (Obrigatório aparecer) ---
+                                Container(
+                                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.1),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: IconButton(
+                                    icon: const Icon(Icons.timer, color: AppColors.secondary, size: 28),
+                                    onPressed: _iniciarDescansoManual,
+                                    tooltip: "Cronômetro",
+                                    padding: const EdgeInsets.all(8),
+                                    constraints: const BoxConstraints(), // Remove restrições de tamanho
+                                  ),
                                 ),
 
-                                // 4. BOTÃO DE VÍDEO
+                                // BOTÃO VÍDEO
                                 if (ex['videoUrl'] != null && ex['videoUrl'].isNotEmpty)
                                   IconButton(
-                                    icon: const Icon(Icons.play_circle_fill, color: Colors.redAccent, size: 30),
+                                    icon: const Icon(Icons.play_circle_fill, color: Colors.redAccent, size: 28),
                                     onPressed: () => _abrirVideo(ex['videoUrl']),
+                                    padding: const EdgeInsets.all(8),
+                                    constraints: const BoxConstraints(),
                                   ),
                               ],
                             ),
                             
-                            const Divider(),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 8.0),
+                              child: Divider(color: Colors.white10),
+                            ),
                             
-                            // INPUT DE CARGA
+                            // INPUT CARGA
                             Row(
                               mainAxisAlignment: MainAxisAlignment.end,
                               children: [
-                                const Text("Carga usada:", style: TextStyle(color: Colors.grey)),
-                                const SizedBox(width: 10),
+                                const Text("Carga:", style: TextStyle(color: AppColors.textSub, fontSize: 14)),
+                                const SizedBox(width: 8),
                                 SizedBox(
                                   width: 80,
-                                  height: 40,
+                                  height: 35,
                                   child: TextField(
                                     keyboardType: TextInputType.number,
+                                    style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.bold),
+                                    textAlign: TextAlign.center,
                                     decoration: InputDecoration(
                                       hintText: "kg",
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                      hintStyle: TextStyle(color: AppColors.textSub.withOpacity(0.3)),
+                                      contentPadding: EdgeInsets.zero,
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
                                       filled: true,
-                                      fillColor: Colors.grey.shade50,
+                                      fillColor: Colors.black26,
+                                      suffixText: "kg",
+                                      suffixStyle: const TextStyle(fontSize: 10, color: AppColors.textSub),
                                     ),
                                     onChanged: (val) {
                                       _cargas[index] = val;
@@ -226,26 +275,19 @@ class _TrainPageState extends State<TrainPage> {
                 ),
               ),
               
-              // BOTÃO CONCLUIR
+              // CONCLUIR
               Container(
-                padding: const EdgeInsets.all(20.0),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), offset: const Offset(0, -4), blurRadius: 10)]
-                ),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.all(16),
-                      elevation: 5,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    onPressed: () => _finalizarTreino(nomeTreino, listaExercicios),
-                    child: const Text("CONCLUIR TREINO", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                padding: const EdgeInsets.all(16.0),
+                width: double.infinity,
+                color: AppColors.surface,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.secondary,
+                    foregroundColor: AppColors.background,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
+                  onPressed: () => _finalizarTreino(nomeTreino, listaExercicios),
+                  child: const Text("CONCLUIR TREINO", style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ),
             ],

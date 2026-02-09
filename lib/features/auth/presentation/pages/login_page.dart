@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart'; // <--- Importante
-import 'package:cloud_firestore/cloud_firestore.dart'; // <--- Importante
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'home_page.dart';
 import 'register_page.dart';
+
+// IMPORTANTE: Ajuste este caminho para onde você salvou o app_colors.dart
+// Se estiver na pasta core/theme/, o caminho relativo deve ser este:
+import '../../../../../core/theme/app_colors.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -17,7 +21,7 @@ class _LoginPageState extends State<LoginPage> {
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _isPasswordVisible = false;
-  bool _isLoading = false; // Para mostrar carregamento no botão Google
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -40,7 +44,7 @@ class _LoginPageState extends State<LoginPage> {
         if (!mounted) return;
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => HomePage()),
+          MaterialPageRoute(builder: (context) => const HomePage()),
         );
 
       } on FirebaseAuthException catch (e) {
@@ -51,7 +55,7 @@ class _LoginPageState extends State<LoginPage> {
            mensagemErro = 'Formato de e-mail inválido.';
         }
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(mensagemErro), backgroundColor: Colors.red),
+          SnackBar(content: Text(mensagemErro), backgroundColor: AppColors.error),
         );
       } finally {
         if (mounted) setState(() => _isLoading = false);
@@ -59,36 +63,29 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  // --- LOGIN COM GOOGLE (NOVO) ---
+  // --- LOGIN COM GOOGLE ---
   Future<void> _fazerLoginGoogle() async {
     setState(() => _isLoading = true);
 
     try {
-      // 1. Iniciar fluxo do Google
       final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
       
-      // Se o usuário cancelou a janelinha
       if (googleUser == null) {
         setState(() => _isLoading = false);
         return;
       }
 
-      // 2. Obter credenciais
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
-      // 3. Fazer login no Firebase
       final UserCredential userCredential = 
           await FirebaseAuth.instance.signInWithCredential(credential);
       
       final user = userCredential.user;
 
-      // 4. VERIFICAÇÃO INTELIGENTE DO FIRESTORE
-      // Se for o primeiro acesso via Google, precisamos criar o perfil no banco
-      // para que a tela de Perfil funcione (peso, idade, etc).
       if (user != null) {
         final userDoc = await FirebaseFirestore.instance
             .collection('users')
@@ -96,31 +93,28 @@ class _LoginPageState extends State<LoginPage> {
             .get();
 
         if (!userDoc.exists) {
-          // Cria o documento padrão
           await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
             'name': user.displayName ?? "Aluno Google",
             'email': user.email,
-            'photoUrl': user.photoURL, // Salva a foto do Google!
+            'photoUrl': user.photoURL,
             'role': 'aluno',
             'createdAt': FieldValue.serverTimestamp(),
             'weight': 0.0,
             'objectives': 'Definir objetivo',
-            // Não temos data de nascimento pelo Google, fica vazio para editar depois
           });
         }
       }
 
       if (!mounted) return;
       
-      // Sucesso
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => HomePage()),
+        MaterialPageRoute(builder: (context) => const HomePage()),
       );
 
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro no Google: $e'), backgroundColor: Colors.red),
+        SnackBar(content: Text('Erro no Google: $e'), backgroundColor: AppColors.error),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -130,6 +124,8 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // Background vem do tema global, mas garantimos aqui
+      backgroundColor: AppColors.background,
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
@@ -139,36 +135,52 @@ class _LoginPageState extends State<LoginPage> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(Icons.fitness_center, size: 80, color: Colors.blue),
+                // ÍCONE LOGO
+                const Icon(
+                  Icons.fitness_center, 
+                  size: 80, 
+                  color: AppColors.primary
+                ),
                 const SizedBox(height: 24),
+                
+                // TÍTULO
                 Text(
-                  'Bem-vindo de volta!',
+                  'Bem-vindo ao Okan',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                         fontWeight: FontWeight.bold,
+                        color: AppColors.textMain,
                       ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Conecte corpo e mente.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppColors.textSub),
                 ),
                 const SizedBox(height: 48),
 
-                // CAMPOS DE EMAIL E SENHA
+                // CAMPO EMAIL
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
+                  style: const TextStyle(color: AppColors.textMain), // Texto digitado branco
                   decoration: const InputDecoration(
                     labelText: 'E-mail',
                     prefixIcon: Icon(Icons.email_outlined),
-                    border: OutlineInputBorder(),
                   ),
                   validator: (val) => (val == null || !val.contains('@')) ? 'E-mail inválido' : null,
                 ),
                 const SizedBox(height: 16),
+                
+                // CAMPO SENHA
                 TextFormField(
                   controller: _passwordController,
                   obscureText: !_isPasswordVisible,
+                  style: const TextStyle(color: AppColors.textMain),
                   decoration: InputDecoration(
                     labelText: 'Senha',
                     prefixIcon: const Icon(Icons.lock_outline),
-                    border: const OutlineInputBorder(),
                     suffixIcon: IconButton(
                       icon: Icon(_isPasswordVisible ? Icons.visibility_off : Icons.visibility),
                       onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
@@ -182,34 +194,39 @@ class _LoginPageState extends State<LoginPage> {
                 // BOTÃO ENTRAR
                 FilledButton(
                   onPressed: _isLoading ? null : _fazerLogin,
-                  style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    backgroundColor: AppColors.primary,
+                  ),
                   child: _isLoading 
                     ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
-                    : const Text('ENTRAR', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    : const Text('ENTRAR', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
                 ),
                 
                 const SizedBox(height: 16),
                 
-                // --- DIVISOR "OU" ---
+                // DIVISOR
                 const Row(
                   children: [
-                    Expanded(child: Divider()),
-                    Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Text("OU")),
-                    Expanded(child: Divider()),
+                    Expanded(child: Divider(color: Colors.white24)),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16), 
+                      child: Text("OU", style: TextStyle(color: AppColors.textSub))
+                    ),
+                    Expanded(child: Divider(color: Colors.white24)),
                   ],
                 ),
                 const SizedBox(height: 16),
 
-                // --- BOTÃO GOOGLE ---
+                // BOTÃO GOOGLE
                 OutlinedButton.icon(
                   onPressed: _isLoading ? null : _fazerLoginGoogle,
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 12),
-                    side: const BorderSide(color: Colors.grey),
+                    side: const BorderSide(color: AppColors.textSub), // Borda cinza
                   ),
-                  // Se quiser o logo colorido, pode usar Image.asset, mas vamos usar um Icon simples por enquanto
                   icon: const Icon(Icons.g_mobiledata, size: 32, color: Colors.red), 
-                  label: const Text("Entrar com Google", style: TextStyle(fontSize: 16, color: Colors.black87)),
+                  label: const Text("Entrar com Google", style: TextStyle(fontSize: 16, color: AppColors.textMain)),
                 ),
 
                 const SizedBox(height: 24),
@@ -218,7 +235,7 @@ class _LoginPageState extends State<LoginPage> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text('Não tem uma conta?'),
+                    const Text('Não tem uma conta?', style: TextStyle(color: AppColors.textSub)),
                     TextButton(
                       onPressed: () {
                         Navigator.push(
@@ -226,7 +243,7 @@ class _LoginPageState extends State<LoginPage> {
                           MaterialPageRoute(builder: (context) => const RegisterPage()),
                         );
                       },
-                      child: const Text('Cadastre-se'),
+                      child: const Text('Cadastre-se', style: TextStyle(color: AppColors.secondary, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),

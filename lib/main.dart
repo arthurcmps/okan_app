@@ -1,53 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // Necessário para a AuthCheck
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter/services.dart'; 
 import 'package:provider/provider.dart';
 
-// Configurações do Firebase
 import 'firebase_options.dart';
-
-// Importações das suas Features
 import 'features/auth/presentation/pages/login_page.dart';
 import 'features/auth/presentation/pages/home_page.dart';
 import 'core/services/time_service.dart';
-
-// Importando a nova feature de Tarefas
 import 'features/auth/presentation/pages/tarefas_page.dart';
 import 'features/auth/presentation/controllers/tarefa_controller.dart';
+import 'core/theme/app_colors.dart'; 
 
-// --- PALETA SPORT MODERN ---
-class AppColors {
-  static const Color background = Color(0xFFF1F5F9); 
-  static const Color surface = Color(0xFFFFFFFF);    
-  static const Color primary = Color(0xFF2563EB);    
-  static const Color secondary = Color(0xFF0EA5E9);  
-  static const Color textMain = Color(0xFF1E293B);   
-  static const Color textSub = Color(0xFF64748B);    
-  static const Color success = Color(0xFF10B981);    
-  static const Color error = Color(0xFFEF4444);      
-}
-
-// --- PONTO DE ENTRADA ---
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
   try {
-    // 1. Inicia Firebase
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-
-    // 2. Configura Datas
     await initializeDateFormatting('pt_BR', null);
 
-    // 3. Roda o App injetando os Providers (Controladores)
     runApp(
       MultiProvider(
         providers: [
-          // Injetando o Controller de Tarefas
           ChangeNotifierProvider(
             create: (_) => TarefaController()..iniciarEscuta(),
           ),
@@ -57,29 +35,35 @@ void main() async {
     );
 
   } catch (e, stackTrace) {
-    // 4. Tela de Erro de Inicialização
     runApp(AppErrorScreen(error: e, stackTrace: stackTrace));
   }
 }
 
-// --- TEMA DO APP ---
+// --- TEMA DO APP (OKAN DARK) ---
 final ThemeData sportTheme = ThemeData(
   useMaterial3: true,
-  brightness: Brightness.light,
+  brightness: Brightness.dark, 
   scaffoldBackgroundColor: AppColors.background,
   
   colorScheme: ColorScheme.fromSeed(
     seedColor: AppColors.primary,
-    brightness: Brightness.light,
+    brightness: Brightness.dark,
     surface: AppColors.surface,
+    background: AppColors.background,
     error: AppColors.error,
+    primary: AppColors.primary,
+    secondary: AppColors.secondary,
+    onPrimary: Colors.white, 
+    onSecondary: AppColors.background, 
   ),
 
   cardTheme: CardThemeData(
     color: AppColors.surface,
-    elevation: 8,
-    shadowColor: const Color(0xFF64748B).withOpacity(0.15),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+    elevation: 0, 
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(20),
+      side: BorderSide(color: Colors.white.withOpacity(0.05), width: 1) 
+    ),
     margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
   ),
 
@@ -103,12 +87,26 @@ final ThemeData sportTheme = ThemeData(
     bodyMedium: TextStyle(color: AppColors.textSub, fontWeight: FontWeight.w500),
   ),
 
+  iconTheme: const IconThemeData(
+    color: AppColors.secondary, 
+  ),
+
   elevatedButtonTheme: ElevatedButtonThemeData(
     style: ElevatedButton.styleFrom(
       backgroundColor: AppColors.primary,
-      foregroundColor: Colors.white,
+      foregroundColor: Colors.white, 
       elevation: 4,
-      shadowColor: AppColors.primary.withOpacity(0.4),
+      shadowColor: AppColors.primary.withOpacity(0.5), 
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+    ),
+  ),
+  
+  outlinedButtonTheme: OutlinedButtonThemeData(
+    style: OutlinedButton.styleFrom(
+      foregroundColor: AppColors.secondary, 
+      side: const BorderSide(color: AppColors.secondary, width: 1.5), 
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
@@ -117,7 +115,10 @@ final ThemeData sportTheme = ThemeData(
 
   inputDecorationTheme: InputDecorationTheme(
     filled: true,
-    fillColor: AppColors.surface,
+    fillColor: AppColors.surface, 
+    labelStyle: const TextStyle(color: AppColors.textSub),
+    hintStyle: TextStyle(color: AppColors.textSub.withOpacity(0.5)),
+    prefixIconColor: AppColors.textSub, 
     contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
     border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
     enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
@@ -129,6 +130,17 @@ final ThemeData sportTheme = ThemeData(
       borderRadius: BorderRadius.circular(16), 
       borderSide: const BorderSide(color: AppColors.error, width: 1.5),
     ),
+  ),
+  
+  checkboxTheme: CheckboxThemeData(
+    fillColor: MaterialStateProperty.resolveWith((states) {
+      if (states.contains(MaterialState.selected)) {
+        return AppColors.secondary; 
+      }
+      return Colors.transparent;
+    }),
+    checkColor: MaterialStateProperty.all(AppColors.background), 
+    side: const BorderSide(color: AppColors.textSub, width: 2),
   ),
 );
 
@@ -143,9 +155,10 @@ class OkanApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: sportTheme,
       
-      // Aqui usamos a classe definida logo abaixo
+      // Tela Inicial
       home: const AuthCheck(), 
 
+      // BUILDER GLOBAL: É aqui que o Timer é injetado sobre todas as telas
       builder: (context, child) {
         return Scaffold(
           backgroundColor: Colors.transparent, 
@@ -154,7 +167,7 @@ class OkanApp extends StatelessWidget {
               if (child != null) child!, 
               const Positioned(
                 bottom: 0, left: 0, right: 0, 
-                child: GlobalTimerBar()
+                child: GlobalTimerBar() // O cronômetro flutuante
               ),
             ],
           ),
@@ -164,8 +177,7 @@ class OkanApp extends StatelessWidget {
   }
 }
 
-// --- CLASSE AUTH CHECK (O GUARDA DE TRÂNSITO) ---
-// Definida aqui mesmo para garantir que é esta lógica que está rodando
+// --- AUTH CHECK ---
 class AuthCheck extends StatelessWidget {
   const AuthCheck({super.key});
 
@@ -174,24 +186,19 @@ class AuthCheck extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        // 1. Verificando...
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(body: Center(child: CircularProgressIndicator()));
         }
-        
-        // 2. Tem Usuário? Vai pra Home
         if (snapshot.hasData) {
           return const HomePage();
         }
-
-        // 3. Não tem? Vai pro Login
         return const LoginPage();
       },
     );
   }
 }
 
-// --- BARRA DE TIMER GLOBAL ---
+// --- BARRA DE TIMER GLOBAL (RESTILIZADA) ---
 class GlobalTimerBar extends StatefulWidget {
   const GlobalTimerBar({super.key});
   @override
@@ -217,6 +224,7 @@ class _GlobalTimerBarState extends State<GlobalTimerBar> {
 
   @override
   Widget build(BuildContext context) {
+    // Só aparece se o timer estiver rodando
     if (!TimerService.instance.isActive) return const SizedBox.shrink();
 
     return SafeArea(
@@ -225,10 +233,11 @@ class _GlobalTimerBarState extends State<GlobalTimerBar> {
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
         margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E293B),
+          color: AppColors.surface, // Fundo Roxo Card
           borderRadius: BorderRadius.circular(30),
+          border: Border.all(color: AppColors.secondary.withOpacity(0.3)), // Borda Neon sutil
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5))
+            BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 10, offset: const Offset(0, 5))
           ]
         ),
         child: Material(
@@ -236,30 +245,35 @@ class _GlobalTimerBarState extends State<GlobalTimerBar> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.timer_outlined, color: Colors.amberAccent),
+              const Icon(Icons.timer_outlined, color: AppColors.secondary), // Ícone Neon
               const SizedBox(width: 12),
               Text(
                 TimerService.instance.formattedTime, 
                 style: const TextStyle(
-                  color: Colors.white, 
+                  color: AppColors.textMain, // Texto Branco
                   fontSize: 18, 
                   fontWeight: FontWeight.bold, 
                   fontFamily: 'monospace'
                 )
               ),
               const Spacer(),
+              // BOTÃO ADICIONAR TEMPO
               IconButton(
-                icon: const Icon(Icons.add_circle_outline, color: Colors.blueAccent), 
+                icon: const Icon(Icons.add_circle_outline, color: AppColors.primary), // Laranja
                 onPressed: () => TimerService.instance.addTime(10)
               ),
               const SizedBox(width: 4),
+              // BOTÃO FECHAR
               InkWell(
                 onTap: () => TimerService.instance.stop(), 
                 borderRadius: BorderRadius.circular(20),
                 child: Container(
                   padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(color: Colors.red.withOpacity(0.2), shape: BoxShape.circle),
-                  child: const Icon(Icons.close, color: Colors.redAccent, size: 20)
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withOpacity(0.2), 
+                    shape: BoxShape.circle
+                  ),
+                  child: const Icon(Icons.close, color: AppColors.error, size: 20)
                 ),
               ),
             ],
@@ -281,7 +295,7 @@ class AppErrorScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       home: Scaffold(
-        backgroundColor: Colors.blue.shade900,
+        backgroundColor: Colors.black,
         body: Padding(
           padding: const EdgeInsets.all(24.0),
           child: Center(
@@ -295,8 +309,8 @@ class AppErrorScreen extends StatelessWidget {
                   const SizedBox(height: 8),
                   Container(
                     padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(8)),
-                    child: Text(error.toString(), style: const TextStyle(color: Colors.amberAccent)),
+                    decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(8)),
+                    child: Text(error.toString(), style: const TextStyle(color: Colors.orange)),
                   ),
                 ],
               ),
