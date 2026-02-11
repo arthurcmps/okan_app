@@ -9,7 +9,7 @@ import '../../../../core/services/auth_service.dart';
 import '../../../../core/widgets/user_avatar.dart';
 import '../../../../core/theme/app_colors.dart';
 
-// IMPORTS DAS NOVAS ABAS
+// SUAS ABAS
 import 'anamnese_tab.dart'; 
 import 'assessments_tab.dart';
 
@@ -33,7 +33,6 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
   @override
   void initState() {
     super.initState();
-    // 3 Abas: Conta, Anamnese, Medidas
     _tabController = TabController(length: 3, vsync: this);
   }
 
@@ -43,7 +42,62 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
     super.dispose();
   }
 
-  // --- LÓGICA DE FOTO ---
+  // --- HELPER: CALCULAR IDADE ---
+  String _calcularIdade(dynamic dataNascimento) {
+    if (dataNascimento == null) return "--"; // Se não tiver data
+
+    DateTime nascimento;
+    if (dataNascimento is Timestamp) {
+      nascimento = dataNascimento.toDate();
+    } else if (dataNascimento is String) {
+      // Tenta recuperar de string antiga se houver
+      return "--"; 
+    } else {
+      return "--";
+    }
+
+    final hoje = DateTime.now();
+    int idade = hoje.year - nascimento.year;
+    if (hoje.month < nascimento.month || (hoje.month == nascimento.month && hoje.day < nascimento.day)) {
+      idade--;
+    }
+    return "$idade anos";
+  }
+
+  // --- ATUALIZAR DATA (Para quem veio do Google) ---
+  Future<void> _editarDataNascimento() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime(2000),
+      firstDate: DateTime(1940),
+      lastDate: DateTime.now(),
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.dark().copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: AppColors.secondary,
+              onPrimary: Colors.black,
+              surface: AppColors.surface,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user!.uid)
+          .update({'birthDate': picked}); // Salva como DateTime/Timestamp
+      
+      if(mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Idade atualizada!")));
+      }
+    }
+  }
+
+  // --- LÓGICA DE FOTO (Mantida) ---
   void _mostrarOpcoesFoto() {
     showModalBottomSheet(
       context: context,
@@ -56,18 +110,12 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
               ListTile(
                 leading: const Icon(Icons.photo_library, color: Colors.blue),
                 title: const Text('Escolher da Galeria', style: TextStyle(color: Colors.white)),
-                onTap: () {
-                  Navigator.pop(context);
-                  _atualizarFoto(ImageSource.gallery);
-                },
+                onTap: () { Navigator.pop(context); _atualizarFoto(ImageSource.gallery); },
               ),
               ListTile(
                 leading: const Icon(Icons.camera_alt, color: Colors.blue),
                 title: const Text('Tirar Foto Agora', style: TextStyle(color: Colors.white)),
-                onTap: () {
-                  Navigator.pop(context);
-                  _atualizarFoto(ImageSource.camera);
-                },
+                onTap: () { Navigator.pop(context); _atualizarFoto(ImageSource.camera); },
               ),
             ],
           ),
@@ -79,33 +127,19 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
   Future<void> _atualizarFoto(ImageSource source) async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: source, imageQuality: 50);
-
     if (pickedFile == null) return;
 
     File imagem = File(pickedFile.path);
-    String userId = user!.uid;
-
     try {
       setState(() => _isUploading = true);
-
-      final ref = FirebaseStorage.instance.ref().child('user_photos').child('$userId.jpg');
+      final ref = FirebaseStorage.instance.ref().child('user_photos').child('${user!.uid}.jpg');
       await ref.putFile(imagem);
       final url = await ref.getDownloadURL();
 
-      await FirebaseFirestore.instance.collection('users').doc(userId).update({'photoUrl': url});
+      await FirebaseFirestore.instance.collection('users').doc(user!.uid).update({'photoUrl': url});
       await FirebaseAuth.instance.currentUser!.updatePhotoURL(url);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Foto de perfil atualizada! 📸"), backgroundColor: Colors.green)
-        );
-      }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Erro ao enviar foto: $e"), backgroundColor: Colors.red)
-        );
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro: $e")));
     } finally {
       if (mounted) setState(() => _isUploading = false);
     }
@@ -116,15 +150,13 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
     if (user == null) return const Scaffold(body: Center(child: Text("Usuário não logado.")));
 
     return Scaffold(
-      backgroundColor: AppColors.background, // Fundo Roxo Okan
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text("Meu Perfil", style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         elevation: 0,
         backgroundColor: Colors.transparent,
         foregroundColor: Colors.white,
-        
-        // --- TAB BAR NA APPBAR ---
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: AppColors.secondary,
@@ -149,7 +181,6 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
     );
   }
 
-  // --- CONTEÚDO DA ABA CONTA ---
   Widget _buildAccountTab() {
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance.collection('users').doc(user!.uid).snapshots(),
@@ -157,39 +188,57 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
         if (!snapshot.hasData || !snapshot.data!.exists) return const Center(child: CircularProgressIndicator());
 
         final data = snapshot.data!.data() as Map<String, dynamic>;
-        final String nome = data['name'] ?? data['nome'] ?? "Usuário";
+        final String nome = data['name'] ?? data['nome'] ?? "Usuário"; // Suporta 'name' ou 'nome'
         final String email = data['email'] ?? "";
         final String tipo = data['tipo'] ?? "aluno";
         final String? photoUrl = data['photoUrl']; 
         
-        // Buscamos dados motivacionais (se existirem na raiz, senão mostramos padrão)
-        // DICA: Para isso aparecer aqui, idealmente salvaríamos esses campos no user doc ao salvar a anamnese.
+        // --- DATA DE NASCIMENTO E IDADE ---
+        // Verifica se existe 'birthDate' (padrão novo) ou 'dataNascimento' (legado)
+        final dynamic birthDateRaw = data['birthDate'] ?? data['dataNascimento'];
+        final String idade = _calcularIdade(birthDateRaw);
+        final bool precisaData = (birthDateRaw == null); // Flag para mostrar aviso
+
         final String objetivo = data['objetivo'] ?? "Definir";
         final String frequencia = data['freq_semanal'] ?? "Definir";
-
         final bool isPersonal = tipo == 'personal';
 
         return SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Column(
             children: [
-              // FOTO E INFO BÁSICA
+              // --- AVISO PARA COMPLETAR CADASTRO (Google Login) ---
+              if (precisaData)
+                GestureDetector(
+                  onTap: _editarDataNascimento,
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 20),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.amber),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.warning_amber_rounded, color: Colors.amber),
+                        SizedBox(width: 10),
+                        Expanded(child: Text("Cadastro incompleto! Toque para adicionar sua Data de Nascimento.", style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold))),
+                      ],
+                    ),
+                  ),
+                ),
+
+              // FOTO E INFO
               Center(
                 child: Column(
                   children: [
                     Stack(
                       children: [
-                        UserAvatar(
-                          photoUrl: photoUrl, 
-                          name: nome, 
-                          radius: 60,
-                          onTap: _mostrarOpcoesFoto,
-                        ),
-                        if (_isUploading)
-                          const Positioned.fill(child: CircularProgressIndicator(color: AppColors.secondary)),
+                        UserAvatar(photoUrl: photoUrl, name: nome, radius: 60, onTap: _mostrarOpcoesFoto),
+                        if (_isUploading) const Positioned.fill(child: CircularProgressIndicator(color: AppColors.secondary)),
                         Positioned(
-                          bottom: 0,
-                          right: 0,
+                          bottom: 0, right: 0,
                           child: GestureDetector(
                             onTap: _mostrarOpcoesFoto,
                             child: Container(
@@ -208,6 +257,13 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                     const SizedBox(height: 16),
                     Text(nome, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
                     
+                    // --- IDADE EM DESTAQUE ---
+                    if (idade != "--")
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(idade, style: const TextStyle(color: AppColors.secondary, fontSize: 16, fontWeight: FontWeight.w600)),
+                      ),
+
                     Container(
                       margin: const EdgeInsets.only(top: 8),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -215,10 +271,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                         color: isPersonal ? Colors.purple : Colors.blueAccent, 
                         borderRadius: BorderRadius.circular(20)
                       ),
-                      child: Text(
-                        isPersonal ? "PERSONAL TRAINER" : "ALUNO", 
-                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)
-                      ),
+                      child: Text(isPersonal ? "PERSONAL TRAINER" : "ALUNO", style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                     ),
                     Text(email, style: const TextStyle(color: Colors.white60, height: 2)),
                   ],
@@ -227,64 +280,54 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
               
               const SizedBox(height: 30),
               
-              // --- CARD MOTIVACIONAL (Substitui Peso/Altura) ---
+              // CARDS MOTIVACIONAIS
               if (!isPersonal) ...[
                 Row(
                   children: [
-                    // Card Objetivo
-                    Expanded(
-                      child: _buildInfoCard(
-                        icon: Icons.flag_outlined, 
-                        title: "Meu Foco", 
-                        value: objetivo, 
-                        // Ao clicar, leva para a aba de Anamnese (Index 1)
-                        onTap: () => _tabController.animateTo(1),
-                      ),
-                    ),
+                    Expanded(child: _buildInfoCard(icon: Icons.flag_outlined, title: "Meu Foco", value: objetivo, onTap: () => _tabController.animateTo(1))),
                     const SizedBox(width: 16),
-                    // Card Frequência
-                    Expanded(
-                      child: _buildInfoCard(
-                        icon: Icons.calendar_today_outlined, 
-                        title: "Frequência", 
-                        value: frequencia, 
-                        // Ao clicar, leva para a aba de Anamnese (Index 1)
-                        onTap: () => _tabController.animateTo(1),
-                      ),
-                    ),
+                    Expanded(child: _buildInfoCard(icon: Icons.calendar_today_outlined, title: "Frequência", value: frequencia, onTap: () => _tabController.animateTo(1))),
                   ],
                 ),
                 const SizedBox(height: 30),
               ],
 
               // MENU DE AÇÕES
-              const Align(alignment: Alignment.centerLeft, child: Text("Ações Rápidas", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.secondary))),
+              const Align(alignment: Alignment.centerLeft, child: Text("Configurações", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.secondary))),
               const SizedBox(height: 10),
               
+              // Opção de editar Nascimento (caso queira mudar depois)
               _buildMenuOption(
-                icon: Icons.history,
-                color: Colors.orange,
-                title: "Histórico de Treinos Realizados",
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => WorkoutHistoryPage(studentId: user!.uid))),
+                icon: Icons.cake, 
+                color: Colors.pinkAccent, 
+                title: "Data de Nascimento", 
+                onTap: _editarDataNascimento
+              ),
+
+              _buildMenuOption(
+                icon: Icons.history, 
+                color: Colors.orange, 
+                title: "Histórico de Treinos", 
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => WorkoutHistoryPage(studentId: user!.uid)))
               ),
 
               if (isPersonal)
                 _buildMenuOption(
-                  icon: Icons.library_books,
-                  color: Colors.purpleAccent,
-                  title: "Gerenciar Biblioteca",
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LibraryAdminPage())),
+                  icon: Icons.library_books, 
+                  color: Colors.purpleAccent, 
+                  title: "Gerenciar Biblioteca", 
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LibraryAdminPage()))
                 ),
 
               _buildMenuOption(
-                icon: Icons.logout,
-                color: Colors.redAccent,
-                title: "Sair da Conta",
-                isDestructive: true,
+                icon: Icons.logout, 
+                color: Colors.redAccent, 
+                title: "Sair da Conta", 
+                isDestructive: true, 
                 onTap: () async {
                   await _authService.deslogar();
                   if (mounted) Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const LoginPage()), (route) => false);
-                },
+                }
               ),
             ],
           ),
@@ -293,7 +336,6 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
     );
   }
 
-  // Card Estilizado (Sem edição direta, serve como atalho)
   Widget _buildInfoCard({required IconData icon, required String title, required String value, required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
@@ -310,12 +352,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
             const SizedBox(height: 8),
             Text(title, style: const TextStyle(color: Colors.white60, fontSize: 12)),
             const SizedBox(height: 4),
-            Text(
-              value, 
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-              textAlign: TextAlign.center,
-              overflow: TextOverflow.ellipsis,
-            ),
+            Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white), textAlign: TextAlign.center, overflow: TextOverflow.ellipsis),
           ],
         ),
       ),
