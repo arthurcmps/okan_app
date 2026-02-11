@@ -7,7 +7,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/widgets/user_avatar.dart';
-import '../../../../core/theme/app_colors.dart'; // Importe suas cores
+import '../../../../core/theme/app_colors.dart';
 
 // IMPORTS DAS NOVAS ABAS
 import 'anamnese_tab.dart'; 
@@ -43,10 +43,11 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
     super.dispose();
   }
 
-  // --- LÓGICA DE FOTO (Mantida) ---
+  // --- LÓGICA DE FOTO ---
   void _mostrarOpcoesFoto() {
     showModalBottomSheet(
       context: context,
+      backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) {
         return SafeArea(
@@ -54,7 +55,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
             children: [
               ListTile(
                 leading: const Icon(Icons.photo_library, color: Colors.blue),
-                title: const Text('Escolher da Galeria'),
+                title: const Text('Escolher da Galeria', style: TextStyle(color: Colors.white)),
                 onTap: () {
                   Navigator.pop(context);
                   _atualizarFoto(ImageSource.gallery);
@@ -62,7 +63,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
               ),
               ListTile(
                 leading: const Icon(Icons.camera_alt, color: Colors.blue),
-                title: const Text('Tirar Foto Agora'),
+                title: const Text('Tirar Foto Agora', style: TextStyle(color: Colors.white)),
                 onTap: () {
                   Navigator.pop(context);
                   _atualizarFoto(ImageSource.camera);
@@ -110,42 +111,6 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
     }
   }
 
-  // --- LÓGICA DE EDITAR DADOS (Mantida para edição rápida) ---
-  Future<void> _editarDados(BuildContext context, String campo, String valorAtual) async {
-    final controller = TextEditingController(text: valorAtual.replaceAll(RegExp(r'[^0-9.,]'), ''));
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: Text("Editar $campo", style: const TextStyle(color: Colors.white)),
-        content: TextField(
-          controller: controller, 
-          keyboardType: TextInputType.number, 
-          style: const TextStyle(color: Colors.white),
-          decoration: InputDecoration(
-            labelText: "Novo $campo", 
-            labelStyle: const TextStyle(color: Colors.white70),
-            suffixText: campo == "Altura" ? "cm" : "kg",
-            enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-          )
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar", style: TextStyle(color: Colors.grey))),
-          ElevatedButton(
-            onPressed: () async {
-              if (controller.text.isNotEmpty) {
-                await FirebaseFirestore.instance.collection('users').doc(user!.uid).update({campo.toLowerCase(): controller.text.trim()});
-                if (mounted) Navigator.pop(context);
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-            child: const Text("Salvar", style: TextStyle(color: Colors.white)),
-          )
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     if (user == null) return const Scaffold(body: Center(child: Text("Usuário não logado.")));
@@ -176,13 +141,8 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
       body: TabBarView(
         controller: _tabController,
         children: [
-          // ABA 1: CONTA (Seu código antigo adaptado)
           _buildAccountTab(),
-
-          // ABA 2: ANAMNESE (O próprio aluno edita)
           AnamneseTab(studentId: user!.uid, isEditable: true),
-
-          // ABA 3: MEDIDAS (Visualiza e adiciona)
           AssessmentsTab(studentId: user!.uid),
         ],
       ),
@@ -200,9 +160,12 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
         final String nome = data['name'] ?? data['nome'] ?? "Usuário";
         final String email = data['email'] ?? "";
         final String tipo = data['tipo'] ?? "aluno";
-        final String peso = data['peso']?.toString() ?? "--";
-        final String altura = data['altura']?.toString() ?? "--";
         final String? photoUrl = data['photoUrl']; 
+        
+        // Buscamos dados motivacionais (se existirem na raiz, senão mostramos padrão)
+        // DICA: Para isso aparecer aqui, idealmente salvaríamos esses campos no user doc ao salvar a anamnese.
+        final String objetivo = data['objetivo'] ?? "Definir";
+        final String frequencia = data['freq_semanal'] ?? "Definir";
 
         final bool isPersonal = tipo == 'personal';
 
@@ -244,6 +207,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                     ),
                     const SizedBox(height: 16),
                     Text(nome, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
+                    
                     Container(
                       margin: const EdgeInsets.only(top: 8),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -263,26 +227,44 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
               
               const SizedBox(height: 30),
               
-              // RESUMO RÁPIDO DE DADOS (Só Aluno) - Opcional, já que tem na aba Medidas
+              // --- CARD MOTIVACIONAL (Substitui Peso/Altura) ---
               if (!isPersonal) ...[
                 Row(
                   children: [
-                    Expanded(child: _buildInfoCard(icon: Icons.monitor_weight_outlined, title: "Peso", value: "$peso kg", onTap: () => _editarDados(context, "Peso", peso))),
+                    // Card Objetivo
+                    Expanded(
+                      child: _buildInfoCard(
+                        icon: Icons.flag_outlined, 
+                        title: "Meu Foco", 
+                        value: objetivo, 
+                        // Ao clicar, leva para a aba de Anamnese (Index 1)
+                        onTap: () => _tabController.animateTo(1),
+                      ),
+                    ),
                     const SizedBox(width: 16),
-                    Expanded(child: _buildInfoCard(icon: Icons.height, title: "Altura", value: "$altura cm", onTap: () => _editarDados(context, "Altura", altura))),
+                    // Card Frequência
+                    Expanded(
+                      child: _buildInfoCard(
+                        icon: Icons.calendar_today_outlined, 
+                        title: "Frequência", 
+                        value: frequencia, 
+                        // Ao clicar, leva para a aba de Anamnese (Index 1)
+                        onTap: () => _tabController.animateTo(1),
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 30),
               ],
 
               // MENU DE AÇÕES
-              const Align(alignment: Alignment.centerLeft, child: Text("Configurações", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.secondary))),
+              const Align(alignment: Alignment.centerLeft, child: Text("Ações Rápidas", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.secondary))),
               const SizedBox(height: 10),
               
               _buildMenuOption(
                 icon: Icons.history,
                 color: Colors.orange,
-                title: "Meu Histórico de Treinos",
+                title: "Histórico de Treinos Realizados",
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => WorkoutHistoryPage(studentId: user!.uid))),
               ),
 
@@ -311,6 +293,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
     );
   }
 
+  // Card Estilizado (Sem edição direta, serve como atalho)
   Widget _buildInfoCard({required IconData icon, required String title, required String value, required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
@@ -323,11 +306,16 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
         ),
         child: Column(
           children: [
-            Icon(icon, size: 30, color: AppColors.secondary),
+            Icon(icon, size: 28, color: AppColors.secondary),
             const SizedBox(height: 8),
             Text(title, style: const TextStyle(color: Colors.white60, fontSize: 12)),
             const SizedBox(height: 4),
-            Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+            Text(
+              value, 
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+            ),
           ],
         ),
       ),

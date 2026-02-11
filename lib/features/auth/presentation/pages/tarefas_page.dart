@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../../core/theme/app_colors.dart'; // Importe suas cores
 import '../../data/models/tarefa_model.dart';
 import '../controllers/tarefa_controller.dart';
 
@@ -16,7 +17,6 @@ class _TarefasPageState extends State<TarefasPage> {
   @override
   void initState() {
     super.initState();
-    // Garante que carregamos as tarefas DO USUÁRIO ATUAL ao abrir a tela
     Future.microtask(() {
       if (mounted) {
         context.read<TarefaController>().iniciarEscuta();
@@ -24,18 +24,12 @@ class _TarefasPageState extends State<TarefasPage> {
     });
   }
 
-  // --- FUNÇÃO SEGURA PARA ADICIONAR ---
   void _adicionarTarefaSegura(BuildContext context, TarefaController controller) {
     final texto = _taskController.text.trim();
     if (texto.isEmpty) return;
 
-    // 1. Fecha o teclado PRIMEIRO para evitar conflito de UI
     FocusScope.of(context).unfocus();
-
-    // 2. Chama o controller
     controller.adicionar(texto);
-
-    // 3. Limpa o campo
     _taskController.clear();
   }
 
@@ -43,51 +37,71 @@ class _TarefasPageState extends State<TarefasPage> {
   Widget build(BuildContext context) {
     final controller = context.watch<TarefaController>();
 
+    // Ordenação: Pendentes primeiro, depois Concluídas
     final pendentes = controller.tarefas.where((t) => !t.concluida).toList();
     final concluidas = controller.tarefas.where((t) => t.concluida).toList();
 
     return Scaffold(
+      backgroundColor: AppColors.background, // Fundo Roxo Escuro
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        foregroundColor: Colors.white,
         title: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("Minhas Metas"),
+            Text("Minhas Metas", style: TextStyle(fontWeight: FontWeight.bold)),
             Text(
               "Foco no resultado! 🚀",
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.normal),
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.normal, color: AppColors.textSub),
             ),
           ],
         ),
       ),
       body: Column(
         children: [
-          // --- ÁREA DE INPUT ---
-          Padding(
+          // --- ÁREA DE INPUT (Estilizada Dark) ---
+          Container(
             padding: const EdgeInsets.all(16.0),
+            decoration: BoxDecoration(
+              color: AppColors.surface, // Fundo levemente mais claro que o fundo da tela
+              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10)],
+            ),
             child: Row(
               children: [
                 Expanded(
                   child: TextField(
                     controller: _taskController,
                     textCapitalization: TextCapitalization.sentences,
+                    style: const TextStyle(color: Colors.white), // Texto Branco
                     decoration: InputDecoration(
-                      hintText: "Nova meta ou tarefa...",
+                      hintText: "Nova meta...",
+                      hintStyle: const TextStyle(color: Colors.white54),
                       filled: true,
-                      fillColor: Colors.white,
+                      fillColor: Colors.black12, // Fundo do input bem sutil
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
                       ),
-                      prefixIcon: const Icon(Icons.check_circle_outline),
+                      prefixIcon: const Icon(Icons.flag_outlined, color: AppColors.secondary),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     ),
                     onSubmitted: (_) => _adicionarTarefaSegura(context, controller),
                   ),
                 ),
-                const SizedBox(width: 8),
-                FloatingActionButton.small(
-                  backgroundColor: Colors.blueAccent,
-                  child: const Icon(Icons.add, color: Colors.white),
+                const SizedBox(width: 10),
+                
+                // Botão "ADICIONAR" visível e intuitivo
+                ElevatedButton(
                   onPressed: () => _adicionarTarefaSegura(context, controller),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.secondary, // Neon
+                    foregroundColor: Colors.black, // Texto Preto
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  ),
+                  child: const Text("ADICIONAR", style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
@@ -96,24 +110,25 @@ class _TarefasPageState extends State<TarefasPage> {
           // --- LISTA DE TAREFAS ---
           Expanded(
             child: controller.isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: CircularProgressIndicator(color: AppColors.secondary))
                 : ListView(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
                     children: [
                       // Pendentes
                       if (pendentes.isNotEmpty) ...[
                         const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 8),
-                          child: Text("PENDENTES", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+                          padding: EdgeInsets.only(bottom: 10, left: 4),
+                          child: Text("PENDENTES", style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textSub, fontSize: 12)),
                         ),
                         ...pendentes.map((t) => _buildTaskCard(context, t, controller)),
+                        const SizedBox(height: 20),
                       ],
 
                       // Concluídas
                       if (concluidas.isNotEmpty) ...[
                         const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 8),
-                          child: Text("CONCLUÍDAS", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                          padding: EdgeInsets.only(bottom: 10, left: 4),
+                          child: Text("CONCLUÍDAS", style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.success, fontSize: 12)),
                         ),
                         ...concluidas.map((t) => _buildTaskCard(context, t, controller)),
                       ],
@@ -125,9 +140,9 @@ class _TarefasPageState extends State<TarefasPage> {
                           child: Center(
                             child: Column(
                               children: [
-                                Icon(Icons.list_alt, size: 60, color: Colors.black12),
+                                Icon(Icons.check_circle_outline, size: 60, color: Colors.white10),
                                 SizedBox(height: 10),
-                                Text("Nenhuma meta ainda.", style: TextStyle(color: Colors.grey)),
+                                Text("Nenhuma meta definida.", style: TextStyle(color: Colors.white54)),
                               ],
                             ),
                           ),
@@ -146,42 +161,59 @@ class _TarefasPageState extends State<TarefasPage> {
       direction: DismissDirection.endToStart,
       background: Container(
         alignment: Alignment.centerRight,
+        margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.only(right: 20),
-        color: Colors.red,
+        decoration: BoxDecoration(
+          color: AppColors.error.withOpacity(0.8),
+          borderRadius: BorderRadius.circular(12),
+        ),
         child: const Icon(Icons.delete, color: Colors.white),
       ),
       onDismissed: (direction) {
         controller.remover(tarefa.id);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text("Tarefa removida"),
+            content: const Text("Meta removida"),
+            backgroundColor: AppColors.surface,
             action: SnackBarAction(
               label: "DESFAZER",
+              textColor: AppColors.secondary,
               onPressed: () => controller.desfazerExclusao(tarefa),
             ),
           ),
         );
       },
-      child: Card(
-        elevation: 2,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: AppColors.surface, // Card Escuro
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: tarefa.concluida ? AppColors.secondary.withOpacity(0.3) : Colors.transparent,
+            width: 1,
+          ),
+        ),
         child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           leading: Checkbox(
             value: tarefa.concluida,
-            activeColor: Colors.green,
+            activeColor: AppColors.secondary, // Neon quando marcado
+            checkColor: Colors.black,
             shape: const CircleBorder(),
+            side: const BorderSide(color: Colors.white54),
             onChanged: (_) => controller.alternarConclusao(tarefa),
           ),
           title: Text(
             tarefa.titulo,
             style: TextStyle(
               fontSize: 16,
+              // Texto Branco (Ativo) ou Cinza/Riscado (Concluído)
               decoration: tarefa.concluida ? TextDecoration.lineThrough : null,
-              color: tarefa.concluida ? Colors.grey : Colors.black87,
+              color: tarefa.concluida ? Colors.white38 : Colors.white,
             ),
           ),
           trailing: IconButton(
-            icon: const Icon(Icons.edit_outlined, color: Colors.grey),
+            icon: const Icon(Icons.edit_outlined, color: Colors.white30),
             onPressed: () => _mostrarDialogoEditar(context, tarefa, controller),
           ),
         ),
@@ -194,25 +226,31 @@ class _TarefasPageState extends State<TarefasPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Editar Tarefa"),
+        backgroundColor: AppColors.surface, // Fundo escuro do diálogo
+        title: const Text("Editar Tarefa", style: TextStyle(color: Colors.white)),
         content: TextField(
           controller: textoController,
           autofocus: true,
-          decoration: const InputDecoration(border: OutlineInputBorder()),
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(
+            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+            focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: AppColors.secondary)),
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Cancelar"),
+            child: const Text("Cancelar", style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.secondary),
             onPressed: () {
               if (textoController.text.trim().isNotEmpty) {
                 controller.atualizarTitulo(tarefa, textoController.text);
                 Navigator.pop(context);
               }
             },
-            child: const Text("Salvar"),
+            child: const Text("Salvar", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
