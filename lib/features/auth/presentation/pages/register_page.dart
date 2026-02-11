@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../../../core/services/auth_service.dart';
-import 'home_page.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../../core/theme/app_colors.dart';
+import 'verify_email_page.dart'; // <--- Nova tela que vamos criar
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -11,136 +13,139 @@ class RegisterPage extends StatefulWidget {
 
 class _RegisterPageState extends State<RegisterPage> {
   final _formKey = GlobalKey<FormState>();
+  
+  // Controllers
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _birthDateController = TextEditingController();
+  final _confirmPasswordController = TextEditingController(); // <--- Novo
   
   String _selectedRole = 'aluno';
   bool _isLoading = false;
-  final AuthService _authService = AuthService();
-
-  void _formatDate(String text) {
-    text = text.replaceAll(RegExp(r'[^0-9]'), '');
-    if (text.length > 8) text = text.substring(0, 8);
-    
-    String formatted = "";
-    if (text.isNotEmpty) {
-      if (text.length <= 2) {
-        formatted = text;
-      } else if (text.length <= 4) {
-        formatted = "${text.substring(0, 2)}/${text.substring(2)}";
-      } else {
-        formatted = "${text.substring(0, 2)}/${text.substring(2, 4)}/${text.substring(4)}";
-      }
-    }
-    
-    _birthDateController.value = TextEditingValue(
-      text: formatted,
-      selection: TextSelection.collapsed(offset: formatted.length),
-    );
-  }
+  bool _obscurePassword = true;
 
   Future<void> _register() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() => _isLoading = true);
+    if (!_formKey.currentState!.validate()) return;
 
-      DateTime? birthDate;
-      try {
-        final parts = _birthDateController.text.split('/');
-        if (parts.length == 3) {
-          birthDate = DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
-        }
-      } catch (e) {
-        // Data inválida ignorada
-      }
+    setState(() => _isLoading = true);
 
-      // CHAMADA CORRIGIDA
-      final erro = await _authService.cadastrarUsuario(
+    try {
+      // 1. Cria a conta no Firebase Auth
+      UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
-        nome: _nameController.text.trim(),      // <--- Corrigido (era name)
-        tipo: _selectedRole,                    // <--- Corrigido (era role)
-        dataNascimento: birthDate,              // <--- Corrigido (era birthDate)
       );
 
-      setState(() => _isLoading = false);
+      // 2. Salva os dados no Firestore
+      String uid = userCredential.user!.uid;
+      await FirebaseFirestore.instance.collection('users').doc(uid).set({
+        'uid': uid,
+        'name': _nameController.text.trim(),
+        'email': _emailController.text.trim(),
+        'tipo': _selectedRole,
+        'createdAt': FieldValue.serverTimestamp(),
+        // Inicializa campos padrão para evitar null safety errors
+        if (_selectedRole == 'aluno') ...{
+           'peso': '--',
+           'altura': '--',
+           'objetivo': 'Definir',
+           'freq_semanal': '3x',
+        }
+      });
+      
+      // Atualiza o Display Name
+      await userCredential.user!.updateDisplayName(_nameController.text.trim());
 
-      if (erro == null && mounted) {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const HomePage()));
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(erro ?? "Erro desconhecido"), backgroundColor: Colors.red),
+      // 3. ENVIA O E-MAIL DE VERIFICAÇÃO
+      await userCredential.user!.sendEmailVerification();
+
+      if (mounted) {
+        // Redireciona para a tela de "Aguardando Verificação"
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const VerifyEmailPage()),
         );
       }
+
+    } on FirebaseAuthException catch (e) {
+      String msg = "Erro ao cadastrar.";
+      if (e.code == 'weak-password') msg = "Senha muito fraca (min 6 caracteres).";
+      if (e.code == 'email-already-in-use') msg = "Este e-mail já está em uso.";
+      if (e.code == 'invalid-email') msg = "E-mail inválido.";
+      
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro: $e"), backgroundColor: Colors.red));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Criar Conta")),
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: const Text("Criar Conta"),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        foregroundColor: Colors.white,
+      ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
+        padding: const EdgeInsets.all(24),
         child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text("Vamos começar!", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+              const Text("Junte-se ao Okan", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white), textAlign: TextAlign.center),
               const SizedBox(height: 8),
-              const Text("Preencha seus dados abaixo", style: TextStyle(color: Colors.grey), textAlign: TextAlign.center),
-              const SizedBox(height: 32),
+              const Text("Escolha seu perfil e comece agora.", style: TextStyle(color: Colors.white60), textAlign: TextAlign.center),
+              const SizedBox(height: 30),
 
-              const Text("Eu sou:", style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 12),
+              // SELETOR DE PERFIL
               Row(
                 children: [
-                  Expanded(child: _buildRoleCard(label: "Aluno", value: "aluno", icon: Icons.fitness_center, color: Colors.blue)),
+                  Expanded(child: _buildRoleCard("Aluno", "aluno", Icons.fitness_center)),
                   const SizedBox(width: 16),
-                  Expanded(child: _buildRoleCard(label: "Personal", value: "personal", icon: Icons.assignment_ind, color: Colors.purple)),
+                  Expanded(child: _buildRoleCard("Personal", "personal", Icons.assignment_ind)),
                 ],
               ),
               const SizedBox(height: 24),
 
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: "Nome Completo", prefixIcon: Icon(Icons.person)),
-                validator: (v) => v!.isEmpty ? "Campo obrigatório" : null,
-              ),
+              // CAMPOS
+              _buildTextField(controller: _nameController, label: "Nome Completo", icon: Icons.person),
               const SizedBox(height: 16),
-              TextFormField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(labelText: "E-mail", prefixIcon: Icon(Icons.email)),
-                validator: (v) => v!.contains('@') ? null : "E-mail inválido",
-              ),
+              
+              _buildTextField(controller: _emailController, label: "E-mail", icon: Icons.email, isEmail: true),
               const SizedBox(height: 16),
-              TextFormField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: "Senha", prefixIcon: Icon(Icons.lock)),
-                validator: (v) => v!.length < 6 ? "Mínimo 6 caracteres" : null,
-              ),
+              
+              _buildTextField(controller: _passwordController, label: "Senha", icon: Icons.lock, isPassword: true),
               const SizedBox(height: 16),
-              TextFormField(
-                controller: _birthDateController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: "Data de Nascimento (dd/mm/aaaa)", prefixIcon: Icon(Icons.calendar_today)),
-                onChanged: _formatDate,
-                validator: (v) => v!.length < 10 ? "Data inválida" : null,
+              
+              // --- CONFIRMAÇÃO DE SENHA ---
+              _buildTextField(
+                controller: _confirmPasswordController, 
+                label: "Confirmar Senha", 
+                icon: Icons.lock_outline, 
+                isPassword: true,
+                validator: (val) {
+                  if (val != _passwordController.text) return "As senhas não coincidem.";
+                  return null;
+                }
               ),
-              const SizedBox(height: 32),
+              
+              const SizedBox(height: 40),
 
               ElevatedButton(
                 onPressed: _isLoading ? null : _register,
                 style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.secondary,
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: _selectedRole == 'personal' ? Colors.purple : Colors.blue,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 child: _isLoading 
-                  ? const CircularProgressIndicator(color: Colors.white) 
-                  : const Text("CRIAR CONTA", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.black)) 
+                  : const Text("CADASTRAR", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black)),
               ),
             ],
           ),
@@ -149,23 +154,61 @@ class _RegisterPageState extends State<RegisterPage> {
     );
   }
 
-  Widget _buildRoleCard({required String label, required String value, required IconData icon, required Color color}) {
+  Widget _buildTextField({
+    required TextEditingController controller, 
+    required String label, 
+    required IconData icon, 
+    bool isPassword = false, 
+    bool isEmail = false,
+    String? Function(String?)? validator,
+  }) {
+    return TextFormField(
+      controller: controller,
+      obscureText: isPassword ? _obscurePassword : false,
+      keyboardType: isEmail ? TextInputType.emailAddress : TextInputType.text,
+      style: const TextStyle(color: Colors.white),
+      validator: validator ?? (v) {
+        if (v == null || v.isEmpty) return "Obrigatório";
+        if (isEmail && !v.contains('@')) return "E-mail inválido";
+        if (isPassword && v.length < 6) return "Mínimo 6 caracteres";
+        return null;
+      },
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(color: Colors.white60),
+        prefixIcon: Icon(icon, color: AppColors.secondary),
+        suffixIcon: isPassword 
+          ? IconButton(
+              icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility, color: Colors.white30),
+              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+            )
+          : null,
+        enabledBorder: OutlineInputBorder(borderSide: const BorderSide(color: Colors.white24), borderRadius: BorderRadius.circular(12)),
+        focusedBorder: OutlineInputBorder(borderSide: const BorderSide(color: AppColors.secondary), borderRadius: BorderRadius.circular(12)),
+        filled: true,
+        fillColor: AppColors.surface,
+      ),
+    );
+  }
+
+  Widget _buildRoleCard(String title, String value, IconData icon) {
     final isSelected = _selectedRole == value;
+    final color = isSelected ? AppColors.secondary : Colors.white24;
+    
     return GestureDetector(
       onTap: () => setState(() => _selectedRole = value),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.1) : Colors.white,
-          border: Border.all(color: isSelected ? color : Colors.grey.shade300, width: 2),
+          color: isSelected ? AppColors.secondary.withOpacity(0.1) : AppColors.surface,
           borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color, width: isSelected ? 2 : 1),
         ),
         child: Column(
           children: [
-            Icon(icon, size: 32, color: isSelected ? color : Colors.grey),
+            Icon(icon, color: isSelected ? AppColors.secondary : Colors.white60, size: 30),
             const SizedBox(height: 8),
-            Text(label, style: TextStyle(color: isSelected ? color : Colors.grey, fontWeight: FontWeight.bold)),
-            if (isSelected) const Padding(padding: EdgeInsets.only(top: 4), child: Icon(Icons.check_circle, size: 16, color: Colors.green))
+            Text(title, style: TextStyle(color: isSelected ? Colors.white : Colors.white60, fontWeight: FontWeight.bold)),
           ],
         ),
       ),
