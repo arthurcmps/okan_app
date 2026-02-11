@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // Importante para verificar quem é
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../../core/theme/app_colors.dart';
-// IMPORTANTE: Importe o widget de notas que criamos
+// IMPORTANTE: O widget de notas que criamos
 import '../../../../core/widgets/professor_notes_widget.dart'; 
 
 class AnamneseTab extends StatefulWidget {
   final String studentId;
-  final bool isEditable; // Se os campos GERAIS são editáveis
+  final bool isEditable; // Se os campos GERAIS da ficha são editáveis
 
   const AnamneseTab({super.key, required this.studentId, this.isEditable = true});
 
@@ -17,13 +17,8 @@ class AnamneseTab extends StatefulWidget {
 
 class _AnamneseTabState extends State<AnamneseTab> {
   final _formKey = GlobalKey<FormState>();
-  
-  // Controllers para campos de texto livre
   final Map<String, TextEditingController> _controllers = {};
-  
-  // Map para guardar os valores dos checkboxes e radios
   final Map<String, dynamic> _formData = {};
-  
   bool _isLoading = true;
 
   @override
@@ -34,7 +29,6 @@ class _AnamneseTabState extends State<AnamneseTab> {
 
   @override
   void dispose() {
-    // Limpeza dos controllers para evitar vazamento de memória
     _controllers.forEach((_, controller) => controller.dispose());
     super.dispose();
   }
@@ -52,11 +46,8 @@ class _AnamneseTabState extends State<AnamneseTab> {
         setState(() {
           _formData.addAll(doc.data()!);
           
-          // --- CORREÇÃO DO BUG DE TEXTO ---
-          // Percorre todos os dados. Se for String, atualiza o controller correspondente.
           _formData.forEach((key, value) {
             if (value is String) {
-              // Se o controller já existe, atualiza o texto. Se não, cria.
               if (_controllers.containsKey(key)) {
                 _controllers[key]!.text = value;
               } else {
@@ -77,10 +68,11 @@ class _AnamneseTabState extends State<AnamneseTab> {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
       
-      // Salva o texto dos controllers normais no map
       _controllers.forEach((key, controller) {
         _formData[key] = controller.text;
       });
+
+      // Removemos a lógica de 'personal_notes' daqui pois agora é um widget separado
 
       await FirebaseFirestore.instance
           .collection('users')
@@ -93,7 +85,6 @@ class _AnamneseTabState extends State<AnamneseTab> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Ficha salva com sucesso! ✅"), backgroundColor: AppColors.success)
         );
-        // Remove o foco para esconder o teclado
         FocusScope.of(context).unfocus();
       }
     }
@@ -108,8 +99,8 @@ class _AnamneseTabState extends State<AnamneseTab> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // --- ÁREA DO PERSONAL (WIDGET GLOBAL) ---
-          // Ele já cuida de aparecer só para o professor e salvar na raiz
+          // --- ÁREA DO PERSONAL (GLOBAL) ---
+          // Este widget já decide se aparece ou não. Não precisa de if aqui.
           ProfessorNotesWidget(studentId: widget.studentId),
 
           const SizedBox(height: 10),
@@ -155,7 +146,6 @@ class _AnamneseTabState extends State<AnamneseTab> {
 
           const SizedBox(height: 20),
           
-          // Botão de Salvar
           ElevatedButton(
             onPressed: _saveAnamnese,
             style: ElevatedButton.styleFrom(

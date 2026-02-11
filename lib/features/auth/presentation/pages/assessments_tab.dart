@@ -20,10 +20,9 @@ class AssessmentsTab extends StatelessWidget {
         label: const Text("Nova Avaliação", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         onPressed: () => _showAddAssessmentModal(context),
       ),
-      // Mudei para Column para inserir o Widget de Notas no topo
       body: Column(
         children: [
-          // --- ÁREA DO PERSONAL (WIDGET GLOBAL) ---
+          // --- NOTAS GLOBAIS DO PROFESSOR (Sincronizadas com a outra aba) ---
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: ProfessorNotesWidget(studentId: studentId),
@@ -149,7 +148,7 @@ class AssessmentsTab extends StatelessWidget {
   }
 }
 
-// --- FORMULÁRIO COMPLETO ---
+// --- FORMULÁRIO (Mantido Igual) ---
 class _AssessmentForm extends StatefulWidget {
   final String studentId;
   final ScrollController scrollController;
@@ -193,7 +192,6 @@ class _AssessmentFormState extends State<_AssessmentForm> {
             .collection('assessments')
             .add(data);
 
-        // Atualiza perfil (Peso/Altura)
         await FirebaseFirestore.instance
             .collection('users')
             .doc(widget.studentId)
@@ -338,7 +336,7 @@ class _AssessmentFormState extends State<_AssessmentForm> {
             ),
             child: const Text("SALVAR AVALIAÇÃO COMPLETA", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
           ),
-          const SizedBox(height: 40), // Espaço extra para teclado
+          const SizedBox(height: 40),
         ],
       ),
     );
