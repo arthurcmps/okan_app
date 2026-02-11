@@ -50,6 +50,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "1080333508962-mfepd524p8978a8l219a119p59gcsu9n.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.okan_app",
+            "certificate_hash": "2c64c5dc9108e67647de5c043d1b41454bfb5008"
+          }
+        },
+        {
           "client_id": "1080333508962-08q17itvn84sbd4q63o27cfpfk3nsoq1.apps.googleusercontent.com",
           "client_type": 3
         }
