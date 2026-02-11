@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
-// Importações dos seus componentes e páginas
+// --- IMPORTS ---
 import '../../../../core/widgets/user_avatar.dart';
 import '../../../../core/services/auth_service.dart';
 import 'weekly_plan_page.dart'; 
@@ -11,6 +11,7 @@ import 'tarefas_page.dart';
 import 'profile_page.dart';
 import 'students_page.dart';    
 import 'chat_page.dart';
+import 'notifications_page.dart'; // <--- IMPORTANTE: Crie esse arquivo se não existir
 import '../../../../core/theme/app_colors.dart';
 
 class HomePage extends StatefulWidget {
@@ -38,12 +39,11 @@ class _HomePageState extends State<HomePage> {
     if (user == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
     return Scaffold(
-      // O background já vem do tema, mas garantimos aqui
       backgroundColor: AppColors.background, 
       appBar: AppBar(
-        // AppBar transparente
         backgroundColor: Colors.transparent,
         elevation: 0,
+        // --- TÍTULO (Saudação) ---
         title: StreamBuilder<DocumentSnapshot>(
           stream: FirebaseFirestore.instance.collection('users').doc(user!.uid).snapshots(),
           builder: (context, snapshot) {
@@ -60,7 +60,50 @@ class _HomePageState extends State<HomePage> {
             );
           },
         ),
+        
+        // --- AÇÕES DA BARRA SUPERIOR ---
         actions: [
+          // 1. ÍCONE DE NOTIFICAÇÃO (Com bolinha vermelha se tiver convite)
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('invites')
+                .where('toStudentEmail', isEqualTo: user?.email)
+                .where('status', isEqualTo: 'pending')
+                .snapshots(),
+            builder: (context, snapshot) {
+              bool temNotificacao = false;
+              if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+                temNotificacao = true;
+              }
+
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.notifications_none_rounded, color: Colors.white, size: 28),
+                    onPressed: () {
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => const NotificationsPage()));
+                    },
+                  ),
+                  if (temNotificacao)
+                    Positioned(
+                      right: 12,
+                      top: 12,
+                      child: Container(
+                        width: 10,
+                        height: 10,
+                        decoration: const BoxDecoration(
+                          color: AppColors.secondary, // Neon ou Vermelho
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+
+          // 2. AVATAR DO USUÁRIO
           StreamBuilder<DocumentSnapshot>(
             stream: FirebaseFirestore.instance.collection('users').doc(user!.uid).snapshots(),
             builder: (context, snapshot) {
@@ -72,7 +115,7 @@ class _HomePageState extends State<HomePage> {
                 name = data['name'] ?? "";
               }
               return Padding(
-                padding: const EdgeInsets.only(right: 16.0),
+                padding: const EdgeInsets.only(right: 16.0, left: 8.0),
                 child: UserAvatar(
                   photoUrl: photoUrl,
                   name: name,
@@ -84,12 +127,14 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
+
+      // --- CORPO DA PÁGINA ---
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // --- TÍTULO SEÇÃO ---
+            // SEÇÃO: TREINO DE HOJE
             const Text("TREINO DE HOJE", style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.secondary, letterSpacing: 1.2)),
             const SizedBox(height: 10),
             
@@ -97,7 +142,7 @@ class _HomePageState extends State<HomePage> {
               stream: FirebaseFirestore.instance.collection('workout_plans').doc(user!.uid).snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const Center(child: CircularProgressIndicator(color: AppColors.secondary));
                 }
 
                 final diaKey = _getDiaSemanaKey();
@@ -109,14 +154,13 @@ class _HomePageState extends State<HomePage> {
                   exerciciosHoje = data[diaKey] as List<dynamic>? ?? [];
                 }
 
-                // Estado: Dia de Descanso
+                // Estado: Descanso
                 if (exerciciosHoje.isEmpty) {
                   return Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      // Gradiente Dark Tech
-                      gradient: LinearGradient(colors: [AppColors.surface, AppColors.background]),
+                      gradient: const LinearGradient(colors: [AppColors.surface, AppColors.background]),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: Colors.white10),
                     ),
@@ -131,7 +175,7 @@ class _HomePageState extends State<HomePage> {
                   );
                 }
 
-                // Estado: Tem Treino!
+                // Estado: Tem Treino
                 final primeiroExercicio = exerciciosHoje.first['nome'] ?? 'Treino';
                 final totalExercicios = exerciciosHoje.length;
 
@@ -143,10 +187,9 @@ class _HomePageState extends State<HomePage> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      // Gradiente Terracota Sutil
                       gradient: LinearGradient(colors: [
-                         AppColors.primary.withOpacity(0.8), 
-                         AppColors.primary.withOpacity(0.4)
+                         AppColors.primary.withOpacity(0.9), 
+                         AppColors.primary.withOpacity(0.6)
                       ]),
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [BoxShadow(color: AppColors.primary.withOpacity(0.2), blurRadius: 15, offset: const Offset(0, 5))],
@@ -188,7 +231,7 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: 30),
 
-            // --- MENU RÁPIDO ---
+            // SEÇÃO: MENU RÁPIDO
             const Text("MENU RÁPIDO", style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.secondary, letterSpacing: 1.2)),
             const SizedBox(height: 10),
             
@@ -197,7 +240,7 @@ class _HomePageState extends State<HomePage> {
                 Expanded(
                   child: _buildMenuCard(
                     icon: Icons.check_circle_outline,
-                    color: AppColors.secondary, // Neon
+                    color: AppColors.secondary,
                     title: "Metas",
                     subtitle: "Foco!",
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const TarefasPage())),
@@ -207,7 +250,7 @@ class _HomePageState extends State<HomePage> {
                 Expanded(
                   child: _buildMenuCard(
                     icon: Icons.calendar_month,
-                    color: AppColors.primary, // Terracota
+                    color: AppColors.primary,
                     title: "Semana",
                     subtitle: "Planejamento",
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => WeeklyPlanPage(studentId: user!.uid, studentName: "Meus Treinos"))),
@@ -218,6 +261,7 @@ class _HomePageState extends State<HomePage> {
             
             const SizedBox(height: 16),
             
+            // CARDS ESPECÍFICOS (Personal ou Aluno)
             StreamBuilder<DocumentSnapshot>(
               stream: FirebaseFirestore.instance.collection('users').doc(user!.uid).snapshots(),
               builder: (context, snapshot) {
@@ -225,6 +269,7 @@ class _HomePageState extends State<HomePage> {
                   final data = snapshot.data!.data() as Map<String, dynamic>;
                   final tipo = data['tipo'];
                   
+                  // Se for PERSONAL
                   if (tipo == 'personal') {
                     return _buildMenuCard(
                       icon: Icons.people_outline,
@@ -235,6 +280,7 @@ class _HomePageState extends State<HomePage> {
                     );
                   }
 
+                  // Se for ALUNO
                   if (tipo == 'aluno' && data['personalId'] != null) {
                     final personalName = data['personalName'] ?? 'Treinador';
                     return _buildMenuCard(
@@ -263,7 +309,7 @@ class _HomePageState extends State<HomePage> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.surface, // Card escuro
+          color: AppColors.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: Colors.white.withOpacity(0.05)),
         ),
