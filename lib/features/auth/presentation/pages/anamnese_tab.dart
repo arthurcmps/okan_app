@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // Importante para verificar quem é
 import '../../../../core/theme/app_colors.dart';
+// IMPORTANTE: Importe o widget de notas que criamos
+import '../../../../core/widgets/professor_notes_widget.dart'; 
 
 class AnamneseTab extends StatefulWidget {
   final String studentId;
-  final bool isEditable; // Se for o Personal, pode editar? Ou só o aluno?
+  final bool isEditable; // Se os campos GERAIS são editáveis
 
   const AnamneseTab({super.key, required this.studentId, this.isEditable = true});
 
@@ -20,6 +23,8 @@ class _AnamneseTabState extends State<AnamneseTab> {
   
   // Map para guardar os valores dos checkboxes e radios
   final Map<String, dynamic> _formData = {};
+  
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -27,25 +32,52 @@ class _AnamneseTabState extends State<AnamneseTab> {
     _loadData();
   }
 
+  @override
+  void dispose() {
+    // Limpeza dos controllers para evitar vazamento de memória
+    _controllers.forEach((_, controller) => controller.dispose());
+    super.dispose();
+  }
+
   Future<void> _loadData() async {
-    final doc = await FirebaseFirestore.instance.collection('users').doc(widget.studentId).collection('medical').doc('anamnese').get();
-    if (doc.exists) {
-      setState(() {
-        _formData.addAll(doc.data()!);
-        // Atualiza controllers se necessário
-        _formData.forEach((key, value) {
-          if (value is String) {
-            _controllers.putIfAbsent(key, () => TextEditingController(text: value));
-          }
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.studentId)
+          .collection('medical')
+          .doc('anamnese')
+          .get();
+
+      if (doc.exists && mounted) {
+        setState(() {
+          _formData.addAll(doc.data()!);
+          
+          // --- CORREÇÃO DO BUG DE TEXTO ---
+          // Percorre todos os dados. Se for String, atualiza o controller correspondente.
+          _formData.forEach((key, value) {
+            if (value is String) {
+              // Se o controller já existe, atualiza o texto. Se não, cria.
+              if (_controllers.containsKey(key)) {
+                _controllers[key]!.text = value;
+              } else {
+                _controllers[key] = TextEditingController(text: value);
+              }
+            }
+          });
         });
-      });
+      }
+    } catch (e) {
+      debugPrint("Erro ao carregar anamnese: $e");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _saveAnamnese() async {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
-      // Salva também o texto dos controllers no map
+      
+      // Salva o texto dos controllers normais no map
       _controllers.forEach((key, controller) {
         _formData[key] = controller.text;
       });
@@ -57,17 +89,31 @@ class _AnamneseTabState extends State<AnamneseTab> {
           .doc('anamnese')
           .set(_formData, SetOptions(merge: true));
 
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Anamnese salva!"), backgroundColor: AppColors.success));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Ficha salva com sucesso! ✅"), backgroundColor: AppColors.success)
+        );
+        // Remove o foco para esconder o teclado
+        FocusScope.of(context).unfocus();
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) return const Center(child: CircularProgressIndicator(color: AppColors.secondary));
+
     return Form(
       key: _formKey,
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // --- ÁREA DO PERSONAL (WIDGET GLOBAL) ---
+          // Ele já cuida de aparecer só para o professor e salvar na raiz
+          ProfessorNotesWidget(studentId: widget.studentId),
+
+          const SizedBox(height: 10),
+
           _buildSection("1. Objetivos", [
             _buildMultiSelect("Objetivos Principais", [
               "Hipertrofia", "Emagrecimento", "Condicionamento", "Reabilitação", "Saúde Geral"
@@ -82,7 +128,7 @@ class _AnamneseTabState extends State<AnamneseTab> {
             _buildTextField("Outros esportes atuais", "outros_esportes"),
           ]),
 
-          _buildSection("3. Saúde e Triagem (Importante!)", [
+          _buildSection("3. Saúde e Triagem", [
             _buildYesNoWithText("Possui lesão?", "lesao", "Onde?"),
             _buildMultiSelect("Dores frequentes", ["Joelhos", "Ombros", "Lombar", "Cervical", "Punhos"]),
             _buildYesNo("Problemas Cardíacos?", "cardiaco"),
@@ -108,12 +154,18 @@ class _AnamneseTabState extends State<AnamneseTab> {
           ]),
 
           const SizedBox(height: 20),
-          if (widget.isEditable)
-            ElevatedButton(
-              onPressed: _saveAnamnese,
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, padding: const EdgeInsets.all(16)),
-              child: const Text("SALVAR FICHA COMPLETA", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          
+          // Botão de Salvar
+          ElevatedButton(
+            onPressed: _saveAnamnese,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.secondary, 
+              padding: const EdgeInsets.all(16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
             ),
+            child: const Text("SALVAR FICHA", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
+          ),
+          const SizedBox(height: 40),
         ],
       ),
     );
@@ -125,22 +177,37 @@ class _AnamneseTabState extends State<AnamneseTab> {
     return Card(
       color: AppColors.surface,
       margin: const EdgeInsets.only(bottom: 10),
-      child: ExpansionTile(
-        title: Text(title, style: const TextStyle(color: AppColors.secondary, fontWeight: FontWeight.bold)),
-        children: children.map((c) => Padding(padding: const EdgeInsets.all(12), child: c)).toList(),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: false,
+          title: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          iconColor: AppColors.secondary,
+          collapsedIconColor: Colors.white54,
+          children: children.map((c) => Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), child: c)).toList(),
+        ),
       ),
     );
   }
 
   Widget _buildTextField(String label, String key) {
-    _controllers.putIfAbsent(key, () => TextEditingController());
-    return TextFormField(
-      controller: _controllers[key],
-      style: const TextStyle(color: Colors.white),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(color: Colors.white70),
-        enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+    if (!_controllers.containsKey(key)) {
+      _controllers[key] = TextEditingController();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TextFormField(
+        controller: _controllers[key],
+        enabled: widget.isEditable, 
+        style: const TextStyle(color: Colors.white),
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: const TextStyle(color: Colors.white54),
+          enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+          focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: AppColors.secondary)),
+        ),
       ),
     );
   }
@@ -176,8 +243,8 @@ class _AnamneseTabState extends State<AnamneseTab> {
         Radio<bool>(
           value: value,
           groupValue: _formData[key],
-          activeColor: AppColors.primary,
-          onChanged: (v) => setState(() => _formData[key] = v),
+          activeColor: AppColors.secondary,
+          onChanged: widget.isEditable ? (v) => setState(() => _formData[key] = v) : null,
         ),
         Text(label, style: const TextStyle(color: Colors.white70)),
         const SizedBox(width: 15),
@@ -189,44 +256,49 @@ class _AnamneseTabState extends State<AnamneseTab> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(padding: const EdgeInsets.only(top: 8), child: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+        Padding(padding: const EdgeInsets.only(top: 8, bottom: 8), child: Text(title, style: const TextStyle(color: Colors.white70, fontSize: 13))),
         Wrap(
           spacing: 8,
           children: options.map((opt) {
+            final isSelected = _formData[key] == opt;
             return ChoiceChip(
               label: Text(opt),
-              selected: _formData[key] == opt,
-              selectedColor: AppColors.primary,
+              selected: isSelected,
+              selectedColor: AppColors.secondary,
               backgroundColor: Colors.black26,
-              labelStyle: TextStyle(color: _formData[key] == opt ? Colors.white : Colors.white70),
-              onSelected: (selected) => setState(() => _formData[key] = selected ? opt : null),
+              labelStyle: TextStyle(color: isSelected ? Colors.black : Colors.white70, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
+              onSelected: widget.isEditable ? (selected) => setState(() => _formData[key] = selected ? opt : null) : null,
             );
           }).toList(),
         ),
+        const SizedBox(height: 10),
       ],
     );
   }
 
   Widget _buildMultiSelect(String title, List<String> options) {
-    // Implementação simplificada. No ideal, seria um Map<String, bool>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        Text(title, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+        const SizedBox(height: 8),
         Wrap(
           spacing: 8,
           children: options.map((opt) {
             final key = "check_${opt.toLowerCase()}";
+            final isSelected = _formData[key] == true;
             return FilterChip(
               label: Text(opt),
-              selected: _formData[key] == true,
-              selectedColor: AppColors.secondary.withOpacity(0.5),
+              selected: isSelected,
+              selectedColor: AppColors.secondary.withOpacity(0.8),
               checkmarkColor: Colors.black,
               backgroundColor: Colors.black26,
-              onSelected: (val) => setState(() => _formData[key] = val),
+              labelStyle: TextStyle(color: isSelected ? Colors.black : Colors.white70),
+              onSelected: widget.isEditable ? (val) => setState(() => _formData[key] = val) : null,
             );
           }).toList(),
         ),
+        const SizedBox(height: 10),
       ],
     );
   }

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
+// IMPORTANTE: Importe o widget de notas
+import '../../../../core/widgets/professor_notes_widget.dart';
 
 class AssessmentsTab extends StatelessWidget {
   final String studentId;
@@ -18,79 +20,93 @@ class AssessmentsTab extends StatelessWidget {
         label: const Text("Nova Avaliação", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         onPressed: () => _showAddAssessmentModal(context),
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('users')
-            .doc(studentId)
-            .collection('assessments')
-            .orderBy('date', descending: true)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-          
-          final docs = snapshot.data!.docs;
-          if (docs.isEmpty) {
-            return const Center(child: Text("Nenhuma avaliação registrada.", style: TextStyle(color: Colors.white54)));
-          }
+      // Mudei para Column para inserir o Widget de Notas no topo
+      body: Column(
+        children: [
+          // --- ÁREA DO PERSONAL (WIDGET GLOBAL) ---
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: ProfessorNotesWidget(studentId: studentId),
+          ),
 
-          return ListView.builder(
-            itemCount: docs.length,
-            padding: const EdgeInsets.all(16),
-            itemBuilder: (context, index) {
-              final data = docs[index].data() as Map<String, dynamic>;
-              final date = (data['date'] is Timestamp) 
-                  ? (data['date'] as Timestamp).toDate() 
-                  : DateTime.tryParse(data['date'].toString()) ?? DateTime.now();
+          // --- LISTA DE AVALIAÇÕES ---
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(studentId)
+                  .collection('assessments')
+                  .orderBy('date', descending: true)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                
+                final docs = snapshot.data!.docs;
+                if (docs.isEmpty) {
+                  return const Center(child: Text("Nenhuma avaliação registrada.", style: TextStyle(color: Colors.white54)));
+                }
 
-              return Card(
-                color: AppColors.surface,
-                margin: const EdgeInsets.only(bottom: 12),
-                child: ExpansionTile(
-                  iconColor: AppColors.secondary,
-                  collapsedIconColor: Colors.white70,
-                  title: Text(DateFormat('dd/MM/yyyy').format(date), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  subtitle: Text(
-                    "${data['weight']}kg  |  BF: ${data['bodyFatPercentage'] ?? '-'}%  |  ${data['generalRating'] ?? ''}", 
-                    style: const TextStyle(color: AppColors.secondary)
-                  ),
-                  children: [
-                    _buildSectionHeader("Medidas Corporais"),
-                    _buildDetailRow("Peso", "${data['weight']} kg"),
-                    _buildDetailRow("Altura", "${data['height']} cm"),
-                    _buildDetailRow("Pescoço", "${data['neck'] ?? '-'} cm"),
-                    _buildDetailRow("Ombros", "${data['shoulders'] ?? '-'} cm"),
-                    _buildDetailRow("Tórax", "${data['chest'] ?? '-'} cm"),
-                    _buildDetailRow("Cintura", "${data['waist'] ?? '-'} cm"),
-                    _buildDetailRow("Abdômen", "${data['abdomen'] ?? '-'} cm"),
-                    _buildDetailRow("Quadril", "${data['hips'] ?? '-'} cm"),
-                    const Divider(color: Colors.white10),
-                    
-                    _buildSectionHeader("Membros (Dir / Esq)"),
-                    _buildDetailRow("Braço Relaxado", "${data['armRightRelaxed'] ?? '-'} / ${data['armLeftRelaxed'] ?? '-'} cm"),
-                    _buildDetailRow("Braço Contraído", "${data['armRightContracted'] ?? '-'} / ${data['armLeftContracted'] ?? '-'} cm"),
-                    _buildDetailRow("Antebraço", "${data['forearmRight'] ?? '-'} / ${data['forearmLeft'] ?? '-'} cm"),
-                    _buildDetailRow("Coxa Medial", "${data['thighRight'] ?? '-'} / ${data['thighLeft'] ?? '-'} cm"),
-                    _buildDetailRow("Panturrilha", "${data['calfRight'] ?? '-'} / ${data['calfLeft'] ?? '-'} cm"),
-                    const Divider(color: Colors.white10),
+                return ListView.builder(
+                  itemCount: docs.length,
+                  padding: const EdgeInsets.all(16),
+                  itemBuilder: (context, index) {
+                    final data = docs[index].data() as Map<String, dynamic>;
+                    final date = (data['date'] is Timestamp) 
+                        ? (data['date'] as Timestamp).toDate() 
+                        : DateTime.tryParse(data['date'].toString()) ?? DateTime.now();
 
-                    _buildSectionHeader("Bioimpedância"),
-                    _buildDetailRow("IMC", "${data['imc']?.toStringAsFixed(2) ?? '-'}"),
-                    _buildDetailRow("% Gordura", "${data['bodyFatPercentage'] ?? '-'} %"),
-                    _buildDetailRow("Massa Gorda", "${data['fatMassKg'] ?? '-'} kg"),
-                    _buildDetailRow("Massa Muscular", "${data['muscleMassKg'] ?? '-'} kg"),
-                    _buildDetailRow("Gordura Visceral", "${data['visceralFat'] ?? '-'} (1-9)"),
-                    _buildDetailRow("Metabolismo Basal", "${data['basalMetabolism'] ?? '-'} Kcal"),
-                    _buildDetailRow("Idade Metabólica", "${data['metabolicAge'] ?? '-'} anos"),
-                    _buildDetailRow("Água Corporal", "${data['bodyWaterPercentage'] ?? '-'} %"),
-                    _buildDetailRow("Massa Óssea", "${data['boneMass'] ?? '-'} kg"),
-                    _buildDetailRow("Avaliação Geral", "${data['generalRating'] ?? '-'}"),
-                    const SizedBox(height: 10),
-                  ],
-                ),
-              );
-            },
-          );
-        },
+                    return Card(
+                      color: AppColors.surface,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      child: ExpansionTile(
+                        iconColor: AppColors.secondary,
+                        collapsedIconColor: Colors.white70,
+                        title: Text(DateFormat('dd/MM/yyyy').format(date), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        subtitle: Text(
+                          "${data['weight']}kg  |  BF: ${data['bodyFatPercentage'] ?? '-'}%  |  ${data['generalRating'] ?? ''}", 
+                          style: const TextStyle(color: AppColors.secondary)
+                        ),
+                        children: [
+                          _buildSectionHeader("Medidas Corporais"),
+                          _buildDetailRow("Peso", "${data['weight']} kg"),
+                          _buildDetailRow("Altura", "${data['height']} cm"),
+                          _buildDetailRow("Pescoço", "${data['neck'] ?? '-'} cm"),
+                          _buildDetailRow("Ombros", "${data['shoulders'] ?? '-'} cm"),
+                          _buildDetailRow("Tórax", "${data['chest'] ?? '-'} cm"),
+                          _buildDetailRow("Cintura", "${data['waist'] ?? '-'} cm"),
+                          _buildDetailRow("Abdômen", "${data['abdomen'] ?? '-'} cm"),
+                          _buildDetailRow("Quadril", "${data['hips'] ?? '-'} cm"),
+                          const Divider(color: Colors.white10),
+                          
+                          _buildSectionHeader("Membros (Dir / Esq)"),
+                          _buildDetailRow("Braço Relaxado", "${data['armRightRelaxed'] ?? '-'} / ${data['armLeftRelaxed'] ?? '-'} cm"),
+                          _buildDetailRow("Braço Contraído", "${data['armRightContracted'] ?? '-'} / ${data['armLeftContracted'] ?? '-'} cm"),
+                          _buildDetailRow("Antebraço", "${data['forearmRight'] ?? '-'} / ${data['forearmLeft'] ?? '-'} cm"),
+                          _buildDetailRow("Coxa Medial", "${data['thighRight'] ?? '-'} / ${data['thighLeft'] ?? '-'} cm"),
+                          _buildDetailRow("Panturrilha", "${data['calfRight'] ?? '-'} / ${data['calfLeft'] ?? '-'} cm"),
+                          const Divider(color: Colors.white10),
+
+                          _buildSectionHeader("Bioimpedância"),
+                          _buildDetailRow("IMC", "${data['imc']?.toStringAsFixed(2) ?? '-'}"),
+                          _buildDetailRow("% Gordura", "${data['bodyFatPercentage'] ?? '-'} %"),
+                          _buildDetailRow("Massa Gorda", "${data['fatMassKg'] ?? '-'} kg"),
+                          _buildDetailRow("Massa Muscular", "${data['muscleMassKg'] ?? '-'} kg"),
+                          _buildDetailRow("Gordura Visceral", "${data['visceralFat'] ?? '-'} (1-9)"),
+                          _buildDetailRow("Metabolismo Basal", "${data['basalMetabolism'] ?? '-'} Kcal"),
+                          _buildDetailRow("Idade Metabólica", "${data['metabolicAge'] ?? '-'} anos"),
+                          _buildDetailRow("Água Corporal", "${data['bodyWaterPercentage'] ?? '-'} %"),
+                          _buildDetailRow("Massa Óssea", "${data['boneMass'] ?? '-'} kg"),
+                          _buildDetailRow("Avaliação Geral", "${data['generalRating'] ?? '-'}"),
+                          const SizedBox(height: 10),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -151,55 +167,46 @@ class _AssessmentFormState extends State<_AssessmentForm> {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
       
-      // 1. Prepara os dados convertendo texto para double/int
       final Map<String, dynamic> data = {
         'date': FieldValue.serverTimestamp(),
-        'generalRating': _values['generalRating'], // String
+        'generalRating': _values['generalRating'], 
       };
       
       _values.forEach((key, val) {
         if(val.isNotEmpty && key != 'generalRating') {
-          // Tenta converter para número, trocando vírgula por ponto
           data[key] = double.tryParse(val.replaceAll(',', '.')) ?? val;
         }
       });
 
-      // 2. Cálculo Automático de IMC se não inserido
       if (data['weight'] != null && data['height'] != null) {
         double w = data['weight'];
         double h = data['height']; 
-        
-        // Se a altura for em cm (ex: 175), converte para metros (1.75) para o cálculo
         double hM = h > 3 ? h / 100 : h; 
-        
         double imcCalc = w / (hM * hM);
         data['imc'] = double.parse(imcCalc.toStringAsFixed(2));
       }
 
       try {
-        // 3. SALVA O HISTÓRICO (Na subcoleção assessments)
         await FirebaseFirestore.instance
             .collection('users')
             .doc(widget.studentId)
             .collection('assessments')
             .add(data);
 
-        // 4. ATUALIZA O PERFIL DO ALUNO (Na raiz do usuário)
-        // Isso garante que o peso/altura na ProfilePage sejam atualizados
+        // Atualiza perfil (Peso/Altura)
         await FirebaseFirestore.instance
             .collection('users')
             .doc(widget.studentId)
             .update({
               'peso': data['weight'], 
               'altura': data['height'],
-              // Opcional: Salvar o último BF e IMC direto no perfil para acesso rápido
               'bodyFatPercentage': data['bodyFatPercentage'],
               'imc': data['imc'],
             });
 
         if (mounted) {
           Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Avaliação salva e perfil atualizado!"), backgroundColor: Colors.green));
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Avaliação salva!"), backgroundColor: Colors.green));
         }
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro: $e")));
