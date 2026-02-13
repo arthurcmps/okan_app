@@ -9,7 +9,6 @@ import 'firebase_options.dart';
 import 'features/auth/presentation/pages/login_page.dart';
 import 'features/auth/presentation/pages/home_page.dart';
 import 'core/services/time_service.dart';
-import 'features/auth/presentation/pages/tarefas_page.dart';
 import 'features/auth/presentation/controllers/tarefa_controller.dart';
 import 'core/theme/app_colors.dart'; 
 
@@ -39,11 +38,12 @@ void main() async {
   }
 }
 
-// --- TEMA DO APP (OKAN DARK) ---
+// --- TEMA DO APP (CYBER-SANKOFA) ---
 final ThemeData sportTheme = ThemeData(
   useMaterial3: true,
   brightness: Brightness.dark, 
   scaffoldBackgroundColor: AppColors.background,
+  fontFamily: 'Montserrat', // Sugestão: Adicione a fonte no pubspec se quiser
   
   colorScheme: ColorScheme.fromSeed(
     seedColor: AppColors.primary,
@@ -53,15 +53,15 @@ final ThemeData sportTheme = ThemeData(
     error: AppColors.error,
     primary: AppColors.primary,
     secondary: AppColors.secondary,
-    onPrimary: Colors.white, 
-    onSecondary: AppColors.background, 
+    onPrimary: Colors.black, // TEXTO PRETO NO BOTÃO NEON (Importante!)
+    onSecondary: Colors.white, 
   ),
 
   cardTheme: CardThemeData(
     color: AppColors.surface,
     elevation: 0, 
     shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(16),
       side: BorderSide(color: Colors.white.withOpacity(0.05), width: 1) 
     ),
     margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
@@ -88,26 +88,25 @@ final ThemeData sportTheme = ThemeData(
   ),
 
   iconTheme: const IconThemeData(
-    color: AppColors.secondary, 
+    color: AppColors.primary, // Ícones padrão em Neon
   ),
 
   elevatedButtonTheme: ElevatedButtonThemeData(
     style: ElevatedButton.styleFrom(
       backgroundColor: AppColors.primary,
-      foregroundColor: Colors.white, 
-      elevation: 4,
-      shadowColor: AppColors.primary.withOpacity(0.5), 
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      foregroundColor: Colors.black, // Texto preto para contraste no Neon
+      elevation: 0, // Flat design mais moderno
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+      textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, letterSpacing: 0.5),
     ),
   ),
   
   outlinedButtonTheme: OutlinedButtonThemeData(
     style: OutlinedButton.styleFrom(
-      foregroundColor: AppColors.secondary, 
-      side: const BorderSide(color: AppColors.secondary, width: 1.5), 
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      foregroundColor: AppColors.textMain, 
+      side: const BorderSide(color: AppColors.textSub, width: 1), 
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
     ),
@@ -120,27 +119,28 @@ final ThemeData sportTheme = ThemeData(
     hintStyle: TextStyle(color: AppColors.textSub.withOpacity(0.5)),
     prefixIconColor: AppColors.textSub, 
     contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
     focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(16), 
-      borderSide: const BorderSide(color: AppColors.primary, width: 2),
+      borderRadius: BorderRadius.circular(12), 
+      borderSide: const BorderSide(color: AppColors.primary, width: 1), // Borda Neon ao focar
     ),
     errorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(16), 
-      borderSide: const BorderSide(color: AppColors.error, width: 1.5),
+      borderRadius: BorderRadius.circular(12), 
+      borderSide: const BorderSide(color: AppColors.error, width: 1),
     ),
   ),
   
   checkboxTheme: CheckboxThemeData(
     fillColor: MaterialStateProperty.resolveWith((states) {
       if (states.contains(MaterialState.selected)) {
-        return AppColors.secondary; 
+        return AppColors.primary; 
       }
       return Colors.transparent;
     }),
-    checkColor: MaterialStateProperty.all(AppColors.background), 
+    checkColor: MaterialStateProperty.all(Colors.black), // Check preto no fundo neon
     side: const BorderSide(color: AppColors.textSub, width: 2),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
   ),
 );
 
@@ -154,11 +154,7 @@ class OkanApp extends StatelessWidget {
       title: 'Okan App',
       debugShowCheckedModeBanner: false,
       theme: sportTheme,
-      
-      // Tela Inicial
       home: const AuthCheck(), 
-
-      // BUILDER GLOBAL: É aqui que o Timer é injetado sobre todas as telas
       builder: (context, child) {
         return Scaffold(
           backgroundColor: Colors.transparent, 
@@ -167,7 +163,7 @@ class OkanApp extends StatelessWidget {
               if (child != null) child!, 
               const Positioned(
                 bottom: 0, left: 0, right: 0, 
-                child: GlobalTimerBar() // O cronômetro flutuante
+                child: GlobalTimerBar() 
               ),
             ],
           ),
@@ -198,7 +194,7 @@ class AuthCheck extends StatelessWidget {
   }
 }
 
-// --- BARRA DE TIMER GLOBAL (RESTILIZADA) ---
+// --- BARRA DE TIMER GLOBAL ---
 class GlobalTimerBar extends StatefulWidget {
   const GlobalTimerBar({super.key});
   @override
@@ -224,7 +220,6 @@ class _GlobalTimerBarState extends State<GlobalTimerBar> {
 
   @override
   Widget build(BuildContext context) {
-    // Só aparece se o timer estiver rodando
     if (!TimerService.instance.isActive) return const SizedBox.shrink();
 
     return SafeArea(
@@ -233,9 +228,9 @@ class _GlobalTimerBarState extends State<GlobalTimerBar> {
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
         margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         decoration: BoxDecoration(
-          color: AppColors.surface, // Fundo Roxo Card
+          color: AppColors.surface,
           borderRadius: BorderRadius.circular(30),
-          border: Border.all(color: AppColors.secondary.withOpacity(0.3)), // Borda Neon sutil
+          border: Border.all(color: AppColors.primary.withOpacity(0.3)), // Borda Neon
           boxShadow: [
             BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 10, offset: const Offset(0, 5))
           ]
@@ -245,25 +240,23 @@ class _GlobalTimerBarState extends State<GlobalTimerBar> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.timer_outlined, color: AppColors.secondary), // Ícone Neon
+              const Icon(Icons.timer_outlined, color: AppColors.primary), // Ícone Neon
               const SizedBox(width: 12),
               Text(
                 TimerService.instance.formattedTime, 
                 style: const TextStyle(
-                  color: AppColors.textMain, // Texto Branco
+                  color: AppColors.textMain, 
                   fontSize: 18, 
                   fontWeight: FontWeight.bold, 
                   fontFamily: 'monospace'
                 )
               ),
               const Spacer(),
-              // BOTÃO ADICIONAR TEMPO
               IconButton(
-                icon: const Icon(Icons.add_circle_outline, color: AppColors.primary), // Laranja
+                icon: const Icon(Icons.add_circle_outline, color: AppColors.secondary), // Terracota no botão secundário
                 onPressed: () => TimerService.instance.addTime(10)
               ),
               const SizedBox(width: 4),
-              // BOTÃO FECHAR
               InkWell(
                 onTap: () => TimerService.instance.stop(), 
                 borderRadius: BorderRadius.circular(20),

@@ -9,10 +9,8 @@ import '../../../../core/services/auth_service.dart';
 import '../../../../core/widgets/user_avatar.dart';
 import '../../../../core/theme/app_colors.dart';
 
-// SUAS ABAS
 import 'anamnese_tab.dart'; 
 import 'assessments_tab.dart';
-
 import 'library_admin_page.dart';
 import 'login_page.dart';
 import 'workout_history_page.dart';
@@ -42,20 +40,14 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
     super.dispose();
   }
 
-  // --- HELPER: CALCULAR IDADE ---
   String _calcularIdade(dynamic dataNascimento) {
-    if (dataNascimento == null) return "--"; // Se não tiver data
-
+    if (dataNascimento == null) return "--"; 
     DateTime nascimento;
     if (dataNascimento is Timestamp) {
       nascimento = dataNascimento.toDate();
-    } else if (dataNascimento is String) {
-      // Tenta recuperar de string antiga se houver
-      return "--"; 
     } else {
       return "--";
     }
-
     final hoje = DateTime.now();
     int idade = hoje.year - nascimento.year;
     if (hoje.month < nascimento.month || (hoje.month == nascimento.month && hoje.day < nascimento.day)) {
@@ -64,7 +56,6 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
     return "$idade anos";
   }
 
-  // --- ATUALIZAR DATA (Para quem veio do Google) ---
   Future<void> _editarDataNascimento() async {
     final picked = await showDatePicker(
       context: context,
@@ -75,7 +66,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
         return Theme(
           data: ThemeData.dark().copyWith(
             colorScheme: const ColorScheme.dark(
-              primary: AppColors.secondary,
+              primary: AppColors.primary, // Neon no calendário
               onPrimary: Colors.black,
               surface: AppColors.surface,
             ),
@@ -89,7 +80,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user!.uid)
-          .update({'birthDate': picked}); // Salva como DateTime/Timestamp
+          .update({'birthDate': picked});
       
       if(mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Idade atualizada!")));
@@ -97,7 +88,6 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
     }
   }
 
-  // --- LÓGICA DE FOTO (Mantida) ---
   void _mostrarOpcoesFoto() {
     showModalBottomSheet(
       context: context,
@@ -108,12 +98,12 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
           child: Wrap(
             children: [
               ListTile(
-                leading: const Icon(Icons.photo_library, color: Colors.blue),
+                leading: const Icon(Icons.photo_library, color: AppColors.textMain),
                 title: const Text('Escolher da Galeria', style: TextStyle(color: Colors.white)),
                 onTap: () { Navigator.pop(context); _atualizarFoto(ImageSource.gallery); },
               ),
               ListTile(
-                leading: const Icon(Icons.camera_alt, color: Colors.blue),
+                leading: const Icon(Icons.camera_alt, color: AppColors.textMain),
                 title: const Text('Tirar Foto Agora', style: TextStyle(color: Colors.white)),
                 onTap: () { Navigator.pop(context); _atualizarFoto(ImageSource.camera); },
               ),
@@ -159,10 +149,11 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
         foregroundColor: Colors.white,
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: AppColors.secondary,
-          labelColor: AppColors.secondary,
-          unselectedLabelColor: Colors.white60,
+          indicatorColor: AppColors.primary, // Neon
+          labelColor: AppColors.primary,
+          unselectedLabelColor: Colors.white30,
           indicatorWeight: 3,
+          dividerColor: Colors.transparent,
           tabs: const [
             Tab(text: "Conta", icon: Icon(Icons.person_outline)),
             Tab(text: "Anamnese", icon: Icon(Icons.assignment_ind_outlined)),
@@ -188,16 +179,14 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
         if (!snapshot.hasData || !snapshot.data!.exists) return const Center(child: CircularProgressIndicator());
 
         final data = snapshot.data!.data() as Map<String, dynamic>;
-        final String nome = data['name'] ?? data['nome'] ?? "Usuário"; // Suporta 'name' ou 'nome'
+        final String nome = data['name'] ?? data['nome'] ?? "Usuário";
         final String email = data['email'] ?? "";
         final String tipo = data['tipo'] ?? "aluno";
         final String? photoUrl = data['photoUrl']; 
         
-        // --- DATA DE NASCIMENTO E IDADE ---
-        // Verifica se existe 'birthDate' (padrão novo) ou 'dataNascimento' (legado)
         final dynamic birthDateRaw = data['birthDate'] ?? data['dataNascimento'];
         final String idade = _calcularIdade(birthDateRaw);
-        final bool precisaData = (birthDateRaw == null); // Flag para mostrar aviso
+        final bool precisaData = (birthDateRaw == null); 
 
         final String objetivo = data['objetivo'] ?? "Definir";
         final String frequencia = data['freq_semanal'] ?? "Definir";
@@ -207,7 +196,6 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
           padding: const EdgeInsets.all(20),
           child: Column(
             children: [
-              // --- AVISO PARA COMPLETAR CADASTRO (Google Login) ---
               if (precisaData)
                 GestureDetector(
                   onTap: _editarDataNascimento,
@@ -215,28 +203,27 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                     margin: const EdgeInsets.only(bottom: 20),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.amber.withOpacity(0.2),
+                      color: AppColors.primary.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.amber),
+                      border: Border.all(color: AppColors.primary),
                     ),
                     child: const Row(
                       children: [
-                        Icon(Icons.warning_amber_rounded, color: Colors.amber),
+                        Icon(Icons.warning_amber_rounded, color: AppColors.primary),
                         SizedBox(width: 10),
-                        Expanded(child: Text("Cadastro incompleto! Toque para adicionar sua Data de Nascimento.", style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold))),
+                        Expanded(child: Text("Cadastro incompleto! Toque para adicionar sua Data de Nascimento.", style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold))),
                       ],
                     ),
                   ),
                 ),
 
-              // FOTO E INFO
               Center(
                 child: Column(
                   children: [
                     Stack(
                       children: [
                         UserAvatar(photoUrl: photoUrl, name: nome, radius: 60, onTap: _mostrarOpcoesFoto),
-                        if (_isUploading) const Positioned.fill(child: CircularProgressIndicator(color: AppColors.secondary)),
+                        if (_isUploading) const Positioned.fill(child: CircularProgressIndicator(color: AppColors.primary)),
                         Positioned(
                           bottom: 0, right: 0,
                           child: GestureDetector(
@@ -244,11 +231,11 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                             child: Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: AppColors.secondary,
+                                color: AppColors.primary, // Botão de câmera Neon
                                 shape: BoxShape.circle,
-                                border: Border.all(color: AppColors.background, width: 2),
+                                border: Border.all(color: AppColors.background, width: 3),
                               ),
-                              child: const Icon(Icons.camera_alt, size: 20, color: Colors.black),
+                              child: const Icon(Icons.camera_alt, size: 18, color: Colors.black),
                             ),
                           ),
                         )
@@ -257,21 +244,28 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                     const SizedBox(height: 16),
                     Text(nome, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
                     
-                    // --- IDADE EM DESTAQUE ---
+                    // --- IDADE EM DESTAQUE (NEON) ---
                     if (idade != "--")
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
-                        child: Text(idade, style: const TextStyle(color: AppColors.secondary, fontSize: 16, fontWeight: FontWeight.w600)),
+                        child: Text(idade, style: const TextStyle(color: AppColors.primary, fontSize: 16, fontWeight: FontWeight.w600)),
                       ),
 
+                    // --- BADGE DE TIPO (TERRACOTA) ---
                     Container(
                       margin: const EdgeInsets.only(top: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                       decoration: BoxDecoration(
-                        color: isPersonal ? Colors.purple : Colors.blueAccent, 
-                        borderRadius: BorderRadius.circular(20)
+                        color: AppColors.secondary, // Terracota para identidade
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(color: AppColors.secondary.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))
+                        ]
                       ),
-                      child: Text(isPersonal ? "PERSONAL TRAINER" : "ALUNO", style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                      child: Text(
+                        isPersonal ? "PERSONAL TRAINER" : "ALUNO", 
+                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1)
+                      ),
                     ),
                     Text(email, style: const TextStyle(color: Colors.white60, height: 2)),
                   ],
@@ -280,7 +274,6 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
               
               const SizedBox(height: 30),
               
-              // CARDS MOTIVACIONAIS
               if (!isPersonal) ...[
                 Row(
                   children: [
@@ -292,21 +285,19 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                 const SizedBox(height: 30),
               ],
 
-              // MENU DE AÇÕES
-              const Align(alignment: Alignment.centerLeft, child: Text("Configurações", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.secondary))),
+              const Align(alignment: Alignment.centerLeft, child: Text("Configurações", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primary))),
               const SizedBox(height: 10),
               
-              // Opção de editar Nascimento (caso queira mudar depois)
               _buildMenuOption(
                 icon: Icons.cake, 
-                color: Colors.pinkAccent, 
+                color: AppColors.secondary, // Terracota
                 title: "Data de Nascimento", 
                 onTap: _editarDataNascimento
               ),
 
               _buildMenuOption(
                 icon: Icons.history, 
-                color: Colors.orange, 
+                color: Colors.white, 
                 title: "Histórico de Treinos", 
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => WorkoutHistoryPage(studentId: user!.uid)))
               ),
@@ -314,14 +305,14 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
               if (isPersonal)
                 _buildMenuOption(
                   icon: Icons.library_books, 
-                  color: Colors.purpleAccent, 
+                  color: Colors.white, 
                   title: "Gerenciar Biblioteca", 
                   onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LibraryAdminPage()))
                 ),
 
               _buildMenuOption(
                 icon: Icons.logout, 
-                color: Colors.redAccent, 
+                color: AppColors.error, 
                 title: "Sair da Conta", 
                 isDestructive: true, 
                 onTap: () async {
@@ -348,7 +339,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
         ),
         child: Column(
           children: [
-            Icon(icon, size: 28, color: AppColors.secondary),
+            Icon(icon, size: 28, color: AppColors.primary), // Ícone Neon
             const SizedBox(height: 8),
             Text(title, style: const TextStyle(color: Colors.white60, fontSize: 12)),
             const SizedBox(height: 4),
@@ -373,7 +364,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
           decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)), 
           child: Icon(icon, color: color)
         ),
-        title: Text(title, style: TextStyle(color: isDestructive ? Colors.redAccent : Colors.white, fontWeight: isDestructive ? FontWeight.bold : FontWeight.normal)),
+        title: Text(title, style: TextStyle(color: isDestructive ? AppColors.error : Colors.white, fontWeight: isDestructive ? FontWeight.bold : FontWeight.normal)),
         trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.white30),
         onTap: onTap,
       ),

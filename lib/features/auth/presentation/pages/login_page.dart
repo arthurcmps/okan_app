@@ -4,10 +4,8 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'home_page.dart';
 import 'register_page.dart';
-
-// IMPORTANTE: Ajuste este caminho para onde você salvou o app_colors.dart
-// Se estiver na pasta core/theme/, o caminho relativo deve ser este:
 import '../../../../../core/theme/app_colors.dart';
+import '../../../../../core/services/auth_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -19,6 +17,8 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _authService = AuthService();
+  
   final _formKey = GlobalKey<FormState>();
   bool _isPasswordVisible = false;
   bool _isLoading = false;
@@ -30,101 +30,44 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  // --- LOGIN COM EMAIL E SENHA ---
   Future<void> _fazerLogin() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() => _isLoading = true);
-      
-      try {
-        await FirebaseAuth.instance.signInWithEmailAndPassword(
-          email: _emailController.text.trim(),
-          password: _passwordController.text.trim(),
-        );
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isLoading = true);
+    
+    final erro = await _authService.loginUsuario(
+      email: _emailController.text.trim(),
+      password: _passwordController.text.trim(),
+    );
 
-        if (!mounted) return;
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const HomePage()),
-        );
-
-      } on FirebaseAuthException catch (e) {
-        String mensagemErro = 'Erro ao fazer login.';
-        if (e.code == 'user-not-found' || e.code == 'wrong-password' || e.code == 'invalid-credential') {
-          mensagemErro = 'E-mail ou senha incorretos.';
-        } else if (e.code == 'invalid-email') {
-           mensagemErro = 'Formato de e-mail inválido.';
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(mensagemErro), backgroundColor: AppColors.error),
-        );
-      } finally {
-        if (mounted) setState(() => _isLoading = false);
+    if (mounted) {
+      setState(() => _isLoading = false);
+      if (erro == null) {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const HomePage()));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(erro), backgroundColor: AppColors.error));
       }
     }
   }
 
-  // --- LOGIN COM GOOGLE ---
   Future<void> _fazerLoginGoogle() async {
     setState(() => _isLoading = true);
+    final erro = await _authService.entrarComGoogle();
 
-    try {
-      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
-      
-      if (googleUser == null) {
-        setState(() => _isLoading = false);
-        return;
-      }
-
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      final UserCredential userCredential = 
-          await FirebaseAuth.instance.signInWithCredential(credential);
-      
-      final user = userCredential.user;
-
-      if (user != null) {
-        final userDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .get();
-
-        if (!userDoc.exists) {
-          await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-            'name': user.displayName ?? "Aluno Google",
-            'email': user.email,
-            'photoUrl': user.photoURL,
-            'role': 'aluno',
-            'createdAt': FieldValue.serverTimestamp(),
-            'weight': 0.0,
-            'objectives': 'Definir objetivo',
-          });
+    if (mounted) {
+      setState(() => _isLoading = false);
+      if (erro == null) {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const HomePage()));
+      } else {
+        if (erro != "Login cancelado.") {
+           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(erro), backgroundColor: AppColors.error));
         }
       }
-
-      if (!mounted) return;
-      
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const HomePage()),
-      );
-
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro no Google: $e'), backgroundColor: AppColors.error),
-      );
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // Background vem do tema global, mas garantimos aqui
       backgroundColor: AppColors.background,
       body: Center(
         child: SingleChildScrollView(
@@ -138,33 +81,36 @@ class _LoginPageState extends State<LoginPage> {
                 // ÍCONE LOGO
                 Image.asset(
                   'assets/images/logo_okan.png',
-                  height: 200, // Tamanho ajustado (teste entre 100 e 150)
+                  height: 120, // Altura balanceada
                   fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) {
+                    return const Icon(Icons.fitness_center, size: 80, color: AppColors.primary);
+                  },
                 ),
+                
                 const SizedBox(height: 24),
                 
-                // TÍTULO
                 Text(
                   'Bem-vindo ao Okan',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w800, // Mais peso
                         color: AppColors.textMain,
                       ),
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Seu ritmo é a batida de seu coração.',
+                  'Sua essência, sua força.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.textSub),
+                  style: TextStyle(color: AppColors.textSub, letterSpacing: 1.0),
                 ),
                 const SizedBox(height: 48),
 
-                // CAMPO EMAIL
+                // EMAIL
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
-                  style: const TextStyle(color: AppColors.textMain), // Texto digitado branco
+                  style: const TextStyle(color: Colors.white),
                   decoration: const InputDecoration(
                     labelText: 'E-mail',
                     prefixIcon: Icon(Icons.email_outlined),
@@ -173,77 +119,70 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 const SizedBox(height: 16),
                 
-                // CAMPO SENHA
+                // SENHA
                 TextFormField(
                   controller: _passwordController,
                   obscureText: !_isPasswordVisible,
-                  style: const TextStyle(color: AppColors.textMain),
+                  style: const TextStyle(color: Colors.white),
                   decoration: InputDecoration(
                     labelText: 'Senha',
                     prefixIcon: const Icon(Icons.lock_outline),
                     suffixIcon: IconButton(
-                      icon: Icon(_isPasswordVisible ? Icons.visibility_off : Icons.visibility),
+                      icon: Icon(_isPasswordVisible ? Icons.visibility_off : Icons.visibility, color: AppColors.textSub),
                       onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
                     ),
                   ),
                   validator: (val) => (val == null || val.length < 6) ? 'Senha curta' : null,
                 ),
                 
-                const SizedBox(height: 24),
+                const SizedBox(height: 32),
 
-                // BOTÃO ENTRAR
+                // BOTÃO ENTRAR (Neon com texto preto)
                 FilledButton(
                   onPressed: _isLoading ? null : _fazerLogin,
                   style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary, 
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: AppColors.primary,
                   ),
                   child: _isLoading 
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
-                    : const Text('ENTRAR', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                    ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 3)) 
+                    : const Text('ENTRAR', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black)),
                 ),
                 
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
                 
                 // DIVISOR
                 const Row(
                   children: [
-                    Expanded(child: Divider(color: Colors.white24)),
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16), 
-                      child: Text("OU", style: TextStyle(color: AppColors.textSub))
-                    ),
-                    Expanded(child: Divider(color: Colors.white24)),
+                    Expanded(child: Divider(color: Colors.white10)),
+                    Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Text("OU", style: TextStyle(color: AppColors.textSub, fontSize: 12))),
+                    Expanded(child: Divider(color: Colors.white10)),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
 
                 // BOTÃO GOOGLE
                 OutlinedButton.icon(
                   onPressed: _isLoading ? null : _fazerLoginGoogle,
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    side: const BorderSide(color: AppColors.textSub), // Borda cinza
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    side: const BorderSide(color: Colors.white24),
+                    foregroundColor: Colors.white,
                   ),
-                  icon: const Icon(Icons.g_mobiledata, size: 32, color: Colors.red), 
-                  label: const Text("Entrar com Google", style: TextStyle(fontSize: 16, color: AppColors.textMain)),
+                  icon: const Icon(Icons.g_mobiledata, size: 28, color: Colors.white), 
+                  label: const Text("Entrar com Google", style: TextStyle(fontSize: 15)),
                 ),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: 32),
 
                 // LINK CADASTRO
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text('Não tem uma conta?', style: TextStyle(color: AppColors.textSub)),
+                    const Text('Ainda não tem conta?', style: TextStyle(color: AppColors.textSub)),
                     TextButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const RegisterPage()),
-                        );
-                      },
-                      child: const Text('Cadastre-se', style: TextStyle(color: AppColors.secondary, fontWeight: FontWeight.bold)),
+                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const RegisterPage())),
+                      child: const Text('Crie a sua', style: TextStyle(color: AppColors.secondary, fontWeight: FontWeight.bold)), // Terracota no link
                     ),
                   ],
                 ),
