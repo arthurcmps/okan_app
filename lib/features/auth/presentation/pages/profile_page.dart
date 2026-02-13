@@ -14,6 +14,7 @@ import 'assessments_tab.dart';
 import 'library_admin_page.dart';
 import 'login_page.dart';
 import 'workout_history_page.dart';
+import 'personal_data_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -289,10 +290,10 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
               const SizedBox(height: 10),
               
               _buildMenuOption(
-                icon: Icons.cake, 
+                icon: Icons.badge_outlined, 
                 color: AppColors.secondary, // Terracota
-                title: "Data de Nascimento", 
-                onTap: _editarDataNascimento
+                title: "Informações Pessoais", 
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => PersonalDataPage(uid: user!.uid))),
               ),
 
               _buildMenuOption(
