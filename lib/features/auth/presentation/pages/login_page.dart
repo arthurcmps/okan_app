@@ -136,10 +136,10 @@ class _LoginPageState extends State<LoginPage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // ÍCONE LOGO
-                const Icon(
-                  Icons.fitness_center, 
-                  size: 80, 
-                  color: AppColors.primary
+                Image.asset(
+                  'assets/images/logo_okan.png',
+                  height: 200, // Tamanho ajustado (teste entre 100 e 150)
+                  fit: BoxFit.contain,
                 ),
                 const SizedBox(height: 24),
                 
@@ -154,7 +154,7 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Conecte corpo e mente.',
+                  'Seu ritmo é a batida de seu coração.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: AppColors.textSub),
                 ),
