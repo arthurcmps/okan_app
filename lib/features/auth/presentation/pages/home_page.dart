@@ -43,23 +43,18 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        // --- TÍTULO (Saudação Atualizada) ---
+        // --- TÍTULO (Saudação Inteligente) ---
         title: StreamBuilder<DocumentSnapshot>(
           stream: FirebaseFirestore.instance.collection('users').doc(user!.uid).snapshots(),
           builder: (context, snapshot) {
-            // Valor padrão enquanto carrega
             String nomeExibicao = 'Atleta';
 
             if (snapshot.hasData && snapshot.data!.exists) {
               final data = snapshot.data!.data() as Map<String, dynamic>?;
-              
-              // Tenta pegar 'name', se não tiver tenta 'nome', se não tiver fica 'Atleta'
+              // Tenta 'name' (padrão novo) ou 'nome' (legado)
               final nomeCompleto = data?['name'] ?? data?['nome'] ?? 'Atleta';
-              
-              // Pega só o primeiro nome
               nomeExibicao = nomeCompleto.toString().split(' ').first;
             } else if (user?.displayName != null) {
-              // Se não carregou do banco, tenta pegar do Auth do Google
               nomeExibicao = user!.displayName!.split(' ').first;
             }
             
@@ -73,44 +68,59 @@ class _HomePageState extends State<HomePage> {
           },
         ),
         
-        // --- AÇÕES DA BARRA SUPERIOR ---
+        // --- AÇÕES DA BARRA SUPERIOR (Com Notificação Unificada) ---
         actions: [
-          // 1. ÍCONE DE NOTIFICAÇÃO
+          // 1. ÍCONE DE NOTIFICAÇÃO (Verifica Convites E Mensagens)
           StreamBuilder<QuerySnapshot>(
+            // Stream 1: Verifica Convites Pendentes
             stream: FirebaseFirestore.instance
                 .collection('invites')
                 .where('toStudentEmail', isEqualTo: user?.email)
                 .where('status', isEqualTo: 'pending')
                 .snapshots(),
-            builder: (context, snapshot) {
-              bool temNotificacao = false;
-              if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
-                temNotificacao = true;
-              }
+            builder: (context, snapshotInvites) {
+              
+              return StreamBuilder<QuerySnapshot>(
+                // Stream 2: Verifica Notificações Gerais Não Lidas (Chat, Treino, etc)
+                stream: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(user!.uid)
+                    .collection('notifications')
+                    .where('isRead', isEqualTo: false)
+                    .snapshots(),
+                builder: (context, snapshotNotifs) {
+                  
+                  bool temConvite = snapshotInvites.hasData && snapshotInvites.data!.docs.isNotEmpty;
+                  bool temNotificacaoNova = snapshotNotifs.hasData && snapshotNotifs.data!.docs.isNotEmpty;
+                  
+                  // Se TIVER convite OU TIVER notificação nova, mostra a bolinha
+                  bool mostrarAlerta = temConvite || temNotificacaoNova;
 
-              return Stack(
-                alignment: Alignment.center,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.notifications_none_rounded, color: Colors.white, size: 28),
-                    onPressed: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const NotificationsPage()));
-                    },
-                  ),
-                  if (temNotificacao)
-                    Positioned(
-                      right: 12,
-                      top: 12,
-                      child: Container(
-                        width: 10,
-                        height: 10,
-                        decoration: const BoxDecoration(
-                          color: AppColors.primary, // Neon para chamar atenção
-                          shape: BoxShape.circle,
-                        ),
+                  return Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.notifications_none_rounded, color: Colors.white, size: 28),
+                        onPressed: () {
+                          Navigator.push(context, MaterialPageRoute(builder: (context) => const NotificationsPage()));
+                        },
                       ),
-                    ),
-                ],
+                      if (mostrarAlerta)
+                        Positioned(
+                          right: 12,
+                          top: 12,
+                          child: Container(
+                            width: 10,
+                            height: 10,
+                            decoration: const BoxDecoration(
+                              color: AppColors.primary, // Bolinha Neon
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
               );
             },
           ),
@@ -229,7 +239,7 @@ class _HomePageState extends State<HomePage> {
                         const SizedBox(height: 10),
                         const Row(
                           children: [
-                            Text("INICIAR", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)), // Texto preto pra contraste no Neon
+                            Text("INICIAR", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
                             SizedBox(width: 5),
                             Icon(Icons.arrow_forward, size: 16, color: Colors.black),
                           ],

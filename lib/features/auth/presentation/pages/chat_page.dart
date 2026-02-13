@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../../core/widgets/user_avatar.dart';
-import '../../../../core/theme/app_colors.dart'; // Importe suas cores
+import '../../../../core/theme/app_colors.dart'; 
 
 class ChatPage extends StatefulWidget {
   final String otherUserId;   // ID da outra pessoa (Personal ou Aluno)
@@ -23,14 +23,29 @@ class _ChatPageState extends State<ChatPage> {
   final ScrollController _scrollController = ScrollController();
   late String _chatId;
   final String _currentUserId = FirebaseAuth.instance.currentUser!.uid;
+  String _currentUserName = "Usuário"; // Para usar na notificação
 
   @override
   void initState() {
     super.initState();
     _chatId = _gerarChatId(_currentUserId, widget.otherUserId);
+    _carregarNomeUsuarioAtual();
   }
 
-  // Gera um ID único para a conversa (sempre na ordem alfabética dos IDs)
+  // Busca o nome do usuário atual para enviar na notificação
+  void _carregarNomeUsuarioAtual() async {
+    final doc = await FirebaseFirestore.instance.collection('users').doc(_currentUserId).get();
+    if (doc.exists) {
+      final data = doc.data();
+      if (mounted && data != null) {
+        setState(() {
+          _currentUserName = data['name'] ?? data['nome'] ?? "Usuário";
+        });
+      }
+    }
+  }
+
+  // Gera um ID único para a conversa
   String _gerarChatId(String id1, String id2) {
     return id1.hashCode <= id2.hashCode ? '${id1}_$id2' : '${id2}_$id1';
   }
@@ -41,6 +56,7 @@ class _ChatPageState extends State<ChatPage> {
     final msg = _messageController.text.trim();
     _messageController.clear();
 
+    // 1. Salva a mensagem no Chat
     await FirebaseFirestore.instance
         .collection('chats')
         .doc(_chatId)
@@ -51,12 +67,30 @@ class _ChatPageState extends State<ChatPage> {
       'timestamp': FieldValue.serverTimestamp(),
     });
 
-    // Atualiza metadados do chat
+    // 2. Atualiza metadados do chat (última mensagem)
     await FirebaseFirestore.instance.collection('chats').doc(_chatId).set({
       'users': [_currentUserId, widget.otherUserId],
       'lastMessage': msg,
       'lastTime': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+
+    // 3. ENVIA NOTIFICAÇÃO PARA O OUTRO USUÁRIO (Novo!)
+    // Só cria notificação se não for você mesmo (caso de testes)
+    if (_currentUserId != widget.otherUserId) {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.otherUserId) // Destinatário
+          .collection('notifications')
+          .add({
+        'type': 'message',
+        'title': 'Nova mensagem de $_currentUserName',
+        'body': msg,
+        'senderName': _currentUserName,
+        'actionId': _currentUserId, // ID de quem enviou (para abrir o chat certo ao clicar)
+        'isRead': false,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+    }
 
     // Rola para o fim
     if (_scrollController.hasClients) {
@@ -153,6 +187,7 @@ class _ChatPageState extends State<ChatPage> {
                             // Minha Msg: Texto Preto | Outra Msg: Texto Branco
                             color: isMe ? Colors.black : Colors.white,
                             fontSize: 16,
+                            fontWeight: isMe ? FontWeight.w600 : FontWeight.normal,
                           ),
                         ),
                       ),
@@ -190,7 +225,7 @@ class _ChatPageState extends State<ChatPage> {
                 ),
                 const SizedBox(width: 8),
                 CircleAvatar(
-                  backgroundColor: AppColors.secondary, // Botão Neon
+                  backgroundColor: AppColors.primary, // Botão Neon (Ação)
                   radius: 24,
                   child: IconButton(
                     icon: const Icon(Icons.send, color: Colors.black, size: 20), // Ícone preto
