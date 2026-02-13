@@ -9,6 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+    
+  firebase_messaging: ^15.2.10
   
   cached_network_image: ^3.3.1
   

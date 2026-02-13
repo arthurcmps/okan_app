@@ -11,6 +11,8 @@ import 'features/auth/presentation/pages/home_page.dart';
 import 'core/services/time_service.dart';
 import 'features/auth/presentation/controllers/tarefa_controller.dart';
 import 'core/theme/app_colors.dart'; 
+// O import já estava aqui, perfeito:
+import 'core/services/push_notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,6 +22,14 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+    
+    // --- NOVO CÓDIGO DE PUSH NOTIFICATION ---
+    // Inicializa o serviço, pede permissão e salva o token no Firestore
+    final pushService = PushNotificationService();
+    await pushService.initialize();
+    pushService.setupInteractions();
+    // ----------------------------------------
+
     await initializeDateFormatting('pt_BR', null);
 
     runApp(
@@ -43,7 +53,7 @@ final ThemeData sportTheme = ThemeData(
   useMaterial3: true,
   brightness: Brightness.dark, 
   scaffoldBackgroundColor: AppColors.background,
-  fontFamily: 'Montserrat', // Sugestão: Adicione a fonte no pubspec se quiser
+  fontFamily: 'Montserrat', 
   
   colorScheme: ColorScheme.fromSeed(
     seedColor: AppColors.primary,
@@ -53,7 +63,7 @@ final ThemeData sportTheme = ThemeData(
     error: AppColors.error,
     primary: AppColors.primary,
     secondary: AppColors.secondary,
-    onPrimary: Colors.black, // TEXTO PRETO NO BOTÃO NEON (Importante!)
+    onPrimary: Colors.black, 
     onSecondary: Colors.white, 
   ),
 
@@ -88,14 +98,14 @@ final ThemeData sportTheme = ThemeData(
   ),
 
   iconTheme: const IconThemeData(
-    color: AppColors.primary, // Ícones padrão em Neon
+    color: AppColors.primary, 
   ),
 
   elevatedButtonTheme: ElevatedButtonThemeData(
     style: ElevatedButton.styleFrom(
       backgroundColor: AppColors.primary,
-      foregroundColor: Colors.black, // Texto preto para contraste no Neon
-      elevation: 0, // Flat design mais moderno
+      foregroundColor: Colors.black, 
+      elevation: 0, 
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, letterSpacing: 0.5),
@@ -123,7 +133,7 @@ final ThemeData sportTheme = ThemeData(
     enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12), 
-      borderSide: const BorderSide(color: AppColors.primary, width: 1), // Borda Neon ao focar
+      borderSide: const BorderSide(color: AppColors.primary, width: 1), 
     ),
     errorBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12), 
@@ -138,7 +148,7 @@ final ThemeData sportTheme = ThemeData(
       }
       return Colors.transparent;
     }),
-    checkColor: MaterialStateProperty.all(Colors.black), // Check preto no fundo neon
+    checkColor: MaterialStateProperty.all(Colors.black), 
     side: const BorderSide(color: AppColors.textSub, width: 2),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
   ),
