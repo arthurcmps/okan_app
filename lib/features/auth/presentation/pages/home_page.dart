@@ -11,7 +11,7 @@ import 'tarefas_page.dart';
 import 'profile_page.dart';
 import 'students_page.dart';    
 import 'chat_page.dart';
-import 'notifications_page.dart'; // <--- IMPORTANTE: Crie esse arquivo se não existir
+import 'notifications_page.dart'; 
 import '../../../../core/theme/app_colors.dart';
 
 class HomePage extends StatefulWidget {
@@ -43,19 +43,31 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        // --- TÍTULO (Saudação) ---
+        // --- TÍTULO (Saudação Atualizada) ---
         title: StreamBuilder<DocumentSnapshot>(
           stream: FirebaseFirestore.instance.collection('users').doc(user!.uid).snapshots(),
           builder: (context, snapshot) {
-            if (!snapshot.hasData) return const Text("Olá!");
-            final data = snapshot.data!.data() as Map<String, dynamic>?;
-            final nome = data?['name']?.toString().split(' ').first ?? 'Atleta';
+            // Valor padrão enquanto carrega
+            String nomeExibicao = 'Atleta';
+
+            if (snapshot.hasData && snapshot.data!.exists) {
+              final data = snapshot.data!.data() as Map<String, dynamic>?;
+              
+              // Tenta pegar 'name', se não tiver tenta 'nome', se não tiver fica 'Atleta'
+              final nomeCompleto = data?['name'] ?? data?['nome'] ?? 'Atleta';
+              
+              // Pega só o primeiro nome
+              nomeExibicao = nomeCompleto.toString().split(' ').first;
+            } else if (user?.displayName != null) {
+              // Se não carregou do banco, tenta pegar do Auth do Google
+              nomeExibicao = user!.displayName!.split(' ').first;
+            }
             
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text("Olá, $nome 👋", style: const TextStyle(color: AppColors.textMain, fontSize: 20, fontWeight: FontWeight.bold)),
-                const Text("Vamos treinar?", style: const TextStyle(color: AppColors.textSub, fontSize: 14, fontWeight: FontWeight.normal)),
+                Text("Olá, $nomeExibicao 👋", style: const TextStyle(color: AppColors.textMain, fontSize: 20, fontWeight: FontWeight.bold)),
+                const Text("Vamos treinar?", style: TextStyle(color: AppColors.textSub, fontSize: 14, fontWeight: FontWeight.normal)),
               ],
             );
           },
@@ -63,7 +75,7 @@ class _HomePageState extends State<HomePage> {
         
         // --- AÇÕES DA BARRA SUPERIOR ---
         actions: [
-          // 1. ÍCONE DE NOTIFICAÇÃO (Com bolinha vermelha se tiver convite)
+          // 1. ÍCONE DE NOTIFICAÇÃO
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
                 .collection('invites')
@@ -93,7 +105,7 @@ class _HomePageState extends State<HomePage> {
                         width: 10,
                         height: 10,
                         decoration: const BoxDecoration(
-                          color: AppColors.secondary, // Neon ou Vermelho
+                          color: AppColors.primary, // Neon para chamar atenção
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -112,7 +124,7 @@ class _HomePageState extends State<HomePage> {
               if (snapshot.hasData && snapshot.data!.exists) {
                 final data = snapshot.data!.data() as Map<String, dynamic>;
                 photoUrl = data['photoUrl'];
-                name = data['name'] ?? "";
+                name = data['name'] ?? data['nome'] ?? "";
               }
               return Padding(
                 padding: const EdgeInsets.only(right: 16.0, left: 8.0),
@@ -188,8 +200,8 @@ class _HomePageState extends State<HomePage> {
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(colors: [
-                         AppColors.primary.withOpacity(0.9), 
-                         AppColors.primary.withOpacity(0.6)
+                          AppColors.primary.withOpacity(0.9), 
+                          AppColors.primary.withOpacity(0.6)
                       ]),
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [BoxShadow(color: AppColors.primary.withOpacity(0.2), blurRadius: 15, offset: const Offset(0, 5))],
@@ -217,9 +229,9 @@ class _HomePageState extends State<HomePage> {
                         const SizedBox(height: 10),
                         const Row(
                           children: [
-                            Text("INICIAR", style: TextStyle(color: AppColors.secondary, fontWeight: FontWeight.bold)),
+                            Text("INICIAR", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)), // Texto preto pra contraste no Neon
                             SizedBox(width: 5),
-                            Icon(Icons.arrow_forward, size: 16, color: AppColors.secondary),
+                            Icon(Icons.arrow_forward, size: 16, color: Colors.black),
                           ],
                         ),
                       ],
