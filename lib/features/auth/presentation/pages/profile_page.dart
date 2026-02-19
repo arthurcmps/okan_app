@@ -300,7 +300,10 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                 icon: Icons.history, 
                 color: Colors.white, 
                 title: "Histórico de Treinos", 
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => WorkoutHistoryPage(studentId: user!.uid)))
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => WorkoutHistoryPage(
+                  studentId: user!.uid,
+                  studentName: nome, // <--- ADICIONADO AQUI PARA CORRIGIR O ERRO
+                )))
               ),
 
               if (isPersonal)

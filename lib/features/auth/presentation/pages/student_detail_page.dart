@@ -256,7 +256,7 @@ class _StudentDetailPageState extends State<StudentDetailPage> with SingleTicker
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => WorkoutHistoryPage(studentId: widget.studentId),
+                  builder: (context) => WorkoutHistoryPage(studentId: widget.studentId, studentName: widget.studentName),
                 ),
               );
             },
