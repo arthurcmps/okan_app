@@ -4,6 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../../core/theme/app_colors.dart'; 
 import '../../data/models/workout_plans_model.dart'; 
 
+import '../../../../core/services/time_service.dart';
+
 class WeeklyPlanPage extends StatefulWidget {
   final String studentId; 
   final String studentName; 
@@ -24,8 +26,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
   final List<String> _titulosAbas = ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB', 'DOM'];
 
   final Map<String, List<WorkoutExercise>> _cacheExercicios = {};
-  
-  // Controladores para o campo de feedback de cada dia
   final Map<String, TextEditingController> _feedbackControllers = {};
 
   bool get _souPersonal {
@@ -53,16 +53,13 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     super.dispose();
   }
 
-  // --- LÓGICA DE NOTIFICAÇÃO ---
   Future<void> _notificarPersonal(String titulo, String corpo) async {
     try {
-      // 1. Acha o ID do personal vinculado a este aluno
       final docAluno = await FirebaseFirestore.instance.collection('users').doc(widget.studentId).get();
       final personalId = docAluno.data()?['personalId'];
       
-      if (personalId == null) return; // Se não tem personal, não faz nada
+      if (personalId == null) return;
 
-      // 2. Cria a notificação para o Personal
       await FirebaseFirestore.instance
           .collection('users')
           .doc(personalId)
@@ -71,7 +68,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
         'type': 'workout',
         'title': titulo,
         'body': corpo,
-        'actionId': widget.studentId, // ID do aluno para o personal clicar e ir pro perfil
+        'actionId': widget.studentId, 
         'isRead': false,
         'timestamp': FieldValue.serverTimestamp(),
       });
@@ -125,10 +122,8 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
               final exercicios = listaRaw.map((e) => WorkoutExercise.fromMap(e as Map<String, dynamic>)).toList();
               _cacheExercicios[diaKey] = exercicios;
 
-              // Pega o feedback atual do banco
               final feedbackAtual = data['feedback_$diaKey'] as String? ?? '';
               
-              // Se o controlador estiver vazio e tiver texto no banco (primeiro load), a gente preenche
               if (_feedbackControllers[diaKey]!.text.isEmpty && feedbackAtual.isNotEmpty) {
                  _feedbackControllers[diaKey]!.text = feedbackAtual;
               }
@@ -138,13 +133,23 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
           );
         },
       ),
+      
       floatingActionButton: _souPersonal
           ? FloatingActionButton(
               backgroundColor: AppColors.primary, 
               onPressed: _adicionarExercicioDialog,
-              child: const Icon(Icons.add, color: Colors.black), // Ícone preto no botão neon
+              tooltip: "Adicionar Exercício",
+              child: const Icon(Icons.add, color: Colors.black), 
             )
-          : null,
+          : FloatingActionButton.extended(
+              backgroundColor: AppColors.primary,
+              onPressed: () => TimerService.instance.start(60),
+              icon: const Icon(Icons.timer_outlined, color: Colors.black),
+              label: const Text(
+                "Descanso 60s", 
+                style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)
+              ),
+            ),
     );
   }
 
@@ -167,18 +172,44 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
 
     return Column(
       children: [
-        // LISTA DE EXERCÍCIOS
         Expanded(
           child: ListView.builder(
             padding: const EdgeInsets.all(16),
-            itemCount: exercicios.length + 1, // +1 para a área de Feedback no final
+            itemCount: exercicios.length + 2, 
             itemBuilder: (context, index) {
               
-              // Se for o último item, renderiza a área de Feedback
+              // 1. Área de Feedback
               if (index == exercicios.length) {
                 return _buildFeedbackArea(diaKey, feedbackAtual);
               }
 
+              // 2. Botão de Finalizar Treino
+              if (index == exercicios.length + 1) {
+                if (_souPersonal) {
+                  return const SizedBox(height: 80); 
+                }
+                
+                return Padding(
+                  padding: const EdgeInsets.only(top: 10.0, bottom: 100.0), 
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.success, 
+                        foregroundColor: Colors.white,
+                        elevation: 4,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                      ),
+                      icon: const Icon(Icons.check_circle, color: Colors.black),
+                      label: const Text("FINALIZAR TREINO", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black)),
+                      onPressed: () => _confirmarFinalizacao(diaKey),
+                    ),
+                  ),
+                );
+              }
+
+              // 3. Renderização dos Exercícios Normais
               final ex = exercicios[index];
               return Card(
                 elevation: 4,
@@ -186,14 +217,12 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                   side: BorderSide(
-                    // Borda fica vermelha se o aluno pediu alteração
                     color: ex.solicitarAlteracao ? Colors.redAccent.withOpacity(0.5) : Colors.white.withOpacity(0.05)
                   ),
                 ),
                 child: ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   
-                  // CHECKBOX
                   leading: Transform.scale(
                     scale: 1.2,
                     child: Checkbox(
@@ -206,7 +235,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                     ),
                   ),
                   
-                  // NOME DO EXERCÍCIO
                   title: Text(
                     ex.nome,
                     style: TextStyle(
@@ -216,15 +244,15 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                     ),
                   ),
                   
-                  // SÉRIES E REPETIÇÕES
                   subtitle: Padding(
                     padding: const EdgeInsets.only(top: 8.0),
-                    child: Row(
+                    child: Wrap(
+                      spacing: 12, 
+                      runSpacing: 8, 
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Text("${ex.series} x ${ex.repeticoes}", style: const TextStyle(color: Colors.white70)),
-                        const SizedBox(width: 12),
                         
-                        // CARGA
                         InkWell(
                           onTap: () => _editarCargaDialog(diaKey, ex),
                           borderRadius: BorderRadius.circular(4),
@@ -236,6 +264,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                               border: Border.all(color: Colors.white24)
                             ),
                             child: Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
                                 const Icon(Icons.monitor_weight_outlined, size: 14, color: AppColors.secondary),
                                 const SizedBox(width: 4),
@@ -250,15 +279,14 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                             ),
                           ),
                         ),
+                        // <-- Botão de "60s" que ficava aqui foi removido com sucesso!
                       ],
                     ),
                   ),
 
-                  // AÇÕES (Personal ou Aluno)
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // SE FOR ALUNO: Ícone de solicitar alteração
                       if (!_souPersonal)
                         IconButton(
                           icon: Icon(
@@ -269,7 +297,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                           onPressed: () => _solicitarAlteracao(diaKey, ex),
                         ),
 
-                      // SE FOR PERSONAL: Ícones de edição
                       if (_souPersonal) ...[
                         if (ex.solicitarAlteracao)
                            IconButton(
@@ -296,27 +323,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
             },
           ),
         ),
-
-        // BOTÃO DE FINALIZAR TREINO (SÓ PARA O ALUNO)
-        if (!_souPersonal && exercicios.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.success, 
-                  foregroundColor: Colors.white,
-                  elevation: 4,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
-                ),
-                icon: const Icon(Icons.check_circle, color: Colors.black),
-                label: const Text("FINALIZAR TREINO", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black)),
-                onPressed: () => _confirmarFinalizacao(diaKey),
-              ),
-            ),
-          ),
       ],
     );
   }
@@ -324,11 +330,10 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
   // --- ÁREA DE FEEDBACK ---
   Widget _buildFeedbackArea(String diaKey, String feedbackAtual) {
     if (_souPersonal) {
-      // PERSONAL: Apenas visualiza o feedback
-      if (feedbackAtual.isEmpty) return const SizedBox.shrink(); // Se não tem feedback, esconde
+      if (feedbackAtual.isEmpty) return const SizedBox.shrink(); 
       
       return Container(
-        margin: const EdgeInsets.only(top: 20, bottom: 80), // Margem extra por causa do FAB
+        margin: const EdgeInsets.only(top: 20, bottom: 10), 
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: AppColors.secondary.withOpacity(0.1),
@@ -352,7 +357,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
       );
     }
 
-    // ALUNO: Campo para digitar o feedback
     return Container(
       margin: const EdgeInsets.only(top: 20, bottom: 20),
       child: Column(
@@ -391,13 +395,11 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     final texto = _feedbackControllers[diaKey]!.text.trim();
     if (texto.isEmpty) return;
 
-    // Salva no banco no documento do treino
     await FirebaseFirestore.instance
         .collection('workout_plans')
         .doc(widget.studentId)
         .set({'feedback_$diaKey': texto}, SetOptions(merge: true));
 
-    // Notifica o Personal
     await _notificarPersonal(
       "Feedback Novo 📝", 
       "${widget.studentName} deixou um comentário no treino de $diaKey."
@@ -409,7 +411,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
   }
 
   void _solicitarAlteracao(String diaKey, WorkoutExercise ex) {
-    if (ex.solicitarAlteracao) return; // Já solicitou
+    if (ex.solicitarAlteracao) return; 
 
     showDialog(
       context: context,
@@ -481,7 +483,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
       _cacheExercicios[diaKey] = exerciciosAtuais;
       await _salvarListaDoDia(diaKey);
 
-      // Limpa o feedback do dia para a próxima semana
       _feedbackControllers[diaKey]!.clear();
       await FirebaseFirestore.instance.collection('workout_plans').doc(widget.studentId).update({
         'feedback_$diaKey': FieldValue.delete(),
@@ -581,7 +582,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                 ex.nome = nomeCtrl.text;
                 ex.series = seriesCtrl.text;
                 ex.repeticoes = repsCtrl.text;
-                // Quando o personal edita, assumimos que ele atendeu a solicitação e apagamos o alerta
                 ex.solicitarAlteracao = false; 
               });
               _salvarListaDoDia(diaKey);
