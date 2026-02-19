@@ -7,7 +7,9 @@ import '../../../../core/theme/app_colors.dart';
 import 'chat_page.dart';
 import 'weekly_plan_page.dart';
 import 'assessments_tab.dart'; 
-// Importe a StudentDetailPage se precisar redirecionar para lá, ou use rotas nomeadas.
+
+// --- CORREÇÃO AQUI: Importação com o caminho exato ---
+import 'student_detail_page.dart'; 
 
 class NotificationsPage extends StatelessWidget {
   const NotificationsPage({super.key});
@@ -27,7 +29,7 @@ class NotificationsPage extends StatelessWidget {
         elevation: 0,
         foregroundColor: Colors.white,
         actions: [
-          // Botão para "Marcar todas como lidas" (Futura implementação)
+          // Botão para "Marcar todas como lidas"
           IconButton(
             icon: const Icon(Icons.done_all, color: AppColors.textSub),
             onPressed: () => _marcarTodasComoLidas(user.uid),
@@ -61,7 +63,7 @@ class NotificationsPage extends StatelessWidget {
     );
   }
 
-  // --- STREAM DE CONVITES (Mantendo sua lógica original) ---
+  // --- STREAM DE CONVITES ---
   Widget _buildInvitesStream(User user) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
@@ -84,7 +86,7 @@ class NotificationsPage extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.surface,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.primary.withOpacity(0.3)), // Borda Neon para destaque
+                border: Border.all(color: AppColors.primary.withOpacity(0.3)), 
                 boxShadow: [BoxShadow(color: AppColors.primary.withOpacity(0.1), blurRadius: 10)],
               ),
               child: Column(
@@ -125,13 +127,13 @@ class NotificationsPage extends StatelessWidget {
     );
   }
 
-  // --- STREAM DE NOTIFICAÇÕES GERAIS (Mensagens, Treinos, Avaliações) ---
+  // --- STREAM DE NOTIFICAÇÕES GERAIS ---
   Widget _buildGeneralNotificationsStream(BuildContext context, User user) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
-          .collection('notifications') // <--- Nova Subcoleção
+          .collection('notifications')
           .orderBy('timestamp', descending: true)
           .limit(20)
           .snapshots(),
@@ -203,7 +205,7 @@ class NotificationsPage extends StatelessWidget {
                             const SizedBox(height: 6),
                             Text(
                               _formatTime(data['timestamp']),
-                              style: TextStyle(color: Colors.white30, fontSize: 10),
+                              style: const TextStyle(color: Colors.white30, fontSize: 10),
                             ),
                           ],
                         ),
@@ -231,27 +233,51 @@ class NotificationsPage extends StatelessWidget {
       await doc.reference.update({'isRead': true});
     }
 
-    // 2. Navega baseado no tipo
     if (!context.mounted) return;
+    
+    final currentUser = FirebaseAuth.instance.currentUser!;
     
     switch (data['type']) {
       case 'message':
-        // ActionId deve ser o ID do usuário que mandou a mensagem
         Navigator.push(context, MaterialPageRoute(builder: (context) => 
           ChatPage(otherUserId: data['actionId'], otherUserName: data['senderName'] ?? 'Chat')
         ));
         break;
         
       case 'workout':
-        Navigator.push(context, MaterialPageRoute(builder: (context) => 
-          // Ajuste conforme sua navegação
-          WeeklyPlanPage(studentId: FirebaseAuth.instance.currentUser!.uid, studentName: "Meus Treinos")
-        ));
+        final actionId = data['actionId'] ?? currentUser.uid;
+
+        // Se a notificação for de OUTRO usuário, significa que você é o Personal abrindo o aviso do Aluno
+        if (actionId != currentUser.uid) {
+          showDialog(
+            context: context, 
+            barrierDismissible: false,
+            builder: (_) => const Center(child: CircularProgressIndicator(color: AppColors.primary))
+          );
+          
+          // Busca rapidamente os dados do aluno para abrir o StudentDetailPage
+          final studentDoc = await FirebaseFirestore.instance.collection('users').doc(actionId).get();
+          final studentData = studentDoc.data() ?? {};
+          
+          if (context.mounted) {
+            Navigator.pop(context); // Fecha o loading
+            Navigator.push(context, MaterialPageRoute(builder: (context) => 
+              StudentDetailPage(
+                studentId: actionId, 
+                studentName: studentData['name'] ?? studentData['nome'] ?? 'Aluno', 
+                studentEmail: studentData['email'] ?? ''
+              )
+            ));
+          }
+        } else {
+          // Se for você mesmo, abre a sua página normal
+          Navigator.push(context, MaterialPageRoute(builder: (context) => 
+            WeeklyPlanPage(studentId: currentUser.uid, studentName: "Meus Treinos")
+          ));
+        }
         break;
 
       case 'assessment':
-        // Pode ir para a tab de avaliações (exige um pequeno refactor na ProfilePage para abrir direto na tab, mas por enquanto abrimos o perfil)
-        // O ideal aqui seria uma Page separada só de Detalhes da Avaliação.
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Vá em Perfil > Avaliações para ver os detalhes.")));
         break;
     }
@@ -261,8 +287,8 @@ class NotificationsPage extends StatelessWidget {
   Color _getColorByType(String? type) {
     switch (type) {
       case 'message': return Colors.blueAccent;
-      case 'workout': return AppColors.primary; // Neon
-      case 'assessment': return AppColors.secondary; // Terracota
+      case 'workout': return AppColors.primary; 
+      case 'assessment': return AppColors.secondary; 
       default: return Colors.grey;
     }
   }
@@ -309,7 +335,7 @@ class NotificationsPage extends StatelessWidget {
     );
   }
 
-  // --- LÓGICA DE CONVITE (Mantida) ---
+  // --- LÓGICA DE CONVITE ---
   Future<void> _responderConvite(BuildContext context, String inviteId, bool aceitar) async {
     try {
       final inviteDoc = await FirebaseFirestore.instance.collection('invites').doc(inviteId).get();
@@ -317,22 +343,18 @@ class NotificationsPage extends StatelessWidget {
 
       final data = inviteDoc.data()!;
       final studentId = FirebaseAuth.instance.currentUser!.uid;
-      final personalId = data['personalId'];
-      final personalName = data['personalName'];
+      // Compatibilidade com bancos antigos (personalId) e novos (fromPersonalId)
+      final personalId = data['personalId'] ?? data['fromPersonalId'];
+      final personalName = data['personalName'] ?? data['fromPersonalName'];
 
       if (aceitar) {
-        // Vincula no documento do aluno
         await FirebaseFirestore.instance.collection('users').doc(studentId).update({
           'personalId': personalId,
           'personalName': personalName,
           'inviteFromPersonalId': inviteId,
         });
-        
-        // (Opcional) Adiciona o aluno na lista do personal se tiver uma collection 'students' lá
-        // Mas no seu modelo atual parece que você busca por query "users where personalId == meuId", então tá ok.
       }
 
-      // Atualiza status do convite
       await FirebaseFirestore.instance.collection('invites').doc(inviteId).update({
         'status': aceitar ? 'accepted' : 'rejected',
       });

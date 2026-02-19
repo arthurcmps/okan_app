@@ -3,8 +3,9 @@ class WorkoutExercise {
   String nome;
   String series;
   String repeticoes;
-  String carga; 
+  String carga;
   bool concluido;
+  bool solicitarAlteracao; // <--- NOVO CAMPO AQUI
 
   WorkoutExercise({
     required this.id,
@@ -13,6 +14,7 @@ class WorkoutExercise {
     required this.repeticoes,
     this.carga = '',
     this.concluido = false,
+    this.solicitarAlteracao = false, // <--- INICIA COMO FALSO
   });
 
   Map<String, dynamic> toMap() {
@@ -23,6 +25,7 @@ class WorkoutExercise {
       'repeticoes': repeticoes,
       'carga': carga,
       'concluido': concluido,
+      'solicitarAlteracao': solicitarAlteracao, // <--- SALVA NO BANCO
     };
   }
 
@@ -34,6 +37,7 @@ class WorkoutExercise {
       repeticoes: map['repeticoes'] ?? '',
       carga: map['carga'] ?? '',
       concluido: map['concluido'] ?? false,
+      solicitarAlteracao: map['solicitarAlteracao'] ?? false, // <--- LÊ DO BANCO
     );
   }
 }
