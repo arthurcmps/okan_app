@@ -160,10 +160,14 @@ class _AssessmentForm extends StatefulWidget {
 
 class _AssessmentFormState extends State<_AssessmentForm> {
   final _formKey = GlobalKey<FormState>();
+  
+  // O mapa que vai segurar os dados a cada tecla digitada
   final Map<String, String> _values = {};
 
   Future<void> _submit() async {
+    // Valida apenas os campos obrigatórios
     if (_formKey.currentState!.validate()) {
+      // Como já salvamos no onChanged, o onSaved vira um backup de segurança
       _formKey.currentState!.save();
       
       final Map<String, dynamic> data = {
@@ -313,7 +317,10 @@ class _AssessmentFormState extends State<_AssessmentForm> {
           ]),
           
           const SizedBox(height: 10),
+          
+          // --- DROPDOWN PROTEGIDO CONTRA REBUILD ---
           DropdownButtonFormField<String>(
+            value: _values['generalRating']?.isNotEmpty == true ? _values['generalRating'] : null,
             dropdownColor: AppColors.surface,
             style: const TextStyle(color: Colors.white),
             decoration: const InputDecoration(
@@ -323,7 +330,11 @@ class _AssessmentFormState extends State<_AssessmentForm> {
               enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
             ),
             items: ["Ruim", "Bom", "Ótimo"].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-            onChanged: (v) => _values['generalRating'] = v ?? '',
+            onChanged: (v) {
+              setState(() {
+                _values['generalRating'] = v ?? '';
+              });
+            },
           ),
           
           const SizedBox(height: 30),
@@ -336,7 +347,7 @@ class _AssessmentFormState extends State<_AssessmentForm> {
             ),
             child: const Text("SALVAR AVALIAÇÃO COMPLETA", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
           ),
-          const SizedBox(height: 40),
+          const SizedBox(height: 40), // Espaço extra pro teclado não engolir o botão
         ],
       ),
     );
@@ -353,6 +364,10 @@ class _AssessmentFormState extends State<_AssessmentForm> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: TextFormField(
+        // O SEGREDO ESTÁ AQUI:
+        initialValue: _values[key], // Se o Flutter destruir a tela, ele busca o valor salvo!
+        onChanged: (v) => _values[key] = v, // Salva IMEDIATAMENTE a cada letra digitada
+        
         style: const TextStyle(color: Colors.white),
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         decoration: InputDecoration(
@@ -362,7 +377,7 @@ class _AssessmentFormState extends State<_AssessmentForm> {
           enabledBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.white12)),
           isDense: true,
         ),
-        validator: required ? (v) => v!.isEmpty ? 'Obrigatório' : null : null,
+        validator: required ? (v) => (v == null || v.isEmpty) ? 'Obrigatório' : null : null,
         onSaved: (v) => _values[key] = v ?? '',
       ),
     );
