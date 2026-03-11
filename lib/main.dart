@@ -5,14 +5,44 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter/services.dart'; 
 import 'package:provider/provider.dart';
 
+// --- NOVOS IMPORTS PARA PUSH NOTIFICATION ---
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
 import 'firebase_options.dart';
 import 'features/auth/presentation/pages/login_page.dart';
 import 'features/auth/presentation/pages/home_page.dart';
 import 'core/services/time_service.dart';
 import 'features/auth/presentation/controllers/tarefa_controller.dart';
 import 'core/theme/app_colors.dart'; 
-// O import já estava aqui, perfeito:
 import 'core/services/push_notification_service.dart';
+
+// =======================================================
+// CONFIGURAÇÃO DE NOTIFICAÇÕES (Background e Android Channel)
+// =======================================================
+
+// 1. Função que processa mensagens quando o app está FECHADO/BACKGROUND
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // Inicializa o Firebase isoladamente para o background handler
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  debugPrint("A processar mensagem em background: ${message.messageId}");
+}
+
+// 2. Canal do Android que FORÇA o som e a vibração
+const AndroidNotificationChannel channel = AndroidNotificationChannel(
+  'high_importance_channel', // id
+  'Notificações Importantes', // título
+  description: 'Este canal é usado para alertas de duelos e mensagens da arena.', // descrição
+  importance: Importance.max, // Importância máxima = Vibra e aparece no topo
+  playSound: true,
+);
+
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+
+// =======================================================
+// FUNÇÃO MAIN
+// =======================================================
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,7 +53,15 @@ void main() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
     
-    // --- NOVO CÓDIGO DE PUSH NOTIFICATION ---
+    // --- SETUP DO MOTOR DE NOTIFICAÇÕES ---
+    // Regista o handler de background
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+    // Cria o canal no dispositivo (Apenas Android)
+    await flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(channel);
+
     // Inicializa o serviço, pede permissão e salva o token no Firestore
     final pushService = PushNotificationService();
     await pushService.initialize();
