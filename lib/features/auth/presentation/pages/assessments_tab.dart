@@ -47,7 +47,8 @@ class AssessmentsTab extends StatelessWidget {
 
                 return ListView.builder(
                   itemCount: docs.length,
-                  padding: const EdgeInsets.all(16),
+                  // ESPAÇO EXTRA NO FUNDO PARA O SCROLL PASSAR DO BOTÃO
+                  padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 90),
                   itemBuilder: (context, index) {
                     final data = docs[index].data() as Map<String, dynamic>;
                     final date = (data['date'] is Timestamp) 

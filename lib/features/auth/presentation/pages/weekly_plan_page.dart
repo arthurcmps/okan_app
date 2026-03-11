@@ -3,8 +3,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../../core/theme/app_colors.dart'; 
 import '../../data/models/workout_plans_model.dart'; 
-
 import '../../../../core/services/time_service.dart';
+
+import 'video_player_page.dart'; // <--- IMPORT DA TELA DE VÍDEO AQUI
 
 class WeeklyPlanPage extends StatefulWidget {
   final String studentId; 
@@ -279,7 +280,36 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                             ),
                           ),
                         ),
-                        // <-- Botão de "60s" que ficava aqui foi removido com sucesso!
+                        
+                        // --- NOVO: BOTÃO DE VÍDEO SE HOUVER LINK ---
+                        if (ex.videoUrl != null && ex.videoUrl!.isNotEmpty)
+                          InkWell(
+                            onTap: () {
+                              Navigator.push(
+                                context, 
+                                MaterialPageRoute(
+                                  builder: (context) => VideoPlayerPage(videoUrl: ex.videoUrl!, exerciseName: ex.nome)
+                                )
+                              );
+                            },
+                            borderRadius: BorderRadius.circular(4),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.redAccent.withOpacity(0.15), 
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: Colors.redAccent.withOpacity(0.5))
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.play_circle_fill, size: 14, color: Colors.redAccent),
+                                  SizedBox(width: 4),
+                                  Text("Vídeo", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent)),
+                                ],
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -390,7 +420,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     );
   }
 
-  // --- LÓGICA DE FEEDBACK E SOLICITAÇÃO ---
   Future<void> _salvarFeedback(String diaKey) async {
     final texto = _feedbackControllers[diaKey]!.text.trim();
     if (texto.isEmpty) return;
@@ -442,7 +471,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     );
   }
 
-  // --- LÓGICA DE FINALIZAR TREINO ---
   void _confirmarFinalizacao(String diaKey) {
     showDialog(
       context: context,
@@ -496,7 +524,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     }
   }
 
-  // --- LÓGICA DE SALVAMENTO ---
   Future<void> _salvarListaDoDia(String diaKey) async {
     final listaExercicios = _cacheExercicios[diaKey] ?? [];
     final listaParaSalvar = listaExercicios.map((e) => e.toMap()).toList();
@@ -514,7 +541,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     _salvarListaDoDia(diaKey);
   }
 
-  // --- MODAIS DE EDIÇÃO ---
   void _editarCargaDialog(String diaKey, WorkoutExercise ex) {
     final cargaCtrl = TextEditingController(text: ex.carga);
     showDialog(
@@ -553,25 +579,30 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     final nomeCtrl = TextEditingController(text: ex.nome);
     final seriesCtrl = TextEditingController(text: ex.series);
     final repsCtrl = TextEditingController(text: ex.repeticoes);
+    final videoCtrl = TextEditingController(text: ex.videoUrl ?? ''); // CAMPO DE VÍDEO
     
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.surface,
         title: const Text("Editar Exercício", style: TextStyle(color: Colors.white)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildDialogInput(nomeCtrl, "Nome"),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(child: _buildDialogInput(seriesCtrl, "Séries", isNumber: true)),
-                const SizedBox(width: 10),
-                Expanded(child: _buildDialogInput(repsCtrl, "Reps", isNumber: true)),
-              ],
-            )
-          ],
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildDialogInput(nomeCtrl, "Nome"),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(child: _buildDialogInput(seriesCtrl, "Séries", isNumber: true)),
+                  const SizedBox(width: 10),
+                  Expanded(child: _buildDialogInput(repsCtrl, "Reps", isNumber: true)),
+                ],
+              ),
+              const SizedBox(height: 10),
+              _buildDialogInput(videoCtrl, "Link do YouTube (Opcional)"), // INPUT DE VÍDEO
+            ],
+          ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar", style: TextStyle(color: Colors.grey))),
@@ -582,6 +613,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                 ex.nome = nomeCtrl.text;
                 ex.series = seriesCtrl.text;
                 ex.repeticoes = repsCtrl.text;
+                ex.videoUrl = videoCtrl.text.trim(); // SALVA O VÍDEO
                 ex.solicitarAlteracao = false; 
               });
               _salvarListaDoDia(diaKey);
@@ -598,24 +630,29 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     final nomeCtrl = TextEditingController();
     final seriesCtrl = TextEditingController(text: '3');
     final repsCtrl = TextEditingController(text: '12');
+    final videoCtrl = TextEditingController(); // CAMPO DE VÍDEO
     
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.surface,
         title: const Text("Adicionar Exercício", style: TextStyle(color: Colors.white)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildDialogInput(nomeCtrl, "Nome do Exercício"),
-            Row(
-              children: [
-                Expanded(child: _buildDialogInput(seriesCtrl, "Séries", isNumber: true)),
-                const SizedBox(width: 10),
-                Expanded(child: _buildDialogInput(repsCtrl, "Repetições", isNumber: true)),
-              ],
-            )
-          ],
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildDialogInput(nomeCtrl, "Nome do Exercício"),
+              Row(
+                children: [
+                  Expanded(child: _buildDialogInput(seriesCtrl, "Séries", isNumber: true)),
+                  const SizedBox(width: 10),
+                  Expanded(child: _buildDialogInput(repsCtrl, "Repetições", isNumber: true)),
+                ],
+              ),
+              const SizedBox(height: 10),
+              _buildDialogInput(videoCtrl, "Link do YouTube (Opcional)"), // INPUT DE VÍDEO
+            ],
+          ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar", style: TextStyle(color: Colors.grey))),
@@ -628,6 +665,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                   nome: nomeCtrl.text,
                   series: seriesCtrl.text,
                   repeticoes: repsCtrl.text,
+                  videoUrl: videoCtrl.text.trim().isEmpty ? null : videoCtrl.text.trim(), // SALVA O VÍDEO
                 );
                 
                 final diaAtual = _diasDaSemana[_tabController.index];

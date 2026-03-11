@@ -33,6 +33,28 @@ class _ArenaPageState extends State<ArenaPage> with SingleTickerProviderStateMix
     super.dispose();
   }
 
+  // ==========================================
+  // MOTOR DE NOTIFICAÇÕES DA ARENA 🔔
+  // ==========================================
+  Future<void> _enviarNotificacaoArena(String targetUserId, String titulo, String corpo) async {
+    if (targetUserId == user?.uid) return; // Não notifica a si mesmo
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(targetUserId)
+          .collection('notifications')
+          .add({
+        'type': 'arena',
+        'title': titulo,
+        'body': corpo,
+        'isRead': false,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      debugPrint("Erro ao enviar notificação da arena: $e");
+    }
+  }
+
   Future<void> _buscarAmigo() async {
     final email = _searchCtrl.text.trim().toLowerCase();
     if (email.isEmpty || email == user?.email) return;
@@ -60,10 +82,11 @@ class _ArenaPageState extends State<ArenaPage> with SingleTickerProviderStateMix
     if (_usuarioEncontrado == null || user == null) return;
     final receiverId = _usuarioEncontrado!['uid'];
     final meuDoc = await FirebaseFirestore.instance.collection('users').doc(user!.uid).get();
-    
+    final meuNome = meuDoc.data()?['name'] ?? meuDoc.data()?['nome'] ?? 'Atleta';
+
     await FirebaseFirestore.instance.collection('friendships').add({
       'requesterId': user!.uid,
-      'requesterName': meuDoc.data()?['name'] ?? meuDoc.data()?['nome'] ?? 'Atleta',
+      'requesterName': meuNome,
       'requesterPhoto': meuDoc.data()?['photoUrl'],
       'receiverId': receiverId,
       'receiverName': _usuarioEncontrado!['name'] ?? _usuarioEncontrado!['nome'] ?? 'Atleta',
@@ -72,14 +95,23 @@ class _ArenaPageState extends State<ArenaPage> with SingleTickerProviderStateMix
       'timestamp': FieldValue.serverTimestamp(),
     });
 
+    // 🔔 DISPARA NOTIFICAÇÃO DE CONVITE ENVIADO
+    await _enviarNotificacaoArena(receiverId, "Novo Convite na Arena 🤝", "$meuNome quer adicionar você como amigo!");
+
     setState(() => _usuarioEncontrado = null);
     _searchCtrl.clear();
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Pedido de amizade enviado!"), backgroundColor: AppColors.primary));
   }
 
-  Future<void> _responderConvite(String docId, bool aceitou) async {
+  Future<void> _responderConvite(String docId, bool aceitou, String requesterId) async {
     if (aceitou) {
       await FirebaseFirestore.instance.collection('friendships').doc(docId).update({'status': 'accepted'});
+      
+      // 🔔 DISPARA NOTIFICAÇÃO DE CONVITE ACEITO
+      final meuDoc = await FirebaseFirestore.instance.collection('users').doc(user!.uid).get();
+      final meuNome = meuDoc.data()?['name'] ?? meuDoc.data()?['nome'] ?? 'Atleta';
+      await _enviarNotificacaoArena(requesterId, "Convite Aceito! ⚔️", "$meuNome agora é seu amigo na Arena Okan.");
+
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Amigo adicionado à Arena!"), backgroundColor: AppColors.success));
     } else {
       await FirebaseFirestore.instance.collection('friendships').doc(docId).delete();
@@ -132,7 +164,7 @@ class _ArenaPageState extends State<ArenaPage> with SingleTickerProviderStateMix
   }
 
   // ==========================================
-  // ABA: DUELOS (AGORA COM RANKING CLICÁVEL)
+  // ABA: DUELOS
   // ==========================================
   Widget _buildDuelosAba() {
     return StreamBuilder<QuerySnapshot>(
@@ -166,7 +198,6 @@ class _ArenaPageState extends State<ArenaPage> with SingleTickerProviderStateMix
             if (data['participants'] == null) return const SizedBox.shrink(); 
 
             final metricaNome = data['metric'] == 'bodyFatPercentage' ? '% de Gordura' : 'Perda de Peso';
-            
             final participantes = data['participants'] as Map<String, dynamic>;
             final meuStatus = participantes[user!.uid]?['status'] ?? 'pending';
             
@@ -177,10 +208,7 @@ class _ArenaPageState extends State<ArenaPage> with SingleTickerProviderStateMix
 
             return GestureDetector(
               onTap: () {
-                // SÓ ABRE O PLACAR SE VOCÊ JÁ TIVER ACEITADO O DESAFIO
-                if (meuStatus == 'accepted') {
-                  _abrirRankingDuelo(doc);
-                }
+                if (meuStatus == 'accepted') _abrirRankingDuelo(doc);
               },
               child: Card(
                 color: AppColors.surface,
@@ -229,15 +257,18 @@ class _ArenaPageState extends State<ArenaPage> with SingleTickerProviderStateMix
                               child: ElevatedButton(
                                 style: ElevatedButton.styleFrom(backgroundColor: Colors.amber),
                                 onPressed: () async {
-                                  // FASE 3: PEGA O VALOR INICIAL ANTES DE ACEITAR
                                   final meuDoc = await FirebaseFirestore.instance.collection('users').doc(user!.uid).get();
                                   String chaveBanco = data['metric'] == 'weight' ? 'peso' : data['metric'];
                                   double startVal = (meuDoc.data()?[chaveBanco] ?? 0.0).toDouble();
+                                  final meuNome = meuDoc.data()?['name'] ?? meuDoc.data()?['nome'] ?? 'Atleta';
 
-                                  FirebaseFirestore.instance.collection('challenges').doc(doc.id).update({
+                                  await FirebaseFirestore.instance.collection('challenges').doc(doc.id).update({
                                     'participants.${user!.uid}.status': 'accepted',
                                     'participants.${user!.uid}.startValue': startVal,
                                   });
+
+                                  // 🔔 DISPARA NOTIFICAÇÃO PARA O CRIADOR DO DUELO
+                                  await _enviarNotificacaoArena(data['creatorId'], "Novo Gladiador na Arena! ⚔️", "$meuNome acabou de aceitar o seu desafio.");
                                 },
                                 child: const Text("ENTRAR NA ARENA", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
                               ),
@@ -257,7 +288,7 @@ class _ArenaPageState extends State<ArenaPage> with SingleTickerProviderStateMix
   }
 
   // ==========================================
-  // O PLACAR (RANKING E MATEMÁTICA FASE 3)
+  // O PLACAR (RANKING E MATEMÁTICA)
   // ==========================================
   void _abrirRankingDuelo(DocumentSnapshot desafioDoc) {
     showModalBottomSheet(
@@ -305,21 +336,19 @@ class _ArenaPageState extends State<ArenaPage> with SingleTickerProviderStateMix
                         final atleta = ranking[index];
                         final delta = atleta['delta'] as double;
                         
-                        // Formatação bonita para o número:
                         String progressoStr;
                         Color corDelta = Colors.white54;
 
                         if (delta < 0) {
                           progressoStr = "${delta.toStringAsFixed(1)} $sufixo";
-                          corDelta = AppColors.success; // Verde: Perdeu peso/gordura
+                          corDelta = AppColors.success; 
                         } else if (delta > 0) {
                           progressoStr = "+${delta.toStringAsFixed(1)} $sufixo";
-                          corDelta = AppColors.error; // Vermelho: Ganhou peso/gordura
+                          corDelta = AppColors.error; 
                         } else {
                           progressoStr = "0.0 $sufixo";
                         }
 
-                        // Medalhas
                         Widget posicao;
                         if (index == 0) posicao = const Icon(Icons.workspace_premium, color: Colors.amber, size: 28);
                         else if (index == 1) posicao = const Icon(Icons.workspace_premium, color: Colors.grey, size: 28);
@@ -362,11 +391,10 @@ class _ArenaPageState extends State<ArenaPage> with SingleTickerProviderStateMix
     );
   }
 
-  // O "MOTOR" MATEMÁTICO QUE COMPARA AS AVALIAÇÕES
   Future<List<Map<String, dynamic>>> _calcularPlacar(DocumentSnapshot desafioDoc) async {
     final data = desafioDoc.data() as Map<String, dynamic>;
     final metrica = data['metric'];
-    final chaveBanco = metrica == 'weight' ? 'peso' : metrica; // Traduz a chave pro banco
+    final chaveBanco = metrica == 'weight' ? 'peso' : metrica; 
     final participantes = data['participants'] as Map<String, dynamic>;
 
     List<Map<String, dynamic>> ranking = [];
@@ -376,12 +404,9 @@ class _ArenaPageState extends State<ArenaPage> with SingleTickerProviderStateMix
       if (pData['status'] != 'accepted') continue;
 
       double startVal = (pData['startValue'] ?? 0.0).toDouble();
-
-      // Busca o peso/BF atual do cara no perfil dele (Atualizado pelo Personal)
       var userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
       double currentVal = (userDoc.data()?[chaveBanco] ?? 0.0).toDouble();
 
-      // A mágica acontece aqui: A diferença
       double delta = currentVal - startVal;
 
       ranking.add({
@@ -392,7 +417,6 @@ class _ArenaPageState extends State<ArenaPage> with SingleTickerProviderStateMix
       });
     }
 
-    // Ordena do menor para o maior (Quem perdeu -5.0 ganha de quem perdeu -2.0)
     ranking.sort((a, b) => a['delta'].compareTo(b['delta']));
     return ranking;
   }
@@ -436,7 +460,7 @@ class _ArenaPageState extends State<ArenaPage> with SingleTickerProviderStateMix
   }
 
   // ==========================================
-  // MODAL CRIAR DUELO (FASE 3)
+  // MODAL CRIAR DUELO 
   // ==========================================
   void _abrirModalCriarDueloEmGrupo() {
     String metricaSelecionada = 'bodyFatPercentage';
@@ -552,7 +576,6 @@ class _ArenaPageState extends State<ArenaPage> with SingleTickerProviderStateMix
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.deepOrangeAccent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                       onPressed: amigosSelecionados.isEmpty ? null : () async {
                         
-                        // FASE 3: SALVA O SEU PONTO DE PARTIDA AO CRIAR O DUELO
                         final meuDoc = await FirebaseFirestore.instance.collection('users').doc(user!.uid).get();
                         final meuNome = meuDoc.data()?['name'] ?? meuDoc.data()?['nome'] ?? 'Atleta';
                         final minhaFoto = meuDoc.data()?['photoUrl'];
@@ -561,7 +584,7 @@ class _ArenaPageState extends State<ArenaPage> with SingleTickerProviderStateMix
 
                         List<String> todosIds = [user!.uid]; 
                         Map<String, dynamic> detalheParticipantes = {
-                          user!.uid: {'name': meuNome, 'photoUrl': minhaFoto, 'status': 'accepted', 'startValue': meuStartVal} // Seu valor guardado!
+                          user!.uid: {'name': meuNome, 'photoUrl': minhaFoto, 'status': 'accepted', 'startValue': meuStartVal}
                         };
 
                         for (var amigo in amigosSelecionados) {
@@ -582,6 +605,12 @@ class _ArenaPageState extends State<ArenaPage> with SingleTickerProviderStateMix
                           'participants': detalheParticipantes,
                         });
 
+                        // 🔔 DISPARA NOTIFICAÇÕES PARA TODOS OS CONVIDADOS DO GRUPO
+                        String metricaLabel = metricaSelecionada == 'weight' ? 'Perda de Peso' : '% de Gordura';
+                        for (var amigo in amigosSelecionados) {
+                          await _enviarNotificacaoArena(amigo['uid'], "Você foi desafiado! 🛡️", "$meuNome montou uma Arena de $metricaLabel.");
+                        }
+
                         if (context.mounted) {
                           Navigator.pop(context); 
                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Duelo criado! Convites enviados."), backgroundColor: Colors.deepOrangeAccent));
@@ -600,7 +629,7 @@ class _ArenaPageState extends State<ArenaPage> with SingleTickerProviderStateMix
   }
 
   // ==========================================
-  // ABA: BUSCAR (Mantido)
+  // ABA: BUSCAR 
   // ==========================================
   Widget _buildBuscarAba() {
     return Padding(
@@ -644,7 +673,7 @@ class _ArenaPageState extends State<ArenaPage> with SingleTickerProviderStateMix
   }
 
   // ==========================================
-  // ABA: CONVITES (Mantido)
+  // ABA: CONVITES 
   // ==========================================
   Widget _buildConvitesAba() {
     return StreamBuilder<QuerySnapshot>(
@@ -668,8 +697,8 @@ class _ArenaPageState extends State<ArenaPage> with SingleTickerProviderStateMix
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    IconButton(icon: const Icon(Icons.close, color: Colors.white30), onPressed: () => _responderConvite(doc.id, false)),
-                    IconButton(icon: const Icon(Icons.check_circle, color: AppColors.success), onPressed: () => _responderConvite(doc.id, true)),
+                    IconButton(icon: const Icon(Icons.close, color: Colors.white30), onPressed: () => _responderConvite(doc.id, false, data['requesterId'])),
+                    IconButton(icon: const Icon(Icons.check_circle, color: AppColors.success), onPressed: () => _responderConvite(doc.id, true, data['requesterId'])),
                   ],
                 ),
               ),

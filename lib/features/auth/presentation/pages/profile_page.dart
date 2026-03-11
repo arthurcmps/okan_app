@@ -189,8 +189,6 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
         final String idade = _calcularIdade(birthDateRaw);
         final bool precisaData = (birthDateRaw == null); 
 
-        final String objetivo = data['objetivo'] ?? "Definir";
-        final String frequencia = data['freq_semanal'] ?? "Definir";
         final bool isPersonal = tipo == 'personal';
 
         return SingleChildScrollView(
@@ -274,17 +272,6 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
               ),
               
               const SizedBox(height: 30),
-              
-              if (!isPersonal) ...[
-                Row(
-                  children: [
-                    Expanded(child: _buildInfoCard(icon: Icons.flag_outlined, title: "Meu Foco", value: objetivo, onTap: () => _tabController.animateTo(1))),
-                    const SizedBox(width: 16),
-                    Expanded(child: _buildInfoCard(icon: Icons.calendar_today_outlined, title: "Frequência", value: frequencia, onTap: () => _tabController.animateTo(1))),
-                  ],
-                ),
-                const SizedBox(height: 30),
-              ],
 
               const Align(alignment: Alignment.centerLeft, child: Text("Configurações", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primary))),
               const SizedBox(height: 10),
@@ -302,7 +289,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                 title: "Histórico de Treinos", 
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => WorkoutHistoryPage(
                   studentId: user!.uid,
-                  studentName: nome, // <--- ADICIONADO AQUI PARA CORRIGIR O ERRO
+                  studentName: nome,
                 )))
               ),
 
@@ -328,29 +315,6 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
           ),
         );
       },
-    );
-  }
-
-  Widget _buildInfoCard({required IconData icon, required String title, required String value, required VoidCallback onTap}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.surface, 
-          borderRadius: BorderRadius.circular(16), 
-          border: Border.all(color: Colors.white.withOpacity(0.05)),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, size: 28, color: AppColors.primary), // Ícone Neon
-            const SizedBox(height: 8),
-            Text(title, style: const TextStyle(color: Colors.white60, fontSize: 12)),
-            const SizedBox(height: 4),
-            Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white), textAlign: TextAlign.center, overflow: TextOverflow.ellipsis),
-          ],
-        ),
-      ),
     );
   }
 
