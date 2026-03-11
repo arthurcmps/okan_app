@@ -11,6 +11,7 @@ import 'profile_page.dart';
 import 'students_page.dart';    
 import 'chat_page.dart';
 import 'notifications_page.dart'; 
+import 'arena_page.dart'; // <--- IMPORT DA ARENA ADICIONADO
 import '../../../../core/theme/app_colors.dart';
 
 class HomePage extends StatefulWidget {
@@ -50,7 +51,6 @@ class _HomePageState extends State<HomePage> {
 
             if (snapshot.hasData && snapshot.data!.exists) {
               final data = snapshot.data!.data() as Map<String, dynamic>?;
-              // Tenta 'name' (padrão novo) ou 'nome' (legado)
               final nomeCompleto = data?['name'] ?? data?['nome'] ?? 'Atleta';
               nomeExibicao = nomeCompleto.toString().split(' ').first;
             } else if (user?.displayName != null) {
@@ -67,11 +67,9 @@ class _HomePageState extends State<HomePage> {
           },
         ),
         
-        // --- AÇÕES DA BARRA SUPERIOR (Com Notificação Unificada) ---
+        // --- AÇÕES DA BARRA SUPERIOR ---
         actions: [
-          // 1. ÍCONE DE NOTIFICAÇÃO (Verifica Convites E Mensagens)
           StreamBuilder<QuerySnapshot>(
-            // Stream 1: Verifica Convites Pendentes
             stream: FirebaseFirestore.instance
                 .collection('invites')
                 .where('toStudentEmail', isEqualTo: user?.email)
@@ -80,7 +78,6 @@ class _HomePageState extends State<HomePage> {
             builder: (context, snapshotInvites) {
               
               return StreamBuilder<QuerySnapshot>(
-                // Stream 2: Verifica Notificações Gerais Não Lidas (Chat, Treino, etc)
                 stream: FirebaseFirestore.instance
                     .collection('users')
                     .doc(user!.uid)
@@ -91,8 +88,6 @@ class _HomePageState extends State<HomePage> {
                   
                   bool temConvite = snapshotInvites.hasData && snapshotInvites.data!.docs.isNotEmpty;
                   bool temNotificacaoNova = snapshotNotifs.hasData && snapshotNotifs.data!.docs.isNotEmpty;
-                  
-                  // Se TIVER convite OU TIVER notificação nova, mostra a bolinha
                   bool mostrarAlerta = temConvite || temNotificacaoNova;
 
                   return Stack(
@@ -112,7 +107,7 @@ class _HomePageState extends State<HomePage> {
                             width: 10,
                             height: 10,
                             decoration: const BoxDecoration(
-                              color: AppColors.primary, // Bolinha Neon
+                              color: AppColors.primary, 
                               shape: BoxShape.circle,
                             ),
                           ),
@@ -124,7 +119,6 @@ class _HomePageState extends State<HomePage> {
             },
           ),
 
-          // 2. AVATAR DO USUÁRIO
           StreamBuilder<DocumentSnapshot>(
             stream: FirebaseFirestore.instance.collection('users').doc(user!.uid).snapshots(),
             builder: (context, snapshot) {
@@ -175,7 +169,6 @@ class _HomePageState extends State<HomePage> {
                   exerciciosHoje = data[diaKey] as List<dynamic>? ?? [];
                 }
 
-                // Estado: Descanso
                 if (exerciciosHoje.isEmpty) {
                   return Container(
                     width: double.infinity,
@@ -196,7 +189,6 @@ class _HomePageState extends State<HomePage> {
                   );
                 }
 
-                // Estado: Tem Treino
                 final primeiroExercicio = exerciciosHoje.first['nome'] ?? 'Treino';
                 final totalExercicios = exerciciosHoje.length;
 
@@ -302,16 +294,33 @@ class _HomePageState extends State<HomePage> {
                   }
 
                   // Se for ALUNO
-                  if (tipo == 'aluno' && data['personalId'] != null) {
-                    final personalName = data['personalName'] ?? 'Treinador';
-                    return _buildMenuCard(
-                      icon: Icons.support_agent,
-                      color: Colors.blueAccent,
-                      title: "Meu Personal",
-                      subtitle: "Falar com $personalName",
-                      onTap: () {
-                        Navigator.push(context, MaterialPageRoute(builder: (context) => ChatPage(otherUserId: data['personalId'], otherUserName: personalName)));
-                      },
+                  if (tipo == 'aluno') {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Card do Personal (só exibe se tiver personalId)
+                        if (data['personalId'] != null) ...[
+                          _buildMenuCard(
+                            icon: Icons.support_agent,
+                            color: Colors.blueAccent,
+                            title: "Meu Personal",
+                            subtitle: "Falar com ${data['personalName'] ?? 'Treinador'}",
+                            onTap: () {
+                              Navigator.push(context, MaterialPageRoute(builder: (context) => ChatPage(otherUserId: data['personalId'], otherUserName: data['personalName'] ?? 'Treinador')));
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                        
+                        // --- ARENA OKAN (NOVO) ---
+                        _buildMenuCard(
+                          icon: Icons.sports_martial_arts,
+                          color: Colors.deepOrangeAccent,
+                          title: "Arena Okan ⚔️",
+                          subtitle: "Busque e desafie amigos!",
+                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ArenaPage())),
+                        ),
+                      ],
                     );
                   }
                 }
@@ -332,7 +341,7 @@ class _HomePageState extends State<HomePage> {
               onTap: () => mostrarFormularioFeedbackBeta(context),
             ),
             
-            const SizedBox(height: 40), // Espaço no fim da tela
+            const SizedBox(height: 40), 
           ],
         ),
       ),
@@ -374,7 +383,7 @@ class _HomePageState extends State<HomePage> {
 }
 
 // =========================================================================
-// LÓGICA DO FORMULÁRIO DE FEEDBACK BETA (Pode remover quando lançar o app)
+// LÓGICA DO FORMULÁRIO DE FEEDBACK BETA
 // =========================================================================
 void mostrarFormularioFeedbackBeta(BuildContext context) {
   final user = FirebaseAuth.instance.currentUser;
@@ -383,7 +392,7 @@ void mostrarFormularioFeedbackBeta(BuildContext context) {
   final TextEditingController confusoCtrl = TextEditingController();
   final TextEditingController bugCtrl = TextEditingController();
   final TextEditingController gostouCtrl = TextEditingController();
-  double notaGeral = 5.0; // Nota inicial
+  double notaGeral = 5.0; 
   bool enviando = false;
 
   showModalBottomSheet(
