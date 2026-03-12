@@ -124,8 +124,18 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
             Text(widget.studentName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal, color: Colors.white70)),
           ],
         ),
-        // --- NOVO BOTÃO DE AVISAR ALUNO ---
         actions: [
+          // --- NOVO BOTÃO DE SALVAR TEMPLATE ---
+          if (_souPersonal)
+            IconButton(
+              icon: const Icon(Icons.save_outlined, color: AppColors.secondary),
+              tooltip: "Salvar dia como Template",
+              onPressed: () {
+                _salvarComoTemplateDialog(_diasDaSemana[_tabController.index]);
+              },
+            ),
+
+          // --- BOTÃO DE AVISAR ALUNO ---
           if (_souPersonal)
             IconButton(
               icon: const Icon(Icons.send_to_mobile, color: AppColors.primary),
@@ -177,8 +187,9 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
       floatingActionButton: _souPersonal
           ? FloatingActionButton(
               backgroundColor: AppColors.primary, 
-              onPressed: _adicionarExercicioDialog,
-              tooltip: "Adicionar Exercício",
+              // 👇 AGORA CHAMA O MENU DE OPÇÕES DA BIBLIOTECA
+              onPressed: _mostrarOpcoesAdicionar,
+              tooltip: "Opções",
               child: const Icon(Icons.add, color: Colors.black), 
             )
           : FloatingActionButton.extended(
@@ -738,5 +749,288 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
       }
     });
     await _salvarListaDoDia(diaKey);
+  }
+
+  // ==========================================================
+  // LÓGICA DE TEMPLATES E BIBLIOTECA
+  // ==========================================================
+
+  // 1. Menu que abre ao clicar no "+" (AGORA COM 3 OPÇÕES)
+  void _mostrarOpcoesAdicionar() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.edit, color: Colors.white70),
+                title: const Text("Criar Manualmente", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                subtitle: const Text("Digitar um exercício do zero", style: TextStyle(color: Colors.white54, fontSize: 12)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _adicionarExercicioDialog(); 
+                },
+              ),
+              const Divider(color: Colors.white10),
+              ListTile(
+                leading: const Icon(Icons.fitness_center, color: AppColors.primary),
+                title: const Text("Importar da Biblioteca", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                subtitle: const Text("Escolher um exercício do catálogo global", style: TextStyle(color: Colors.white54, fontSize: 12)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _importarExercicioDaBibliotecaDialog(_diasDaSemana[_tabController.index]);
+                },
+              ),
+              const Divider(color: Colors.white10),
+              ListTile(
+                leading: const Icon(Icons.library_books, color: AppColors.secondary),
+                title: const Text("Importar Template de Treino", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                subtitle: const Text("Copiar uma lista de exercícios pronta", style: TextStyle(color: Colors.white54, fontSize: 12)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _importarTemplateDialog(_diasDaSemana[_tabController.index]);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // --- NOVAS FUNÇÕES: PUXAR EXERCÍCIO DA BIBLIOTECA ---
+
+  // Abre a lista de exercícios cadastrados na coleção 'exercises'
+  void _importarExercicioDaBibliotecaDialog(String diaKey) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.7,
+        builder: (context, scrollController) => Column(
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(20.0),
+              child: Text("Catálogo de Exercícios", style: TextStyle(color: AppColors.primary, fontSize: 18, fontWeight: FontWeight.bold)),
+            ),
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance.collection('exercises').orderBy('nome').snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+                  
+                  final docs = snapshot.data?.docs ?? [];
+                  if (docs.isEmpty) return const Center(child: Text("Nenhum exercício na biblioteca.", style: TextStyle(color: Colors.white54)));
+
+                  return ListView.builder(
+                    controller: scrollController,
+                    itemCount: docs.length,
+                    itemBuilder: (context, index) {
+                      final data = docs[index].data() as Map<String, dynamic>;
+                      return ListTile(
+                        leading: const CircleAvatar(backgroundColor: Colors.black26, child: Icon(Icons.fitness_center, color: AppColors.primary, size: 20)),
+                        title: Text(data['nome'] ?? 'Sem nome', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        subtitle: Text(data['grupo'] ?? '', style: const TextStyle(color: Colors.white54)),
+                        trailing: const Icon(Icons.add_circle_outline, color: AppColors.primary),
+                        onTap: () {
+                          Navigator.pop(context);
+                          _configurarExercicioImportado(diaKey, data);
+                        },
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Depois de escolher o exercício, o Personal apenas diz as Séries e Repetições
+  void _configurarExercicioImportado(String diaKey, Map<String, dynamic> dadosExercicio) {
+    final seriesCtrl = TextEditingController(text: '3');
+    final repsCtrl = TextEditingController(text: '12');
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Text("Configurar: ${dadosExercicio['nome']}", style: const TextStyle(color: Colors.white, fontSize: 18)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Expanded(child: _buildDialogInput(seriesCtrl, "Séries", isNumber: true)),
+                const SizedBox(width: 10),
+                Expanded(child: _buildDialogInput(repsCtrl, "Repetições", isNumber: true)),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar", style: TextStyle(color: Colors.grey))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            onPressed: () async {
+              // Cria o exercício puxando o NOME e o VÍDEO da base de dados
+              final novo = WorkoutExercise(
+                id: DateTime.now().millisecondsSinceEpoch.toString(),
+                nome: dadosExercicio['nome'],
+                series: seriesCtrl.text,
+                repeticoes: repsCtrl.text,
+                videoUrl: dadosExercicio['videoUrl'], // Puxa o link automaticamente!
+              );
+              
+              List<WorkoutExercise> lista = _cacheExercicios[diaKey] ?? [];
+              lista.add(novo);
+              _cacheExercicios[diaKey] = lista;
+              
+              await _salvarListaDoDia(diaKey);
+              if (mounted) Navigator.pop(context);
+            },
+            child: const Text("Adicionar à Ficha", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          )
+        ],
+      ),
+    );
+  }
+
+  // 2. Salva a lista atual na coleção 'workout_templates'
+  void _salvarComoTemplateDialog(String diaKey) {
+    final exercicios = _cacheExercicios[diaKey] ?? [];
+    if (exercicios.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Adicione exercícios primeiro!"), backgroundColor: AppColors.error));
+      return;
+    }
+
+    final nomeCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text("Salvar na Biblioteca", style: TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: nomeCtrl,
+          style: const TextStyle(color: Colors.white),
+          textCapitalization: TextCapitalization.sentences,
+          decoration: InputDecoration(
+            hintText: "Nome (ex: Ficha A - Hipertrofia)",
+            hintStyle: const TextStyle(color: Colors.white30),
+            filled: true,
+            fillColor: Colors.black26,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar", style: TextStyle(color: Colors.grey))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.secondary),
+            onPressed: () async {
+              if (nomeCtrl.text.isNotEmpty) {
+                await FirebaseFirestore.instance.collection('workout_templates').add({
+                  'personalId': FirebaseAuth.instance.currentUser!.uid,
+                  'nome': nomeCtrl.text.trim(),
+                  'exercicios': exercicios.map((e) => e.toMap()).toList(),
+                  'timestamp': FieldValue.serverTimestamp(),
+                });
+                if (mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Template salvo na biblioteca!", style: TextStyle(color: Colors.black)), backgroundColor: AppColors.success));
+                }
+              }
+            },
+            child: const Text("Salvar", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          )
+        ],
+      ),
+    );
+  }
+
+  // 3. Lê a biblioteca e importa os exercícios
+  void _importarTemplateDialog(String diaKey) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.6,
+        builder: (context, scrollController) => Column(
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(20.0),
+              child: Text("Minha Biblioteca", style: TextStyle(color: AppColors.secondary, fontSize: 18, fontWeight: FontWeight.bold)),
+            ),
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('workout_templates')
+                    .where('personalId', isEqualTo: FirebaseAuth.instance.currentUser!.uid)
+                    .orderBy('timestamp', descending: true)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: AppColors.secondary));
+                  final docs = snapshot.data?.docs ?? [];
+                  
+                  if (docs.isEmpty) return const Center(child: Text("Você ainda não salvou nenhum template.", style: TextStyle(color: Colors.white54)));
+
+                  return ListView.builder(
+                    controller: scrollController,
+                    itemCount: docs.length,
+                    itemBuilder: (context, index) {
+                      final data = docs[index].data() as Map<String, dynamic>;
+                      final List listaEx = data['exercicios'] ?? [];
+                      
+                      return ListTile(
+                        leading: const CircleAvatar(backgroundColor: Colors.black26, child: Icon(Icons.fitness_center, color: AppColors.secondary, size: 20)),
+                        title: Text(data['nome'] ?? 'Sem nome', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        subtitle: Text("${listaEx.length} exercícios", style: const TextStyle(color: Colors.white54)),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                          tooltip: "Apagar Template",
+                          onPressed: () => FirebaseFirestore.instance.collection('workout_templates').doc(docs[index].id).delete(),
+                        ),
+                        onTap: () async {
+                          // Importa gerando IDs novos para evitar conflitos no banco
+                          List<WorkoutExercise> novosExercicios = listaEx.map((e) {
+                            final ex = WorkoutExercise.fromMap(e as Map<String, dynamic>);
+                            ex.id = DateTime.now().microsecondsSinceEpoch.toString() + ex.nome.hashCode.toString();
+                            ex.concluido = false; // Garante que o aluno recebe o treino desmarcado
+                            return ex;
+                          }).toList();
+
+                          List<WorkoutExercise> atuais = _cacheExercicios[diaKey] ?? [];
+                          atuais.addAll(novosExercicios);
+                          _cacheExercicios[diaKey] = atuais;
+                          
+                          await _salvarListaDoDia(diaKey);
+                          
+                          if (mounted) {
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Template importado com sucesso!", style: TextStyle(color: Colors.black)), backgroundColor: AppColors.success));
+                          }
+                        },
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
