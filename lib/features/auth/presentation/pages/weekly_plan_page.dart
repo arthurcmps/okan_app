@@ -5,7 +5,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../data/models/workout_plans_model.dart'; 
 import '../../../../core/services/time_service.dart';
 
-import 'video_player_page.dart'; // <--- IMPORT DA TELA DE VÍDEO AQUI
+import 'video_player_page.dart';
 
 class WeeklyPlanPage extends StatefulWidget {
   final String studentId; 
@@ -54,11 +54,12 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     super.dispose();
   }
 
+  // --- NOTIFICAR PERSONAL ---
   Future<void> _notificarPersonal(String titulo, String corpo) async {
     try {
       final docAluno = await FirebaseFirestore.instance.collection('users').doc(widget.studentId).get();
       final personalId = docAluno.data()?['personalId'];
-      
+        
       if (personalId == null) return;
 
       await FirebaseFirestore.instance
@@ -75,6 +76,33 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
       });
     } catch (e) {
       debugPrint("Erro ao notificar: $e");
+    }
+  }
+
+  // --- NOVA FUNÇÃO: NOTIFICAR ALUNO ---
+  Future<void> _notificarAluno(String titulo, String corpo) async {
+    try {
+      final meuDoc = await FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser!.uid).get();
+      final meuNome = meuDoc.data()?['name'] ?? meuDoc.data()?['nome'] ?? 'O seu Personal';
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.studentId)
+          .collection('notifications')
+          .add({
+        'type': 'workout_update',
+        'title': titulo,
+        'body': corpo,
+        'actionId': FirebaseAuth.instance.currentUser!.uid,
+        'isRead': false,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("O aluno foi notificado do novo treino!"), backgroundColor: AppColors.success));
+      }
+    } catch (e) {
+      debugPrint("Erro ao notificar aluno: $e");
     }
   }
 
@@ -96,6 +124,17 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
             Text(widget.studentName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal, color: Colors.white70)),
           ],
         ),
+        // --- NOVO BOTÃO DE AVISAR ALUNO ---
+        actions: [
+          if (_souPersonal)
+            IconButton(
+              icon: const Icon(Icons.send_to_mobile, color: AppColors.primary),
+              tooltip: "Avisar Aluno das Mudanças",
+              onPressed: () {
+                _notificarAluno("Treino Atualizado! 🏋️‍♂️", "O seu professor acabou de atualizar a sua ficha de treinos. Vá dar uma olhada!");
+              },
+            ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           isScrollable: true,
@@ -179,12 +218,10 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
             itemCount: exercicios.length + 2, 
             itemBuilder: (context, index) {
               
-              // 1. Área de Feedback
               if (index == exercicios.length) {
                 return _buildFeedbackArea(diaKey, feedbackAtual);
               }
 
-              // 2. Botão de Finalizar Treino
               if (index == exercicios.length + 1) {
                 if (_souPersonal) {
                   return const SizedBox(height: 80); 
@@ -210,7 +247,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                 );
               }
 
-              // 3. Renderização dos Exercícios Normais
               final ex = exercicios[index];
               return Card(
                 elevation: 4,
@@ -281,7 +317,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                           ),
                         ),
                         
-                        // --- NOVO: BOTÃO DE VÍDEO SE HOUVER LINK ---
                         if (ex.videoUrl != null && ex.videoUrl!.isNotEmpty)
                           InkWell(
                             onTap: () {
@@ -357,7 +392,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     );
   }
 
-  // --- ÁREA DE FEEDBACK ---
   Widget _buildFeedbackArea(String diaKey, String feedbackAtual) {
     if (_souPersonal) {
       if (feedbackAtual.isEmpty) return const SizedBox.shrink(); 
@@ -579,7 +613,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     final nomeCtrl = TextEditingController(text: ex.nome);
     final seriesCtrl = TextEditingController(text: ex.series);
     final repsCtrl = TextEditingController(text: ex.repeticoes);
-    final videoCtrl = TextEditingController(text: ex.videoUrl ?? ''); // CAMPO DE VÍDEO
+    final videoCtrl = TextEditingController(text: ex.videoUrl ?? ''); 
     
     showDialog(
       context: context,
@@ -600,7 +634,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                 ],
               ),
               const SizedBox(height: 10),
-              _buildDialogInput(videoCtrl, "Link do YouTube (Opcional)"), // INPUT DE VÍDEO
+              _buildDialogInput(videoCtrl, "Link do YouTube (Opcional)"), 
             ],
           ),
         ),
@@ -613,7 +647,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                 ex.nome = nomeCtrl.text;
                 ex.series = seriesCtrl.text;
                 ex.repeticoes = repsCtrl.text;
-                ex.videoUrl = videoCtrl.text.trim(); // SALVA O VÍDEO
+                ex.videoUrl = videoCtrl.text.trim(); 
                 ex.solicitarAlteracao = false; 
               });
               _salvarListaDoDia(diaKey);
@@ -630,7 +664,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     final nomeCtrl = TextEditingController();
     final seriesCtrl = TextEditingController(text: '3');
     final repsCtrl = TextEditingController(text: '12');
-    final videoCtrl = TextEditingController(); // CAMPO DE VÍDEO
+    final videoCtrl = TextEditingController(); 
     
     showDialog(
       context: context,
@@ -650,7 +684,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                 ],
               ),
               const SizedBox(height: 10),
-              _buildDialogInput(videoCtrl, "Link do YouTube (Opcional)"), // INPUT DE VÍDEO
+              _buildDialogInput(videoCtrl, "Link do YouTube (Opcional)"), 
             ],
           ),
         ),
@@ -665,7 +699,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                   nome: nomeCtrl.text,
                   series: seriesCtrl.text,
                   repeticoes: repsCtrl.text,
-                  videoUrl: videoCtrl.text.trim().isEmpty ? null : videoCtrl.text.trim(), // SALVA O VÍDEO
+                  videoUrl: videoCtrl.text.trim().isEmpty ? null : videoCtrl.text.trim(), 
                 );
                 
                 final diaAtual = _diasDaSemana[_tabController.index];

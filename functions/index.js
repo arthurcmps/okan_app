@@ -1,91 +1,58 @@
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
-const { setGlobalOptions } = require("firebase-functions/v2");
 const admin = require("firebase-admin");
 
 admin.initializeApp();
 
-// Forçamos a região para o Brasil (mais rápido e evita conflitos de permissão)
-setGlobalOptions({ region: "southamerica-east1" }); 
+// Esta função fica "olhando" a coleção de notificações do seu app 24h por dia
+exports.enviarPushNotificationGenerica = onDocumentCreated(
+    "users/{userId}/notifications/{notificationId}",
+    async (event) => {
+        
+        // Se o documento não existir, ignora
+        if (!event.data) return;
 
-exports.sendPushNotification = onDocumentCreated("users/{userId}/notifications/{notificationId}", async (event) => {
-    const snapshot = event.data;
-    
-    // Se não houver dados (documento deletado rápido demais, etc), paramos
-    if (!snapshot) return;
+        const novaNotificacao = event.data.data();
+        const userId = event.params.userId;
 
-    const notificationData = snapshot.data();
-    const userId = event.params.userId;
+        // 1. Pega os dados do usuário para encontrar o "Token" (O CPF do aparelho)
+        const userDoc = await admin.firestore().collection("users").doc(userId).get();
+        if (!userDoc.exists) return;
 
-    console.log("Nova notificação detectada para o usuário:", userId);
+        const userData = userDoc.data();
+        const tokens = userData.fcmTokens; // A lista de tokens que o Flutter salvou
 
-    // 1. Buscar os tokens do usuário
-    const userDoc = await admin.firestore().collection("users").doc(userId).get();
-    
-    if (!userDoc.exists || !userDoc.data().fcmTokens || userDoc.data().fcmTokens.length === 0) {
-      console.log("Nenhum token encontrado para o usuário:", userId);
-      return;
+        // Se o usuário não tem token (nunca abriu o app), cancela o envio
+        if (!tokens || tokens.length === 0) {
+            console.log("Usuário sem token FCM:", userId);
+            return;
+        }
+
+        // 2. Monta a mensagem Push que vai fazer o celular vibrar
+        const payload = {
+            notification: {
+                title: novaNotificacao.title || "Nova Notificação",
+                body: novaNotificacao.body || "Você tem uma nova mensagem no Okan.",
+            },
+            data: {
+                // IMPORTANTE: Os campos de 'data' precisam ser String
+                type: String(novaNotificacao.type || "geral"),
+                actionId: String(novaNotificacao.actionId || ""),
+            },
+            android: {
+                notification: {
+                    channelId: "high_importance_channel", // O canal que força o som e vibração!
+                    sound: "default"
+                }
+            },
+            tokens: tokens // Envia para todos os aparelhos do usuário de uma vez
+        };
+
+        // 3. Dispara a notificação via Firebase Cloud Messaging
+        try {
+            const response = await admin.messaging().sendEachForMulticast(payload);
+            console.log("Notificações enviadas com sucesso:", response.successCount);
+        } catch (error) {
+            console.error("Erro ao enviar Push:", error);
+        }
     }
-
-    const tokens = userDoc.data().fcmTokens;
-
-    // 2. Montar a mensagem no formato MulticastMessage com suporte a SOM e VIBRAÇÃO
-    const message = {
-      notification: {
-        title: notificationData.title || "Nova Notificação",
-        body: notificationData.body || "Você tem uma nova mensagem no Okan.",
-      },
-      // --- CONFIGURAÇÃO PARA ANDROID ---
-      android: {
-        notification: {
-          sound: "default", // Força o som padrão
-          clickAction: "FLUTTER_NOTIFICATION_CLICK"
-        }
-      },
-      // --- CONFIGURAÇÃO PARA iOS (APPLE) ---
-      apns: {
-        payload: {
-          aps: {
-            sound: "default", // Força o som padrão
-            badge: 1 // Atualiza a bolinha vermelha no ícone
-          }
-        }
-      },
-      // --- DADOS EXTRAS PARA NAVEGAÇÃO NO FLUTTER ---
-      data: {
-        type: String(notificationData.type || "general"), 
-        actionId: String(notificationData.actionId || ""),
-        click_action: "FLUTTER_NOTIFICATION_CLICK"
-      },
-      tokens: tokens, // Array de tokens
-    };
-
-    try {
-      // 3. Enviar para todos os aparelhos do usuário
-      const response = await admin.messaging().sendEachForMulticast(message);
-      console.log(`${response.successCount} mensagens enviadas com sucesso.`);
-
-      // 4. Limpeza de tokens antigos/inválidos
-      const tokensToRemove = [];
-      response.responses.forEach((res, index) => {
-        if (!res.success) {
-          const error = res.error;
-          console.error(`Erro ao enviar push para o token ${index}:`, error);
-          
-          if (error.code === 'messaging/invalid-registration-token' ||
-              error.code === 'messaging/registration-token-not-registered') {
-            tokensToRemove.push(tokens[index]);
-          }
-        }
-      });
-      
-      // Se achou token velho, deleta do banco para não dar erro na próxima
-      if (tokensToRemove.length > 0) {
-         await admin.firestore().collection("users").doc(userId).update({
-            fcmTokens: admin.firestore.FieldValue.arrayRemove(...tokensToRemove)
-         });
-         console.log("Tokens inválidos limpos do banco com sucesso.");
-      }
-    } catch (error) {
-      console.error("Erro fatal ao tentar enviar a mensagem de Push:", error);
-    }
-});
+);

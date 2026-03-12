@@ -74,8 +74,7 @@ class _ChatPageState extends State<ChatPage> {
       'lastTime': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
 
-    // 3. ENVIA NOTIFICAÇÃO PARA O OUTRO USUÁRIO (Novo!)
-    // Só cria notificação se não for você mesmo (caso de testes)
+    // 3. ENVIA NOTIFICAÇÃO PARA O OUTRO USUÁRIO
     if (_currentUserId != widget.otherUserId) {
       await FirebaseFirestore.instance
           .collection('users')
@@ -172,7 +171,6 @@ class _ChatPageState extends State<ChatPage> {
                         margin: const EdgeInsets.symmetric(vertical: 4),
                         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                         decoration: BoxDecoration(
-                          // Minha Msg: Neon | Outra Msg: Card Escuro
                           color: isMe ? AppColors.secondary : AppColors.surface,
                           borderRadius: BorderRadius.only(
                             topLeft: const Radius.circular(16),
@@ -184,7 +182,6 @@ class _ChatPageState extends State<ChatPage> {
                         child: Text(
                           data['text'],
                           style: TextStyle(
-                            // Minha Msg: Texto Preto | Outra Msg: Texto Branco
                             color: isMe ? Colors.black : Colors.white,
                             fontSize: 16,
                             fontWeight: isMe ? FontWeight.w600 : FontWeight.normal,
@@ -210,13 +207,13 @@ class _ChatPageState extends State<ChatPage> {
                 Expanded(
                   child: TextField(
                     controller: _messageController,
-                    style: const TextStyle(color: Colors.white), // TEXTO BRANCO
+                    style: const TextStyle(color: Colors.white), 
                     textCapitalization: TextCapitalization.sentences,
                     decoration: InputDecoration(
                       hintText: "Digite sua mensagem...",
-                      hintStyle: const TextStyle(color: Colors.white54), // Hint visível
+                      hintStyle: const TextStyle(color: Colors.white54), 
                       filled: true,
-                      fillColor: Colors.black26, // Fundo do input mais escuro
+                      fillColor: Colors.black26, 
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                     ),
@@ -225,10 +222,10 @@ class _ChatPageState extends State<ChatPage> {
                 ),
                 const SizedBox(width: 8),
                 CircleAvatar(
-                  backgroundColor: AppColors.primary, // Botão Neon (Ação)
+                  backgroundColor: AppColors.primary, 
                   radius: 24,
                   child: IconButton(
-                    icon: const Icon(Icons.send, color: Colors.black, size: 20), // Ícone preto
+                    icon: const Icon(Icons.send, color: Colors.black, size: 20), 
                     onPressed: _enviarMensagem,
                   ),
                 ),
