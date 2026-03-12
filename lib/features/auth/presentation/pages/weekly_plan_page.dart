@@ -29,10 +29,12 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
   final Map<String, List<WorkoutExercise>> _cacheExercicios = {};
   final Map<String, TextEditingController> _feedbackControllers = {};
 
-  bool get _souPersonal {
-    final meuId = FirebaseAuth.instance.currentUser?.uid;
-    return meuId != widget.studentId;
-  }
+  // --- NOVAS VARIÁVEIS DE ESTADO ---
+  bool _isVerificandoPerfil = true;
+  bool _souProfessor = false;
+  bool _modoEdicao = false;
+
+  bool get _isMeuProprioTreino => FirebaseAuth.instance.currentUser?.uid == widget.studentId;
 
   @override
   void initState() {
@@ -42,6 +44,51 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     
     for (var dia in _diasDaSemana) {
       _feedbackControllers[dia] = TextEditingController();
+    }
+
+    _carregarPerfil();
+  }
+
+  // Descobre se o utilizador atual é um Personal Trainer e ajusta a tela
+  Future<void> _carregarPerfil() async {
+    if (!_isMeuProprioTreino) {
+      // Se não é o meu treino, sou o personal a editar o aluno
+      if (mounted) {
+        setState(() {
+          _souProfessor = true;
+          _modoEdicao = true; // Entra direto no modo de edição
+          _isVerificandoPerfil = false;
+        });
+      }
+      return;
+    }
+
+    // Se é o meu próprio treino, pergunto ao banco de dados se eu sou um professor
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(widget.studentId).get();
+      final data = doc.data();
+      
+      bool isProf = false;
+      if (data != null) {
+        // Verifica as formas comuns de salvar o papel do usuário no banco
+        final role = data['role']?.toString().toLowerCase();
+        final tipo = data['tipo']?.toString().toLowerCase();
+        final isPersonal = data['isPersonal'] == true;
+        
+        if (role == 'personal' || role == 'professor' || tipo == 'personal' || isPersonal) {
+          isProf = true;
+        }
+      }
+      
+      if (mounted) {
+        setState(() {
+          _souProfessor = isProf;
+          _modoEdicao = false; // Começa no MODO TREINO por padrão
+          _isVerificandoPerfil = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isVerificandoPerfil = false);
     }
   }
 
@@ -56,6 +103,9 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
 
   // --- NOTIFICAR PERSONAL ---
   Future<void> _notificarPersonal(String titulo, String corpo) async {
+    // Se o professor estiver a fazer o próprio treino, não precisa de enviar notificação a si mesmo
+    if (_isMeuProprioTreino && _souProfessor) return;
+
     try {
       final docAluno = await FirebaseFirestore.instance.collection('users').doc(widget.studentId).get();
       final personalId = docAluno.data()?['personalId'];
@@ -82,9 +132,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
   // --- NOVA FUNÇÃO: NOTIFICAR ALUNO ---
   Future<void> _notificarAluno(String titulo, String corpo) async {
     try {
-      final meuDoc = await FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser!.uid).get();
-      final meuNome = meuDoc.data()?['name'] ?? meuDoc.data()?['nome'] ?? 'O seu Personal';
-
       await FirebaseFirestore.instance
           .collection('users')
           .doc(widget.studentId)
@@ -108,6 +155,13 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
 
   @override
   Widget build(BuildContext context) {
+    if (_isVerificandoPerfil) {
+      return const Scaffold(
+        backgroundColor: AppColors.background, 
+        body: Center(child: CircularProgressIndicator(color: AppColors.secondary))
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background, 
       appBar: AppBar(
@@ -118,15 +172,27 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              _souPersonal ? "Editar Treino" : "Treino da Semana",
+              _modoEdicao ? "Editar Treino" : "Treino da Semana",
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             Text(widget.studentName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal, color: Colors.white70)),
           ],
         ),
         actions: [
-          // --- NOVO BOTÃO DE SALVAR TEMPLATE ---
-          if (_souPersonal)
+          // --- BOTÃO MÁGICO DE TROCA DE MODO (Só para o professor na própria ficha) ---
+          if (_souProfessor && _isMeuProprioTreino)
+            IconButton(
+              icon: Icon(_modoEdicao ? Icons.visibility : Icons.edit, color: AppColors.primary),
+              tooltip: _modoEdicao ? "Mudar para Modo Treino" : "Mudar para Modo Edição",
+              onPressed: () {
+                setState(() {
+                  _modoEdicao = !_modoEdicao;
+                });
+              },
+            ),
+
+          // --- BOTÃO DE SALVAR TEMPLATE ---
+          if (_modoEdicao)
             IconButton(
               icon: const Icon(Icons.save_outlined, color: AppColors.secondary),
               tooltip: "Salvar dia como Template",
@@ -135,8 +201,8 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
               },
             ),
 
-          // --- BOTÃO DE AVISAR ALUNO ---
-          if (_souPersonal)
+          // --- BOTÃO DE AVISAR ALUNO (Não avisa se for o próprio treino) ---
+          if (_modoEdicao && !_isMeuProprioTreino)
             IconButton(
               icon: const Icon(Icons.send_to_mobile, color: AppColors.primary),
               tooltip: "Avisar Aluno das Mudanças",
@@ -184,10 +250,9 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
         },
       ),
       
-      floatingActionButton: _souPersonal
+      floatingActionButton: _modoEdicao
           ? FloatingActionButton(
               backgroundColor: AppColors.primary, 
-              // 👇 AGORA CHAMA O MENU DE OPÇÕES DA BIBLIOTECA
               onPressed: _mostrarOpcoesAdicionar,
               tooltip: "Opções",
               child: const Icon(Icons.add, color: Colors.black), 
@@ -213,7 +278,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
             const Icon(Icons.fitness_center, size: 60, color: Colors.white10),
             const SizedBox(height: 10),
             Text(
-              _souPersonal ? "Toque no + para adicionar" : "Descanso.", 
+              _modoEdicao ? "Toque no + para adicionar" : "Descanso.", 
               style: const TextStyle(color: Colors.white38)
             ),
           ],
@@ -234,7 +299,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
               }
 
               if (index == exercicios.length + 1) {
-                if (_souPersonal) {
+                if (_modoEdicao) {
                   return const SizedBox(height: 80); 
                 }
                 
@@ -363,7 +428,8 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (!_souPersonal)
+                      // Se estou no modo de treino, e NÃO É o meu próprio treino, mostro solicitar alteração
+                      if (!_modoEdicao && !_isMeuProprioTreino)
                         IconButton(
                           icon: Icon(
                             ex.solicitarAlteracao ? Icons.warning : Icons.change_circle_outlined,
@@ -373,7 +439,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                           onPressed: () => _solicitarAlteracao(diaKey, ex),
                         ),
 
-                      if (_souPersonal) ...[
+                      if (_modoEdicao) ...[
                         if (ex.solicitarAlteracao)
                            IconButton(
                             icon: const Icon(Icons.warning, color: Colors.redAccent),
@@ -404,7 +470,8 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
   }
 
   Widget _buildFeedbackArea(String diaKey, String feedbackAtual) {
-    if (_souPersonal) {
+    // Se estou a editar a ficha (ver feedback do aluno)
+    if (_modoEdicao) {
       if (feedbackAtual.isEmpty) return const SizedBox.shrink(); 
       
       return Container(
@@ -432,6 +499,12 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
       );
     }
 
+    // Se eu for o professor a treinar a MINHA própria ficha, não preciso de deixar feedback para mim mesmo
+    if (_isMeuProprioTreino && _souProfessor) {
+      return const SizedBox.shrink();
+    }
+
+    // Campo para o ALUNO enviar feedback
     return Container(
       margin: const EdgeInsets.only(top: 20, bottom: 20),
       child: Column(
@@ -755,7 +828,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
   // LÓGICA DE TEMPLATES E BIBLIOTECA
   // ==========================================================
 
-  // 1. Menu que abre ao clicar no "+" (AGORA COM 3 OPÇÕES)
   void _mostrarOpcoesAdicionar() {
     showModalBottomSheet(
       context: context,
@@ -803,9 +875,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     );
   }
 
-  // --- NOVAS FUNÇÕES: PUXAR EXERCÍCIO DA BIBLIOTECA ---
-
-  // Abre a lista de exercícios cadastrados na coleção 'exercises'
   void _importarExercicioDaBibliotecaDialog(String diaKey) {
     showModalBottomSheet(
       context: context,
@@ -856,7 +925,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     );
   }
 
-  // Depois de escolher o exercício, o Personal apenas diz as Séries e Repetições
   void _configurarExercicioImportado(String diaKey, Map<String, dynamic> dadosExercicio) {
     final seriesCtrl = TextEditingController(text: '3');
     final repsCtrl = TextEditingController(text: '12');
@@ -883,13 +951,12 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
             onPressed: () async {
-              // Cria o exercício puxando o NOME e o VÍDEO da base de dados
               final novo = WorkoutExercise(
                 id: DateTime.now().millisecondsSinceEpoch.toString(),
                 nome: dadosExercicio['nome'],
                 series: seriesCtrl.text,
                 repeticoes: repsCtrl.text,
-                videoUrl: dadosExercicio['videoUrl'], // Puxa o link automaticamente!
+                videoUrl: dadosExercicio['videoUrl'], 
               );
               
               List<WorkoutExercise> lista = _cacheExercicios[diaKey] ?? [];
@@ -906,7 +973,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     );
   }
 
-  // 2. Salva a lista atual na coleção 'workout_templates'
   void _salvarComoTemplateDialog(String diaKey) {
     final exercicios = _cacheExercicios[diaKey] ?? [];
     if (exercicios.isEmpty) {
@@ -957,7 +1023,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     );
   }
 
-  // 3. Lê a biblioteca e importa os exercícios
   void _importarTemplateDialog(String diaKey) {
     showModalBottomSheet(
       context: context,
@@ -1003,11 +1068,10 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                           onPressed: () => FirebaseFirestore.instance.collection('workout_templates').doc(docs[index].id).delete(),
                         ),
                         onTap: () async {
-                          // Importa gerando IDs novos para evitar conflitos no banco
                           List<WorkoutExercise> novosExercicios = listaEx.map((e) {
                             final ex = WorkoutExercise.fromMap(e as Map<String, dynamic>);
                             ex.id = DateTime.now().microsecondsSinceEpoch.toString() + ex.nome.hashCode.toString();
-                            ex.concluido = false; // Garante que o aluno recebe o treino desmarcado
+                            ex.concluido = false; 
                             return ex;
                           }).toList();
 
