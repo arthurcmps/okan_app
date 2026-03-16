@@ -4,14 +4,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter/services.dart'; 
 import 'package:provider/provider.dart';
-
-// --- NOVOS IMPORTS PARA PUSH NOTIFICATION ---
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-
 import 'firebase_options.dart';
 import 'features/auth/presentation/pages/login_page.dart';
 import 'features/auth/presentation/pages/home_page.dart';
+import 'features/auth/presentation/pages/onboarding_page.dart';
 import 'core/services/time_service.dart';
 import 'features/auth/presentation/controllers/tarefa_controller.dart';
 import 'core/theme/app_colors.dart'; 
@@ -21,20 +20,17 @@ import 'core/services/push_notification_service.dart';
 // CONFIGURAÇÃO DE NOTIFICAÇÕES (Background e Android Channel)
 // =======================================================
 
-// 1. Função que processa mensagens quando o app está FECHADO/BACKGROUND
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // Inicializa o Firebase isoladamente para o background handler
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   debugPrint("A processar mensagem em background: ${message.messageId}");
 }
 
-// 2. Canal do Android que FORÇA o som e a vibração
 const AndroidNotificationChannel channel = AndroidNotificationChannel(
-  'high_importance_channel', // id
-  'Notificações Importantes', // título
-  description: 'Este canal é usado para alertas de duelos e mensagens da arena.', // descrição
-  importance: Importance.max, // Importância máxima = Vibra e aparece no topo
+  'high_importance_channel', 
+  'Notificações Importantes', 
+  description: 'Este canal é usado para alertas de treinos e mensagens.', 
+  importance: Importance.max, 
   playSound: true,
 );
 
@@ -53,16 +49,17 @@ void main() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
     
+    // Verificação do Onboarding (Shared Preferences)
+    final prefs = await SharedPreferences.getInstance();
+    final bool showOnboarding = prefs.getBool('showOnboarding') ?? true;
+
     // --- SETUP DO MOTOR DE NOTIFICAÇÕES ---
-    // Regista o handler de background
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-    // Cria o canal no dispositivo (Apenas Android)
     await flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(channel);
 
-    // Inicializa o serviço, pede permissão e salva o token no Firestore
     final pushService = PushNotificationService();
     await pushService.initialize();
     pushService.setupInteractions();
@@ -77,7 +74,7 @@ void main() async {
             create: (_) => TarefaController()..iniciarEscuta(),
           ),
         ],
-        child: const OkanApp(),
+        child: OkanApp(showOnboarding: showOnboarding),
       ),
     );
 
@@ -194,7 +191,8 @@ final ThemeData sportTheme = ThemeData(
 
 // --- WIDGET RAIZ ---
 class OkanApp extends StatelessWidget {
-  const OkanApp({super.key});
+  final bool showOnboarding;
+  const OkanApp({super.key, required this.showOnboarding});
 
   @override
   Widget build(BuildContext context) {
@@ -202,7 +200,8 @@ class OkanApp extends StatelessWidget {
       title: 'Okan App',
       debugShowCheckedModeBanner: false,
       theme: sportTheme,
-      home: const AuthCheck(), 
+      // Passamos a informação para o AuthCheck
+      home: AuthCheck(showOnboarding: showOnboarding), 
       builder: (context, child) {
         return Scaffold(
           backgroundColor: Colors.transparent, 
@@ -221,12 +220,19 @@ class OkanApp extends StatelessWidget {
   }
 }
 
-// --- AUTH CHECK ---
+// --- AUTH CHECK COM LÓGICA DE ONBOARDING ---
 class AuthCheck extends StatelessWidget {
-  const AuthCheck({super.key});
+  final bool showOnboarding;
+  const AuthCheck({super.key, required this.showOnboarding});
 
   @override
   Widget build(BuildContext context) {
+    // 1. Se for a primeira vez, mostra Onboarding independente de estar logado ou não
+    if (showOnboarding) {
+      return const OnboardingPage();
+    }
+
+    // 2. Se não for a primeira vez, verifica o login
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
@@ -278,7 +284,7 @@ class _GlobalTimerBarState extends State<GlobalTimerBar> {
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(30),
-          border: Border.all(color: AppColors.primary.withOpacity(0.3)), // Borda Neon
+          border: Border.all(color: AppColors.primary.withOpacity(0.3)), 
           boxShadow: [
             BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 10, offset: const Offset(0, 5))
           ]
@@ -288,7 +294,7 @@ class _GlobalTimerBarState extends State<GlobalTimerBar> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.timer_outlined, color: AppColors.primary), // Ícone Neon
+              const Icon(Icons.timer_outlined, color: AppColors.primary), 
               const SizedBox(width: 12),
               Text(
                 TimerService.instance.formattedTime, 
@@ -301,7 +307,7 @@ class _GlobalTimerBarState extends State<GlobalTimerBar> {
               ),
               const Spacer(),
               IconButton(
-                icon: const Icon(Icons.add_circle_outline, color: AppColors.secondary), // Terracota no botão secundário
+                icon: const Icon(Icons.add_circle_outline, color: AppColors.secondary), 
                 onPressed: () => TimerService.instance.addTime(10)
               ),
               const SizedBox(width: 4),

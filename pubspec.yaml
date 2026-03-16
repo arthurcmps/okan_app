@@ -45,6 +45,7 @@ dependencies:
   uuid: ^4.4.0
   vibration: ^3.1.5
   flutter_local_notifications: ^21.0.0
+  shared_preferences: ^2.5.4
 
 dev_dependencies:
   flutter_test:
