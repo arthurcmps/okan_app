@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-
-// --- IMPORTS ---
 import '../../../../core/widgets/user_avatar.dart';
 import 'weekly_plan_page.dart'; 
 import 'tarefas_page.dart';     
@@ -11,8 +9,9 @@ import 'profile_page.dart';
 import 'students_page.dart';    
 import 'chat_page.dart';
 import 'notifications_page.dart'; 
-import 'arena_page.dart'; // <--- IMPORT DA ARENA ADICIONADO
+import 'arena_page.dart';
 import '../../../../core/theme/app_colors.dart';
+import 'discover_workouts_page.dart'; // IMPORT DA LOJA
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -32,6 +31,68 @@ class _HomePageState extends State<HomePage> {
 
   String _getNomeDiaSemana() {
     return DateFormat('EEEE', 'pt_BR').format(DateTime.now()); 
+  }
+
+  // --- O BANNER DA VITRINE PREMIUM ---
+  Widget _buildBannerDescobrirTreinos(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context, 
+          MaterialPageRoute(builder: (context) => const DiscoverWorkoutsPage())
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          // Gradiente chamativo usando as cores Cyber-Sankofa
+          gradient: LinearGradient(
+            colors: [AppColors.secondary, AppColors.primary.withOpacity(0.8)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withOpacity(0.2),
+              blurRadius: 15,
+              spreadRadius: -2,
+              offset: const Offset(0, 4),
+            )
+          ],
+        ),
+        child: Row(
+          children: [
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Descubra Novos Treinos", 
+                    style: TextStyle(color: Colors.black, fontSize: 18, fontWeight: FontWeight.bold)
+                  ),
+                  SizedBox(height: 6),
+                  Text(
+                    "Encontre fichas premium perfeitas para o seu perfil e nível.", 
+                    style: TextStyle(color: Colors.black87, fontSize: 13, fontWeight: FontWeight.w500)
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: const BoxDecoration(
+                color: Colors.black12,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.auto_awesome, color: Colors.black, size: 28),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -274,55 +335,71 @@ class _HomePageState extends State<HomePage> {
             
             const SizedBox(height: 16),
             
-            // CARDS ESPECÍFICOS (Personal ou Aluno)
+            // CARDS ESPECÍFICOS (Personal ou Aluno) E BANNER DA LOJA
             StreamBuilder<DocumentSnapshot>(
               stream: FirebaseFirestore.instance.collection('users').doc(user!.uid).snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.hasData && snapshot.data!.exists) {
                   final data = snapshot.data!.data() as Map<String, dynamic>;
                   final tipo = data['tipo'];
+                  final isPersonal = tipo == 'personal' || data['role'] == 'personal';
+                  final temPersonal = data['personalId'] != null && data['personalId'].toString().isNotEmpty;
+
+                  List<Widget> cardsSecao = [];
+
+                  // SE FOR ALUNO E NÃO TIVER PERSONAL, MOSTRA A LOJA!
+                  if (!isPersonal && !temPersonal) {
+                    cardsSecao.add(_buildBannerDescobrirTreinos(context));
+                    cardsSecao.add(const SizedBox(height: 16));
+                  }
                   
                   // Se for PERSONAL
-                  if (tipo == 'personal') {
-                    return _buildMenuCard(
-                      icon: Icons.people_outline,
-                      color: Colors.purpleAccent,
-                      title: "Meus Alunos",
-                      subtitle: "Gerenciar Atletas",
-                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const StudentsPage())),
+                  if (isPersonal) {
+                    cardsSecao.add(
+                      _buildMenuCard(
+                        icon: Icons.people_outline,
+                        color: Colors.purpleAccent,
+                        title: "Meus Alunos",
+                        subtitle: "Gerenciar Atletas",
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const StudentsPage())),
+                      )
                     );
                   }
 
                   // Se for ALUNO
-                  if (tipo == 'aluno') {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Card do Personal (só exibe se tiver personalId)
-                        if (data['personalId'] != null) ...[
-                          _buildMenuCard(
-                            icon: Icons.support_agent,
-                            color: Colors.blueAccent,
-                            title: "Meu Personal",
-                            subtitle: "Falar com ${data['personalName'] ?? 'Treinador'}",
-                            onTap: () {
-                              Navigator.push(context, MaterialPageRoute(builder: (context) => ChatPage(otherUserId: data['personalId'], otherUserName: data['personalName'] ?? 'Treinador')));
-                            },
-                          ),
-                          const SizedBox(height: 16),
-                        ],
-                        
-                        // --- ARENA OKAN (NOVO) ---
+                  if (!isPersonal) {
+                    // Card do Personal (só exibe se tiver personalId)
+                    if (temPersonal) {
+                      cardsSecao.add(
                         _buildMenuCard(
-                          icon: Icons.sports_martial_arts,
-                          color: Colors.deepOrangeAccent,
-                          title: "Arena Okan ⚔️",
-                          subtitle: "Busque e desafie amigos!",
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ArenaPage())),
-                        ),
-                      ],
+                          icon: Icons.support_agent,
+                          color: Colors.blueAccent,
+                          title: "Meu Personal",
+                          subtitle: "Falar com ${data['personalName'] ?? 'Treinador'}",
+                          onTap: () {
+                            Navigator.push(context, MaterialPageRoute(builder: (context) => ChatPage(otherUserId: data['personalId'], otherUserName: data['personalName'] ?? 'Treinador')));
+                          },
+                        )
+                      );
+                      cardsSecao.add(const SizedBox(height: 16));
+                    }
+                    
+                    // --- ARENA OKAN ---
+                    cardsSecao.add(
+                      _buildMenuCard(
+                        icon: Icons.sports_martial_arts,
+                        color: Colors.deepOrangeAccent,
+                        title: "Arena Okan ⚔️",
+                        subtitle: "Busque e desafie amigos!",
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ArenaPage())),
+                      )
                     );
                   }
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: cardsSecao,
+                  );
                 }
                 return const SizedBox.shrink();
               },
@@ -347,6 +424,8 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
+
+  // --- WIDGETS AUXILIARES ---
 
   Widget _buildMenuCard({required IconData icon, required Color color, required String title, required String subtitle, required VoidCallback onTap}) {
     return GestureDetector(
@@ -380,149 +459,148 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
-}
 
-// =========================================================================
-// LÓGICA DO FORMULÁRIO DE FEEDBACK BETA
-// =========================================================================
-void mostrarFormularioFeedbackBeta(BuildContext context) {
-  final user = FirebaseAuth.instance.currentUser;
-  if (user == null) return;
+  Widget _buildFeedbackInput(TextEditingController ctrl, String hint) {
+    return TextField(
+      controller: ctrl,
+      style: const TextStyle(color: Colors.white),
+      maxLines: 2,
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: const TextStyle(color: Colors.white30, fontSize: 13),
+        filled: true,
+        fillColor: AppColors.surface,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+      ),
+    );
+  }
 
-  final TextEditingController confusoCtrl = TextEditingController();
-  final TextEditingController bugCtrl = TextEditingController();
-  final TextEditingController gostouCtrl = TextEditingController();
-  double notaGeral = 5.0; 
-  bool enviando = false;
+  // =========================================================================
+  // LÓGICA DO FORMULÁRIO DE FEEDBACK BETA
+  // =========================================================================
+  void mostrarFormularioFeedbackBeta(BuildContext context) {
+    if (user == null) return;
 
-  showModalBottomSheet(
-    context: context,
-    isScrollControlled: true, 
-    backgroundColor: Colors.transparent,
-    builder: (context) {
-      return StatefulBuilder(
-        builder: (context, setStateModal) {
-          return Container(
-            height: MediaQuery.of(context).size.height * 0.85, 
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom, 
-              left: 20, right: 20, top: 20,
-            ),
-            decoration: const BoxDecoration(
-              color: AppColors.background,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 50, height: 5,
-                    decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)),
+    final TextEditingController confusoCtrl = TextEditingController();
+    final TextEditingController bugCtrl = TextEditingController();
+    final TextEditingController gostouCtrl = TextEditingController();
+    double notaGeral = 5.0; 
+    bool enviando = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true, 
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateModal) {
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.85, 
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom, 
+                left: 20, right: 20, top: 20,
+              ),
+              decoration: const BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 50, height: 5,
+                      decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 20),
-                const Row(
-                  children: [
-                    Icon(Icons.bug_report, color: Colors.amber),
-                    SizedBox(width: 10),
-                    Text("Feedback de Teste (Beta)", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                const Text("Sua opinião vai ajudar a polir o Okan antes do lançamento oficial!", style: TextStyle(color: Colors.white54, fontSize: 14)),
-                const SizedBox(height: 20),
-
-                Expanded(
-                  child: ListView(
+                  const SizedBox(height: 20),
+                  const Row(
                     children: [
-                      const Text("1. Que nota você dá para o app?", style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
-                      Slider(
-                        value: notaGeral,
-                        min: 1, max: 5, divisions: 4,
-                        activeColor: AppColors.primary,
-                        inactiveColor: Colors.white12,
-                        label: notaGeral.toInt().toString(),
-                        onChanged: (val) => setStateModal(() => notaGeral = val),
-                      ),
-                      Center(child: Text("${notaGeral.toInt()} de 5 Estrelas", style: const TextStyle(color: Colors.white))),
-                      const SizedBox(height: 20),
-
-                      const Text("2. O que achou mais confuso ou difícil de usar?", style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
-                      _buildFeedbackInput(confusoCtrl, "Ex: Não entendi como adicionar a carga..."),
-                      const SizedBox(height: 20),
-
-                      const Text("3. Encontrou algum erro (bug)? Onde?", style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
-                      _buildFeedbackInput(bugCtrl, "Ex: O botão X travou a tela..."),
-                      const SizedBox(height: 20),
-
-                      const Text("4. O que você mais gostou?", style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
-                      _buildFeedbackInput(gostouCtrl, "Ex: Achei as cores incríveis..."),
-                      const SizedBox(height: 20),
+                      Icon(Icons.bug_report, color: Colors.amber),
+                      SizedBox(width: 10),
+                      Text("Feedback de Teste (Beta)", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
                     ],
                   ),
-                ),
+                  const SizedBox(height: 10),
+                  const Text("Sua opinião vai ajudar a polir o Okan antes do lançamento oficial!", style: TextStyle(color: Colors.white54, fontSize: 14)),
+                  const SizedBox(height: 20),
 
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.amber,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                  Expanded(
+                    child: ListView(
+                      children: [
+                        const Text("1. Que nota você dá para o app?", style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+                        Slider(
+                          value: notaGeral,
+                          min: 1, max: 5, divisions: 4,
+                          activeColor: AppColors.primary,
+                          inactiveColor: Colors.white12,
+                          label: notaGeral.toInt().toString(),
+                          onChanged: (val) => setStateModal(() => notaGeral = val),
+                        ),
+                        Center(child: Text("${notaGeral.toInt()} de 5 Estrelas", style: const TextStyle(color: Colors.white))),
+                        const SizedBox(height: 20),
+
+                        const Text("2. O que achou mais confuso ou difícil de usar?", style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        _buildFeedbackInput(confusoCtrl, "Ex: Não entendi como adicionar a carga..."),
+                        const SizedBox(height: 20),
+
+                        const Text("3. Encontrou algum erro (bug)? Onde?", style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        _buildFeedbackInput(bugCtrl, "Ex: O botão X travou a tela..."),
+                        const SizedBox(height: 20),
+
+                        const Text("4. O que você mais gostou?", style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        _buildFeedbackInput(gostouCtrl, "Ex: Achei as cores incríveis..."),
+                        const SizedBox(height: 20),
+                      ],
                     ),
-                    onPressed: enviando ? null : () async {
-                      setStateModal(() => enviando = true);
-                      
-                      try {
-                        await FirebaseFirestore.instance.collection('beta_feedback').add({
-                          'userId': user.uid,
-                          'timestamp': FieldValue.serverTimestamp(),
-                          'nota': notaGeral.toInt(),
-                          'confuso': confusoCtrl.text,
-                          'bugs': bugCtrl.text,
-                          'gostou': gostouCtrl.text,
-                          'status': 'novo', 
-                        });
-                        
-                        if (context.mounted) {
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Feedback enviado! Muito obrigado! 💙"), backgroundColor: Colors.amber));
-                        }
-                      } catch (e) {
-                        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro: $e")));
-                        setStateModal(() => enviando = false);
-                      }
-                    },
-                    child: enviando 
-                      ? const CircularProgressIndicator(color: Colors.black)
-                      : const Text("ENVIAR FEEDBACK", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
                   ),
-                ),
-                const SizedBox(height: 20),
-              ],
-            ),
-          );
-        }
-      );
-    }
-  );
-}
 
-Widget _buildFeedbackInput(TextEditingController ctrl, String hint) {
-  return TextField(
-    controller: ctrl,
-    style: const TextStyle(color: Colors.white),
-    maxLines: 2,
-    decoration: InputDecoration(
-      hintText: hint,
-      hintStyle: const TextStyle(color: Colors.white30, fontSize: 13),
-      filled: true,
-      fillColor: AppColors.surface,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-    ),
-  );
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.amber,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                      ),
+                      onPressed: enviando ? null : () async {
+                        setStateModal(() => enviando = true);
+                        
+                        try {
+                          await FirebaseFirestore.instance.collection('beta_feedback').add({
+                            'userId': user!.uid,
+                            'timestamp': FieldValue.serverTimestamp(),
+                            'nota': notaGeral.toInt(),
+                            'confuso': confusoCtrl.text,
+                            'bugs': bugCtrl.text,
+                            'gostou': gostouCtrl.text,
+                            'status': 'novo', 
+                          });
+                          
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Feedback enviado! Muito obrigado! 💙"), backgroundColor: Colors.amber));
+                          }
+                        } catch (e) {
+                          if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro: $e")));
+                          setStateModal(() => enviando = false);
+                        }
+                      },
+                      child: enviando 
+                        ? const CircularProgressIndicator(color: Colors.black)
+                        : const Text("ENVIAR FEEDBACK", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                ],
+              ),
+            );
+          }
+        );
+      }
+    );
+  }
 }

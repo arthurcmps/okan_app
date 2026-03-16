@@ -4,21 +4,20 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
-
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/widgets/user_avatar.dart';
 import '../../../../core/theme/app_colors.dart';
-
 import 'anamnese_tab.dart'; 
 import 'assessments_tab.dart';
 import 'library_admin_page.dart';
 import 'login_page.dart';
 import 'workout_history_page.dart';
 import 'personal_data_page.dart';
+import 'super_admin_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
-
+  
   @override
   State<ProfilePage> createState() => _ProfilePageState();
 }
@@ -29,6 +28,8 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
   late TabController _tabController;
   bool _isUploading = false;
 
+  int _adminTapCount = 0;
+  
   @override
   void initState() {
     super.initState();
@@ -67,7 +68,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
         return Theme(
           data: ThemeData.dark().copyWith(
             colorScheme: const ColorScheme.dark(
-              primary: AppColors.primary, // Neon no calendário
+              primary: AppColors.primary, 
               onPrimary: Colors.black,
               surface: AppColors.surface,
             ),
@@ -150,7 +151,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
         foregroundColor: Colors.white,
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: AppColors.primary, // Neon
+          indicatorColor: AppColors.primary, 
           labelColor: AppColors.primary,
           unselectedLabelColor: Colors.white30,
           indicatorWeight: 3,
@@ -221,7 +222,30 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                   children: [
                     Stack(
                       children: [
-                        UserAvatar(photoUrl: photoUrl, name: nome, radius: 60, onTap: _mostrarOpcoesFoto),
+                        GestureDetector(
+                          onTap: () {
+                            _adminTapCount++;
+                            if (_adminTapCount >= 7) {
+                              _adminTapCount = 0; 
+
+                              // SUBSTITUA COM SEU EMAIL DE ADMIN
+                              if (user?.email == 'arthur.felipe1993@gmail.com' || user?.email == 'heitor.felipe2001@gmail.com') { 
+                                Navigator.push(
+                                  context, 
+                                  MaterialPageRoute(builder: (_) => const SuperAdminPage())
+                                );
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text("Acesso Negado."), 
+                                    backgroundColor: AppColors.error
+                                  )
+                                );
+                              }
+                            }
+                          },
+                          child: UserAvatar(photoUrl: photoUrl, name: nome, radius: 60),
+                        ),
                         if (_isUploading) const Positioned.fill(child: CircularProgressIndicator(color: AppColors.primary)),
                         Positioned(
                           bottom: 0, right: 0,
@@ -230,7 +254,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                             child: Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: AppColors.primary, // Botão de câmera Neon
+                                color: AppColors.primary, 
                                 shape: BoxShape.circle,
                                 border: Border.all(color: AppColors.background, width: 3),
                               ),
@@ -243,19 +267,17 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                     const SizedBox(height: 16),
                     Text(nome, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
                     
-                    // --- IDADE EM DESTAQUE (NEON) ---
                     if (idade != "--")
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
                         child: Text(idade, style: const TextStyle(color: AppColors.primary, fontSize: 16, fontWeight: FontWeight.w600)),
                       ),
 
-                    // --- BADGE DE TIPO (TERRACOTA) ---
                     Container(
                       margin: const EdgeInsets.only(top: 8),
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                       decoration: BoxDecoration(
-                        color: AppColors.secondary, // Terracota para identidade
+                        color: AppColors.secondary, 
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(color: AppColors.secondary.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))
@@ -278,7 +300,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
               
               _buildMenuOption(
                 icon: Icons.badge_outlined, 
-                color: AppColors.secondary, // Terracota
+                color: AppColors.secondary, 
                 title: "Informações Pessoais", 
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => PersonalDataPage(uid: user!.uid))),
               ),

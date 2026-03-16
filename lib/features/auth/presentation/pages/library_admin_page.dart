@@ -24,7 +24,7 @@ class _LibraryAdminPageState extends State<LibraryAdminPage> with SingleTickerPr
   void initState() {
     super.initState();
     // Controlador para as 2 abas (Exercícios e Templates)
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 2, vsync: this); 
     _tabController.addListener(() {
       setState(() {}); // Atualiza a interface (especialmente o botão +) ao trocar de aba
     });
@@ -244,10 +244,10 @@ class _LibraryAdminPageState extends State<LibraryAdminPage> with SingleTickerPr
     if (meuId == null) return const SizedBox.shrink();
 
     return StreamBuilder<QuerySnapshot>(
+      // Retiramos o orderBy daqui para evitar o erro de Índice do Firebase
       stream: FirebaseFirestore.instance
           .collection('workout_templates')
           .where('personalId', isEqualTo: meuId)
-          .orderBy('timestamp', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: AppColors.secondary));
@@ -256,7 +256,16 @@ class _LibraryAdminPageState extends State<LibraryAdminPage> with SingleTickerPr
           return const Center(child: Text("Você ainda não criou nenhum template.", style: TextStyle(color: Colors.white54)));
         }
 
-        final docs = snapshot.data!.docs;
+        // Fazemos a ordenação localmente (em Dart) para os mais recentes ficarem no topo
+        final docs = snapshot.data!.docs.toList();
+        docs.sort((a, b) {
+          final dataA = a.data() as Map<String, dynamic>;
+          final dataB = b.data() as Map<String, dynamic>;
+          final tA = dataA['timestamp'] as Timestamp?;
+          final tB = dataB['timestamp'] as Timestamp?;
+          if (tA == null || tB == null) return 0;
+          return tB.compareTo(tA);
+        });
 
         return ListView.builder(
           padding: const EdgeInsets.all(12),
@@ -301,7 +310,6 @@ class _TemplateBuilderScreenState extends State<TemplateBuilderScreen> {
   final TextEditingController _nomeTemplateController = TextEditingController();
   final List<WorkoutExercise> _exerciciosDoTemplate = [];
 
-  // Puxa o exercício do catálogo e pede séries e repetições
   void _abrirCatalogoExercicios() {
     showModalBottomSheet(
       context: context,
@@ -416,10 +424,11 @@ class _TemplateBuilderScreenState extends State<TemplateBuilderScreen> {
         'nome': _nomeTemplateController.text.trim(),
         'exercicios': _exerciciosDoTemplate.map((e) => e.toMap()).toList(),
         'timestamp': FieldValue.serverTimestamp(),
+        // Removido tags e isPremium. Este treino é estritamente do professor!
       });
       
       if (mounted) {
-        Navigator.pop(context); // Fecha o construtor e volta para a Biblioteca
+        Navigator.pop(context); 
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Template salvo com sucesso!"), backgroundColor: AppColors.success));
       }
     } catch (e) {
@@ -446,7 +455,6 @@ class _TemplateBuilderScreenState extends State<TemplateBuilderScreen> {
       ),
       body: Column(
         children: [
-          // Campo para o nome do Template
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: TextField(
@@ -463,7 +471,6 @@ class _TemplateBuilderScreenState extends State<TemplateBuilderScreen> {
             ),
           ),
 
-          // Botão para adicionar mais exercícios
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
             child: SizedBox(
@@ -483,7 +490,6 @@ class _TemplateBuilderScreenState extends State<TemplateBuilderScreen> {
 
           const SizedBox(height: 16),
 
-          // Lista de exercícios já adicionados
           Expanded(
             child: _exerciciosDoTemplate.isEmpty
                 ? const Center(child: Text("Ficha vazia. Adicione os exercícios acima.", style: TextStyle(color: Colors.white30)))

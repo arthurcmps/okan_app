@@ -29,9 +29,9 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
   final Map<String, List<WorkoutExercise>> _cacheExercicios = {};
   final Map<String, TextEditingController> _feedbackControllers = {};
 
-  // --- NOVAS VARIÁVEIS DE ESTADO ---
   bool _isVerificandoPerfil = true;
   bool _souProfessor = false;
+  bool _isAlunoSemPersonal = false; 
   bool _modoEdicao = false;
 
   bool get _isMeuProprioTreino => FirebaseAuth.instance.currentUser?.uid == widget.studentId;
@@ -49,28 +49,26 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     _carregarPerfil();
   }
 
-  // Descobre se o utilizador atual é um Personal Trainer e ajusta a tela
   Future<void> _carregarPerfil() async {
     if (!_isMeuProprioTreino) {
-      // Se não é o meu treino, sou o personal a editar o aluno
       if (mounted) {
         setState(() {
           _souProfessor = true;
-          _modoEdicao = true; // Entra direto no modo de edição
+          _modoEdicao = true; 
           _isVerificandoPerfil = false;
         });
       }
       return;
     }
 
-    // Se é o meu próprio treino, pergunto ao banco de dados se eu sou um professor
     try {
       final doc = await FirebaseFirestore.instance.collection('users').doc(widget.studentId).get();
       final data = doc.data();
       
       bool isProf = false;
+      bool isSelfManaged = false;
+
       if (data != null) {
-        // Verifica as formas comuns de salvar o papel do usuário no banco
         final role = data['role']?.toString().toLowerCase();
         final tipo = data['tipo']?.toString().toLowerCase();
         final isPersonal = data['isPersonal'] == true;
@@ -78,12 +76,18 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
         if (role == 'personal' || role == 'professor' || tipo == 'personal' || isPersonal) {
           isProf = true;
         }
+
+        final pId = data['personalId'];
+        if (!isProf && (pId == null || pId.toString().trim().isEmpty)) {
+          isSelfManaged = true;
+        }
       }
       
       if (mounted) {
         setState(() {
           _souProfessor = isProf;
-          _modoEdicao = false; // Começa no MODO TREINO por padrão
+          _isAlunoSemPersonal = isSelfManaged; 
+          _modoEdicao = false; 
           _isVerificandoPerfil = false;
         });
       }
@@ -101,16 +105,15 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     super.dispose();
   }
 
-  // --- NOTIFICAR PERSONAL ---
   Future<void> _notificarPersonal(String titulo, String corpo) async {
-    // Se o professor estiver a fazer o próprio treino, não precisa de enviar notificação a si mesmo
     if (_isMeuProprioTreino && _souProfessor) return;
+    if (_isAlunoSemPersonal) return; 
 
     try {
       final docAluno = await FirebaseFirestore.instance.collection('users').doc(widget.studentId).get();
       final personalId = docAluno.data()?['personalId'];
         
-      if (personalId == null) return;
+      if (personalId == null || personalId.toString().isEmpty) return;
 
       await FirebaseFirestore.instance
           .collection('users')
@@ -129,7 +132,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     }
   }
 
-  // --- NOVA FUNÇÃO: NOTIFICAR ALUNO ---
   Future<void> _notificarAluno(String titulo, String corpo) async {
     try {
       await FirebaseFirestore.instance
@@ -151,6 +153,36 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     } catch (e) {
       debugPrint("Erro ao notificar aluno: $e");
     }
+  }
+
+  // --- CORREÇÃO AQUI (Uso do ctx) ---
+  void _limparDiaDialog(String diaKey) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text("Limpar Dia?", style: TextStyle(color: Colors.white)),
+        content: const Text("Tem certeza que deseja apagar todos os exercícios deste dia? Isso não pode ser desfeito.", style: TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar", style: TextStyle(color: Colors.grey))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () async {
+              Navigator.pop(ctx); // Fecha o dialog com segurança
+              setState(() {
+                _cacheExercicios[diaKey] = [];
+              });
+              await _salvarListaDoDia(diaKey);
+              if (mounted) {
+                // Usa o context original da página para o SnackBar
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Treino do dia apagado com sucesso!"), backgroundColor: AppColors.success));
+              }
+            },
+            child: const Text("Limpar Tudo", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          )
+        ],
+      ),
+    );
   }
 
   @override
@@ -179,8 +211,16 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
           ],
         ),
         actions: [
-          // --- BOTÃO MÁGICO DE TROCA DE MODO (Só para o professor na própria ficha) ---
-          if (_souProfessor && _isMeuProprioTreino)
+          if (_modoEdicao)
+            IconButton(
+              icon: const Icon(Icons.delete_sweep, color: Colors.redAccent),
+              tooltip: "Limpar Dia",
+              onPressed: () {
+                _limparDiaDialog(_diasDaSemana[_tabController.index]);
+              },
+            ),
+
+          if ((_souProfessor || _isAlunoSemPersonal) && _isMeuProprioTreino)
             IconButton(
               icon: Icon(_modoEdicao ? Icons.visibility : Icons.edit, color: AppColors.primary),
               tooltip: _modoEdicao ? "Mudar para Modo Treino" : "Mudar para Modo Edição",
@@ -191,8 +231,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
               },
             ),
 
-          // --- BOTÃO DE SALVAR TEMPLATE ---
-          if (_modoEdicao)
+          if (_modoEdicao && _souProfessor)
             IconButton(
               icon: const Icon(Icons.save_outlined, color: AppColors.secondary),
               tooltip: "Salvar dia como Template",
@@ -201,7 +240,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
               },
             ),
 
-          // --- BOTÃO DE AVISAR ALUNO (Não avisa se for o próprio treino) ---
           if (_modoEdicao && !_isMeuProprioTreino)
             IconButton(
               icon: const Icon(Icons.send_to_mobile, color: AppColors.primary),
@@ -278,7 +316,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
             const Icon(Icons.fitness_center, size: 60, color: Colors.white10),
             const SizedBox(height: 10),
             Text(
-              _modoEdicao ? "Toque no + para adicionar" : "Descanso.", 
+              _modoEdicao ? "Toque no + para adicionar exercícios" : "Dia de Descanso. Recupere as energias!", 
               style: const TextStyle(color: Colors.white38)
             ),
           ],
@@ -428,8 +466,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Se estou no modo de treino, e NÃO É o meu próprio treino, mostro solicitar alteração
-                      if (!_modoEdicao && !_isMeuProprioTreino)
+                      if (!_modoEdicao && !_isMeuProprioTreino && !_isAlunoSemPersonal)
                         IconButton(
                           icon: Icon(
                             ex.solicitarAlteracao ? Icons.warning : Icons.change_circle_outlined,
@@ -470,7 +507,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
   }
 
   Widget _buildFeedbackArea(String diaKey, String feedbackAtual) {
-    // Se estou a editar a ficha (ver feedback do aluno)
     if (_modoEdicao) {
       if (feedbackAtual.isEmpty) return const SizedBox.shrink(); 
       
@@ -499,12 +535,10 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
       );
     }
 
-    // Se eu for o professor a treinar a MINHA própria ficha, não preciso de deixar feedback para mim mesmo
-    if (_isMeuProprioTreino && _souProfessor) {
+    if ((_isMeuProprioTreino && _souProfessor) || _isAlunoSemPersonal) {
       return const SizedBox.shrink();
     }
 
-    // Campo para o ALUNO enviar feedback
     return Container(
       margin: const EdgeInsets.only(top: 20, bottom: 20),
       child: Column(
@@ -557,21 +591,22 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     }
   }
 
+  // --- CORREÇÃO AQUI (Uso do ctx) ---
   void _solicitarAlteracao(String diaKey, WorkoutExercise ex) {
     if (ex.solicitarAlteracao) return; 
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
         title: const Text("Solicitar Alteração?", style: TextStyle(color: Colors.white)),
         content: Text("Deseja pedir para o seu personal alterar o exercício '${ex.nome}'?", style: const TextStyle(color: Colors.white70)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar", style: TextStyle(color: Colors.grey))),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar", style: TextStyle(color: Colors.grey))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.amber),
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(ctx);
               setState(() => ex.solicitarAlteracao = true);
               await _salvarListaDoDia(diaKey);
               
@@ -589,19 +624,20 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     );
   }
 
+  // --- CORREÇÃO AQUI (Uso do ctx) ---
   void _confirmarFinalizacao(String diaKey) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
         title: const Text("Concluir Treino?", style: TextStyle(color: Colors.white)),
         content: const Text("Isso vai salvar o histórico de hoje e desmarcar os exercícios para a próxima semana.", style: TextStyle(color: Colors.white70)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar", style: TextStyle(color: Colors.grey))),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar", style: TextStyle(color: Colors.grey))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.success),
             onPressed: () {
-              Navigator.pop(context);
+              Navigator.pop(ctx);
               _salvarHistoricoEResetar(diaKey);
             },
             child: const Text("Concluir", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
@@ -659,11 +695,12 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     _salvarListaDoDia(diaKey);
   }
 
+  // --- CORREÇÃO AQUI (Uso do ctx) ---
   void _editarCargaDialog(String diaKey, WorkoutExercise ex) {
     final cargaCtrl = TextEditingController(text: ex.carga);
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
         title: Text("Carga - ${ex.nome}", style: const TextStyle(color: Colors.white)),
         content: TextField(
@@ -678,13 +715,13 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
           autofocus: true,
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar", style: TextStyle(color: Colors.grey))),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar", style: TextStyle(color: Colors.grey))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.secondary),
             onPressed: () {
               setState(() => ex.carga = cargaCtrl.text);
               _salvarListaDoDia(diaKey);
-              Navigator.pop(context);
+              Navigator.pop(ctx);
             },
             child: const Text("Salvar", style: TextStyle(color: Colors.black)),
           )
@@ -693,6 +730,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     );
   }
 
+  // --- CORREÇÃO AQUI (Uso do ctx) ---
   void _editarExercicioCompletoDialog(String diaKey, WorkoutExercise ex) {
     final nomeCtrl = TextEditingController(text: ex.nome);
     final seriesCtrl = TextEditingController(text: ex.series);
@@ -701,7 +739,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
         title: const Text("Editar Exercício", style: TextStyle(color: Colors.white)),
         content: SingleChildScrollView(
@@ -723,7 +761,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar", style: TextStyle(color: Colors.grey))),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar", style: TextStyle(color: Colors.grey))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
             onPressed: () {
@@ -735,7 +773,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                 ex.solicitarAlteracao = false; 
               });
               _salvarListaDoDia(diaKey);
-              Navigator.pop(context);
+              Navigator.pop(ctx);
             },
             child: const Text("Salvar Alterações", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
           )
@@ -744,6 +782,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     );
   }
 
+  // --- CORREÇÃO AQUI (Uso do ctx) ---
   void _adicionarExercicioDialog() {
     final nomeCtrl = TextEditingController();
     final seriesCtrl = TextEditingController(text: '3');
@@ -752,7 +791,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
         title: const Text("Adicionar Exercício", style: TextStyle(color: Colors.white)),
         content: SingleChildScrollView(
@@ -773,7 +812,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar", style: TextStyle(color: Colors.grey))),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar", style: TextStyle(color: Colors.grey))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.secondary),
             onPressed: () async {
@@ -792,7 +831,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                 _cacheExercicios[diaAtual] = lista;
                 
                 await _salvarListaDoDia(diaAtual);
-                if (mounted) Navigator.pop(context);
+                if (mounted) Navigator.pop(ctx);
               }
             },
             child: const Text("Adicionar", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
@@ -824,16 +863,13 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     await _salvarListaDoDia(diaKey);
   }
 
-  // ==========================================================
-  // LÓGICA DE TEMPLATES E BIBLIOTECA
-  // ==========================================================
-
+  // --- CORREÇÃO AQUI (Uso do ctx) ---
   void _mostrarOpcoesAdicionar() {
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (context) => SafeArea(
+      builder: (ctx) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 16),
           child: Column(
@@ -844,7 +880,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                 title: const Text("Criar Manualmente", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 subtitle: const Text("Digitar um exercício do zero", style: TextStyle(color: Colors.white54, fontSize: 12)),
                 onTap: () {
-                  Navigator.pop(context);
+                  Navigator.pop(ctx);
                   _adicionarExercicioDialog(); 
                 },
               ),
@@ -854,20 +890,23 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                 title: const Text("Importar da Biblioteca", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 subtitle: const Text("Escolher um exercício do catálogo global", style: TextStyle(color: Colors.white54, fontSize: 12)),
                 onTap: () {
-                  Navigator.pop(context);
+                  Navigator.pop(ctx);
                   _importarExercicioDaBibliotecaDialog(_diasDaSemana[_tabController.index]);
                 },
               ),
-              const Divider(color: Colors.white10),
-              ListTile(
-                leading: const Icon(Icons.library_books, color: AppColors.secondary),
-                title: const Text("Importar Template de Treino", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                subtitle: const Text("Copiar uma lista de exercícios pronta", style: TextStyle(color: Colors.white54, fontSize: 12)),
-                onTap: () {
-                  Navigator.pop(context);
-                  _importarTemplateDialog(_diasDaSemana[_tabController.index]);
-                },
-              ),
+              
+              if (_souProfessor) ...[
+                const Divider(color: Colors.white10),
+                ListTile(
+                  leading: const Icon(Icons.library_books, color: AppColors.secondary),
+                  title: const Text("Importar Template de Treino", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  subtitle: const Text("Copiar uma lista de exercícios pronta", style: TextStyle(color: Colors.white54, fontSize: 12)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _importarTemplateDialog(_diasDaSemana[_tabController.index]);
+                  },
+                ),
+              ],
             ],
           ),
         ),
@@ -875,16 +914,17 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     );
   }
 
+  // --- CORREÇÃO AQUI (Uso do ctx) ---
   void _importarExercicioDaBibliotecaDialog(String diaKey) {
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.surface,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (context) => DraggableScrollableSheet(
+      builder: (ctx) => DraggableScrollableSheet(
         expand: false,
         initialChildSize: 0.7,
-        builder: (context, scrollController) => Column(
+        builder: (ctx2, scrollController) => Column(
           children: [
             const Padding(
               padding: EdgeInsets.all(20.0),
@@ -910,7 +950,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                         subtitle: Text(data['grupo'] ?? '', style: const TextStyle(color: Colors.white54)),
                         trailing: const Icon(Icons.add_circle_outline, color: AppColors.primary),
                         onTap: () {
-                          Navigator.pop(context);
+                          Navigator.pop(ctx2);
                           _configurarExercicioImportado(diaKey, data);
                         },
                       );
@@ -925,13 +965,14 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     );
   }
 
+  // --- CORREÇÃO AQUI (Uso do ctx) ---
   void _configurarExercicioImportado(String diaKey, Map<String, dynamic> dadosExercicio) {
     final seriesCtrl = TextEditingController(text: '3');
     final repsCtrl = TextEditingController(text: '12');
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
         title: Text("Configurar: ${dadosExercicio['nome']}", style: const TextStyle(color: Colors.white, fontSize: 18)),
         content: Column(
@@ -947,7 +988,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar", style: TextStyle(color: Colors.grey))),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar", style: TextStyle(color: Colors.grey))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
             onPressed: () async {
@@ -964,7 +1005,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
               _cacheExercicios[diaKey] = lista;
               
               await _salvarListaDoDia(diaKey);
-              if (mounted) Navigator.pop(context);
+              if (mounted) Navigator.pop(ctx);
             },
             child: const Text("Adicionar à Ficha", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
           )
@@ -973,6 +1014,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     );
   }
 
+  // --- CORREÇÃO AQUI (Uso do ctx) ---
   void _salvarComoTemplateDialog(String diaKey) {
     final exercicios = _cacheExercicios[diaKey] ?? [];
     if (exercicios.isEmpty) {
@@ -983,7 +1025,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     final nomeCtrl = TextEditingController();
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
         title: const Text("Salvar na Biblioteca", style: TextStyle(color: Colors.white)),
         content: TextField(
@@ -999,7 +1041,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar", style: TextStyle(color: Colors.grey))),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar", style: TextStyle(color: Colors.grey))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.secondary),
             onPressed: () async {
@@ -1011,7 +1053,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                   'timestamp': FieldValue.serverTimestamp(),
                 });
                 if (mounted) {
-                  Navigator.pop(context);
+                  Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Template salvo na biblioteca!", style: TextStyle(color: Colors.black)), backgroundColor: AppColors.success));
                 }
               }
@@ -1023,16 +1065,17 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     );
   }
 
+  // --- CORREÇÃO AQUI (Uso do ctx) ---
   void _importarTemplateDialog(String diaKey) {
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.surface,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (context) => DraggableScrollableSheet(
+      builder: (ctx) => DraggableScrollableSheet(
         expand: false,
         initialChildSize: 0.6,
-        builder: (context, scrollController) => Column(
+        builder: (ctx2, scrollController) => Column(
           children: [
             const Padding(
               padding: EdgeInsets.all(20.0),
@@ -1082,7 +1125,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                           await _salvarListaDoDia(diaKey);
                           
                           if (mounted) {
-                            Navigator.pop(context);
+                            Navigator.pop(ctx2);
                             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Template importado com sucesso!", style: TextStyle(color: Colors.black)), backgroundColor: AppColors.success));
                           }
                         },

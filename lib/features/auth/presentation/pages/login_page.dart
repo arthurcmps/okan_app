@@ -65,6 +65,79 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  // --- NOVA FUNÇÃO: RECUPERAR SENHA ---
+  Future<void> _recuperarSenha() async {
+    // Aproveita o email que a pessoa já possa ter começado a digitar
+    final TextEditingController emailRecuperacaoCtrl = TextEditingController(text: _emailController.text);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.surface, // Usando o tema escuro da aplicação
+        title: const Text("Recuperar Senha", style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              "Digite o seu email abaixo. Enviaremos um link para redefinir a sua senha.",
+              style: TextStyle(color: Colors.white70, fontSize: 14),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: emailRecuperacaoCtrl,
+              keyboardType: TextInputType.emailAddress,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                labelText: "Email",
+                labelStyle: const TextStyle(color: Colors.white54),
+                filled: true,
+                fillColor: Colors.black26,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                prefixIcon: const Icon(Icons.email_outlined, color: Colors.white54),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context), 
+            child: const Text("Cancelar", style: TextStyle(color: Colors.grey))
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            onPressed: () async {
+              final email = emailRecuperacaoCtrl.text.trim();
+              if (email.isEmpty || !email.contains('@')) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Digite um email válido."), backgroundColor: AppColors.error));
+                return;
+              }
+
+              try {
+                // A magia do Firebase acontece aqui:
+                await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+                
+                if (mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("Email enviado para $email! Verifique a sua caixa de entrada."), backgroundColor: AppColors.success)
+                  );
+                }
+              } on FirebaseAuthException catch (e) {
+                String mensagemErro = "Erro ao enviar email.";
+                if (e.code == 'user-not-found') mensagemErro = "Nenhum utilizador encontrado com este email.";
+                
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(mensagemErro), backgroundColor: AppColors.error));
+                }
+              }
+            },
+            child: const Text("Enviar Link", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          )
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -135,7 +208,22 @@ class _LoginPageState extends State<LoginPage> {
                   validator: (val) => (val == null || val.length < 6) ? 'Senha curta' : null,
                 ),
                 
-                const SizedBox(height: 32),
+                // --- NOVO: BOTÃO ESQUECI A SENHA ---
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: _recuperarSenha,
+                    child: const Text(
+                      "Esqueci-me da senha",
+                      style: TextStyle(
+                        color: AppColors.secondary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
 
                 // BOTÃO ENTRAR (Neon com texto preto)
                 FilledButton(
@@ -182,7 +270,7 @@ class _LoginPageState extends State<LoginPage> {
                     const Text('Ainda não tem conta?', style: TextStyle(color: AppColors.textSub)),
                     TextButton(
                       onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const RegisterPage())),
-                      child: const Text('Crie a sua', style: TextStyle(color: AppColors.secondary, fontWeight: FontWeight.bold)), // Terracota no link
+                      child: const Text('Crie a sua', style: TextStyle(color: AppColors.secondary, fontWeight: FontWeight.bold)), 
                     ),
                   ],
                 ),
