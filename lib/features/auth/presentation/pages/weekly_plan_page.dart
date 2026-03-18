@@ -1086,11 +1086,23 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                 stream: FirebaseFirestore.instance
                     .collection('workout_templates')
                     .where('personalId', isEqualTo: FirebaseAuth.instance.currentUser!.uid)
-                    .orderBy('timestamp', descending: true)
+                    // REMOVIDO: orderBy('timestamp', descending: true) para evitar erro de índice
                     .snapshots(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: AppColors.secondary));
-                  final docs = snapshot.data?.docs ?? [];
+                  
+                  final docsRaw = snapshot.data?.docs ?? [];
+                  
+                  // ORDENAÇÃO LOCAL NO TELEMÓVEL (Mais recentes no topo)
+                  final docs = docsRaw.toList();
+                  docs.sort((a, b) {
+                    final dataA = a.data() as Map<String, dynamic>;
+                    final dataB = b.data() as Map<String, dynamic>;
+                    final tA = dataA['timestamp'] as Timestamp?;
+                    final tB = dataB['timestamp'] as Timestamp?;
+                    if (tA == null || tB == null) return 0;
+                    return tB.compareTo(tA);
+                  });
                   
                   if (docs.isEmpty) return const Center(child: Text("Você ainda não salvou nenhum template.", style: TextStyle(color: Colors.white54)));
 

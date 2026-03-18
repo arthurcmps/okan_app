@@ -32,24 +32,61 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
     super.dispose();
   }
 
-  // --- LÓGICA DE ENVIAR CONVITE ---
+  // --- LÓGICA DE ENVIAR CONVITE E TRAVA DE PLANO ---
   Future<void> _enviarConvite() async {
-    final emailInput = _emailController.text.trim();
+    final emailInput = _emailController.text.trim().toLowerCase();
     if (emailInput.isEmpty) return;
 
     setState(() => _isLoading = true);
     final user = FirebaseAuth.instance.currentUser;
 
     try {
-      // 1. Busca o aluno pelo e-mail
+      // =========================================================
+      // 1. TRAVA DE NEGÓCIO (LIMITAÇÃO DO PLANO BASE)
+      // =========================================================
+      final personalDoc = await FirebaseFirestore.instance.collection('users').doc(user!.uid).get();
+      final isPremium = personalDoc.data()?['isPremium'] == true;
+
+      if (!isPremium) {
+        // Conta alunos já ativos
+        final ativosSnap = await FirebaseFirestore.instance
+            .collection('users')
+            .where('personalId', isEqualTo: user.uid)
+            .get();
+        
+        // Conta convites que estão pendentes
+        final pendentesSnap = await FirebaseFirestore.instance
+            .collection('invites')
+            .where('personalId', isEqualTo: user.uid)
+            .where('status', isEqualTo: 'pending')
+            .get();
+
+        final totalAlunos = ativosSnap.docs.length + pendentesSnap.docs.length;
+
+        if (totalAlunos >= 3) {
+          if (mounted) {
+            Navigator.pop(context); // Fecha o modal do convite
+            _mostrarAlerta(
+              "Limite Atingido ⚠️", 
+              "O seu Plano Base permite até 3 alunos (ativos ou pendentes). Vá ao seu Perfil e torne-se Mestre Sankofa para ter alunos ilimitados e faturar mais!"
+            );
+          }
+          setState(() => _isLoading = false);
+          return;
+        }
+      }
+      // =========================================================
+
+      // 2. Busca o aluno pelo e-mail
       final querySnapshot = await FirebaseFirestore.instance
           .collection('users')
           .where('email', isEqualTo: emailInput)
+          .where('tipo', isEqualTo: 'aluno') // Garante que não convida outro professor
           .limit(1)
           .get();
 
       if (querySnapshot.docs.isEmpty) {
-        if (mounted) _mostrarAlerta("Não encontrado", "Não achamos o usuário '$emailInput'.");
+        if (mounted) _mostrarAlerta("Não encontrado", "Não achamos nenhum aluno com o e-mail '$emailInput'.");
         setState(() => _isLoading = false);
         return;
       }
@@ -57,18 +94,24 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
       final alunoDoc = querySnapshot.docs.first;
       final dadosAluno = alunoDoc.data();
 
-      // 2. Validações
-      if (alunoDoc.id == user!.uid) {
+      // 3. Validações
+      if (alunoDoc.id == user.uid) {
         _mostrarSnack('Você não pode convidar a si mesmo.', isError: true);
         setState(() => _isLoading = false);
         return;
       }
 
-      // 3. Verifica se já existe convite pendente
+      if (dadosAluno['personalId'] == user.uid) {
+        _mostrarSnack('Este aluno já está na sua lista de ativos.', isError: true);
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // 4. Verifica se já existe convite pendente
       final convitesExistentes = await FirebaseFirestore.instance
           .collection('invites')
           .where('toStudentEmail', isEqualTo: emailInput)
-          .where('fromPersonalId', isEqualTo: user.uid)
+          .where('personalId', isEqualTo: user.uid)
           .get();
 
       if (convitesExistentes.docs.isNotEmpty) {
@@ -77,26 +120,26 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
         return;
       }
 
-      // 4. Cria o convite na coleção 'invites'
+      // 5. Cria o convite na coleção 'invites'
       await FirebaseFirestore.instance.collection('invites').add({
-        'fromPersonalId': user.uid, // Antigo 'personalId'
-        'personalId': user.uid, // Novo padrão para NotificationsPage achar
-        'personalName': user.displayName ?? 'Personal',
+        'fromPersonalId': user.uid, 
+        'personalId': user.uid, 
+        'personalName': user.displayName ?? personalDoc.data()?['name'] ?? 'Personal',
         'toStudentEmail': emailInput,
         'studentUid': alunoDoc.id,
         'status': 'pending',
         'sentAt': FieldValue.serverTimestamp(),
       });
 
-      // 5. Cria notificação para o aluno (para acender a bolinha)
+      // 6. Cria notificação para o aluno (para acender a bolinha)
       await FirebaseFirestore.instance
           .collection('users')
           .doc(alunoDoc.id)
           .collection('notifications')
           .add({
             'type': 'invite',
-            'title': 'Novo Convite de Personal',
-            'body': '${user.displayName ?? "Um treinador"} quer te treinar!',
+            'title': 'Novo Convite de Treino',
+            'body': '${user.displayName ?? personalDoc.data()?['name'] ?? "Um personal"} quer treinar você!',
             'isRead': false,
             'timestamp': FieldValue.serverTimestamp(),
       });
@@ -247,7 +290,7 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
         // --- ABAS ---
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: AppColors.primary, // Neon
+          indicatorColor: AppColors.primary, 
           labelColor: AppColors.primary,
           unselectedLabelColor: Colors.white54,
           tabs: const [
@@ -264,7 +307,7 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AppColors.secondary, // Terracota
+        backgroundColor: AppColors.secondary, 
         icon: const Icon(Icons.person_add, color: Colors.white),
         label: const Text("Convidar", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         onPressed: _mostrarDialogoAdicionar,

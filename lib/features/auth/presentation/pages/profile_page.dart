@@ -14,6 +14,7 @@ import 'login_page.dart';
 import 'workout_history_page.dart';
 import 'personal_data_page.dart';
 import 'super_admin_page.dart';
+import 'professor_subscription_page.dart'; // <--- IMPORT DA PÁGINA DE ASSINATURA
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -315,13 +316,21 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                 )))
               ),
 
-              if (isPersonal)
+              // NOVOS BOTÕES PARA QUEM É PERSONAL TRAINER
+              if (isPersonal) ...[
+                _buildMenuOption(
+                  icon: Icons.workspace_premium, 
+                  color: AppColors.primary, 
+                  title: "Assinatura e Planos", 
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ProfessorSubscriptionPage()))
+                ),
                 _buildMenuOption(
                   icon: Icons.library_books, 
                   color: Colors.white, 
                   title: "Gerenciar Biblioteca", 
                   onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LibraryAdminPage()))
                 ),
+              ],
 
               _buildMenuOption(
                 icon: Icons.logout, 

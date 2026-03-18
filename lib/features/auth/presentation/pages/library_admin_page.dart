@@ -186,7 +186,7 @@ class _LibraryAdminPageState extends State<LibraryAdminPage> with SingleTickerPr
           if (_tabController.index == 0) {
             _mostrarDialogoExercicio(); // Abre dialog de Exercício
           } else {
-            // Abre Tela de Criar Template
+            // Abre Tela de Criar Template (Novo)
             Navigator.push(context, MaterialPageRoute(builder: (context) => const TemplateBuilderScreen()));
           }
         },
@@ -283,9 +283,29 @@ class _LibraryAdminPageState extends State<LibraryAdminPage> with SingleTickerPr
                 leading: CircleAvatar(backgroundColor: AppColors.primary.withOpacity(0.2), child: const Icon(Icons.library_books, color: AppColors.primary)),
                 title: Text(data['nome'] ?? 'Sem nome', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
                 subtitle: Text("${listaEx.length} exercícios guardados", style: const TextStyle(color: Colors.white54)),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete_outline, color: Colors.redAccent), 
-                  onPressed: () => _confirmarDeletarDocumento(doc.id, data['nome'] ?? '', 'workout_templates')
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Botão de Editar
+                    IconButton(
+                      icon: const Icon(Icons.edit, color: Colors.white70),
+                      tooltip: "Editar Template",
+                      onPressed: () {
+                        Navigator.push(
+                          context, 
+                          MaterialPageRoute(
+                            builder: (context) => TemplateBuilderScreen(existingTemplate: doc)
+                          )
+                        );
+                      },
+                    ),
+                    // Botão de Apagar
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.redAccent), 
+                      tooltip: "Excluir Template",
+                      onPressed: () => _confirmarDeletarDocumento(doc.id, data['nome'] ?? '', 'workout_templates')
+                    ),
+                  ],
                 ),
               ),
             );
@@ -297,10 +317,13 @@ class _LibraryAdminPageState extends State<LibraryAdminPage> with SingleTickerPr
 }
 
 // ============================================================================
-// NOVA TELA EXCLUSIVA: CONSTRUTOR DE TEMPLATES (TEMPLATE BUILDER)
+// TELA: CONSTRUTOR DE TEMPLATES (TEMPLATE BUILDER)
+// Agora suporta Criação e Edição
 // ============================================================================
 class TemplateBuilderScreen extends StatefulWidget {
-  const TemplateBuilderScreen({super.key});
+  final DocumentSnapshot? existingTemplate; // Documento opcional para edição
+
+  const TemplateBuilderScreen({super.key, this.existingTemplate});
 
   @override
   State<TemplateBuilderScreen> createState() => _TemplateBuilderScreenState();
@@ -309,6 +332,22 @@ class TemplateBuilderScreen extends StatefulWidget {
 class _TemplateBuilderScreenState extends State<TemplateBuilderScreen> {
   final TextEditingController _nomeTemplateController = TextEditingController();
   final List<WorkoutExercise> _exerciciosDoTemplate = [];
+  bool get _isEditing => widget.existingTemplate != null;
+
+  @override
+  void initState() {
+    super.initState();
+    // Se recebemos um template para editar, carregamos os dados dele
+    if (_isEditing) {
+      final data = widget.existingTemplate!.data() as Map<String, dynamic>;
+      _nomeTemplateController.text = data['nome'] ?? '';
+      
+      final listaRaw = data['exercicios'] as List<dynamic>? ?? [];
+      for (var e in listaRaw) {
+        _exerciciosDoTemplate.add(WorkoutExercise.fromMap(e as Map<String, dynamic>));
+      }
+    }
+  }
 
   void _abrirCatalogoExercicios() {
     showModalBottomSheet(
@@ -419,13 +458,20 @@ class _TemplateBuilderScreenState extends State<TemplateBuilderScreen> {
     }
 
     try {
-      await FirebaseFirestore.instance.collection('workout_templates').add({
+      final dataToSave = {
         'personalId': FirebaseAuth.instance.currentUser!.uid,
         'nome': _nomeTemplateController.text.trim(),
         'exercicios': _exerciciosDoTemplate.map((e) => e.toMap()).toList(),
         'timestamp': FieldValue.serverTimestamp(),
-        // Removido tags e isPremium. Este treino é estritamente do professor!
-      });
+      };
+
+      if (_isEditing) {
+        // Atualiza o template existente
+        await FirebaseFirestore.instance.collection('workout_templates').doc(widget.existingTemplate!.id).update(dataToSave);
+      } else {
+        // Cria um novo template
+        await FirebaseFirestore.instance.collection('workout_templates').add(dataToSave);
+      }
       
       if (mounted) {
         Navigator.pop(context); 
@@ -444,7 +490,7 @@ class _TemplateBuilderScreenState extends State<TemplateBuilderScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         foregroundColor: Colors.white,
-        title: const Text("Criar Novo Template", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        title: Text(_isEditing ? "Editar Template" : "Criar Novo Template", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
             icon: const Icon(Icons.check_circle, color: AppColors.success, size: 28),
