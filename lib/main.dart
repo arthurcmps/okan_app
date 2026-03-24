@@ -7,7 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:firebase_app_check/firebase_app_check.dart'; // <--- Import mantido
+import 'package:firebase_app_check/firebase_app_check.dart';
 
 import 'firebase_options.dart';
 import 'features/auth/presentation/pages/login_page.dart';
@@ -17,6 +17,9 @@ import 'core/services/time_service.dart';
 import 'features/auth/presentation/controllers/tarefa_controller.dart';
 import 'core/theme/app_colors.dart'; 
 import 'core/services/push_notification_service.dart';
+
+// --- CHAVE MESTRA DE NAVEGAÇÃO ---
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 // =======================================================
 // CONFIGURAÇÃO DE NOTIFICAÇÕES (Background e Android Channel)
@@ -51,15 +54,13 @@ void main() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
 
-    // =====================================================
-    // ATIVAÇÃO DO APP CHECK (Resolve o erro do console)
-    // =====================================================
+    // ATIVAÇÃO DO APP CHECK
     await FirebaseAppCheck.instance.activate(
       androidProvider: AndroidProvider.debug, 
       appleProvider: AppleProvider.debug,
     );
     
-    // Verificação do Onboarding (Shared Preferences)
+    // Verificação do Onboarding
     final prefs = await SharedPreferences.getInstance();
     final bool showOnboarding = prefs.getBool('showOnboarding') ?? true;
 
@@ -72,7 +73,9 @@ void main() async {
 
     final pushService = PushNotificationService();
     await pushService.initialize();
-    pushService.setupInteractions();
+    
+    // Passamos a chave mestra para o serviço de notificações
+    pushService.setupInteractions(navigatorKey);
     // ----------------------------------------
 
     await initializeDateFormatting('pt_BR', null);
@@ -186,6 +189,7 @@ final ThemeData sportTheme = ThemeData(
     ),
   ),
   
+  // --- CORREÇÃO APLICADA AQUI (WidgetStateProperty em vez de MaterialStateProperty) ---
   checkboxTheme: CheckboxThemeData(
     fillColor: WidgetStateProperty.resolveWith((states) {
       if (states.contains(WidgetState.selected)) {
@@ -210,6 +214,7 @@ class OkanApp extends StatelessWidget {
       title: 'Okan App',
       debugShowCheckedModeBanner: false,
       theme: sportTheme,
+      navigatorKey: navigatorKey, // <--- Chave global adicionada aqui
       home: AuthCheck(showOnboarding: showOnboarding), 
       builder: (context, child) {
         return Scaffold(

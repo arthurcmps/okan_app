@@ -7,8 +7,6 @@ import '../../../../core/theme/app_colors.dart';
 import 'chat_page.dart';
 import 'weekly_plan_page.dart';
 import 'assessments_tab.dart'; 
-
-// --- CORREÇÃO AQUI: Importação com o caminho exato ---
 import 'student_detail_page.dart'; 
 
 class NotificationsPage extends StatelessWidget {
@@ -29,7 +27,6 @@ class NotificationsPage extends StatelessWidget {
         elevation: 0,
         foregroundColor: Colors.white,
         actions: [
-          // Botão para "Marcar todas como lidas"
           IconButton(
             icon: const Icon(Icons.done_all, color: AppColors.textSub),
             onPressed: () => _marcarTodasComoLidas(user.uid),
@@ -79,7 +76,7 @@ class NotificationsPage extends StatelessWidget {
         return Column(
           children: snapshot.data!.docs.map((doc) {
             final data = doc.data() as Map<String, dynamic>;
-            final personalName = data['personalName'] ?? 'Personal';
+            final personalName = data['personalName'] ?? data['fromPersonalName'] ?? 'Personal';
             
             return Container(
               margin: const EdgeInsets.only(bottom: 12),
@@ -226,7 +223,7 @@ class NotificationsPage extends StatelessWidget {
     );
   }
 
-  // --- LÓGICA DE AÇÃO ---
+  // --- LÓGICA DE NAVEGAÇÃO E AÇÃO (O CORE DA SUA PERGUNTA) ---
   void _handleNotificationTap(BuildContext context, DocumentSnapshot doc, Map<String, dynamic> data) async {
     // 1. Marca como lida
     if (data['isRead'] == false) {
@@ -238,6 +235,15 @@ class NotificationsPage extends StatelessWidget {
     final currentUser = FirebaseAuth.instance.currentUser!;
     
     switch (data['type']) {
+      case 'invite': // <-- NOVO: ABRIR POP-UP DO CONVITE
+        final inviteId = data['actionId'];
+        if (inviteId != null && inviteId.toString().isNotEmpty) {
+          _mostrarDialogoConvite(context, inviteId);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Olhe no topo da tela, nos seus convites pendentes!")));
+        }
+        break;
+
       case 'message':
         Navigator.push(context, MaterialPageRoute(builder: (context) => 
           ChatPage(otherUserId: data['actionId'], otherUserName: data['senderName'] ?? 'Chat')
@@ -255,7 +261,6 @@ class NotificationsPage extends StatelessWidget {
             builder: (_) => const Center(child: CircularProgressIndicator(color: AppColors.primary))
           );
           
-          // Busca rapidamente os dados do aluno para abrir o StudentDetailPage
           final studentDoc = await FirebaseFirestore.instance.collection('users').doc(actionId).get();
           final studentData = studentDoc.data() ?? {};
           
@@ -270,11 +275,17 @@ class NotificationsPage extends StatelessWidget {
             ));
           }
         } else {
-          // Se for você mesmo, abre a sua página normal
+          // Se for você mesmo
           Navigator.push(context, MaterialPageRoute(builder: (context) => 
             WeeklyPlanPage(studentId: currentUser.uid, studentName: "Meus Treinos")
           ));
         }
+        break;
+
+      case 'workout_update': // <-- NOVO: ROTA DIRETA PARA A FICHA DE TREINO ATUALIZADA
+        Navigator.push(context, MaterialPageRoute(builder: (context) => 
+          WeeklyPlanPage(studentId: currentUser.uid, studentName: "Meus Treinos")
+        ));
         break;
 
       case 'assessment':
@@ -283,12 +294,69 @@ class NotificationsPage extends StatelessWidget {
     }
   }
 
+  // --- NOVO: POP-UP DE CONVITE DIRETO DA LISTA ---
+  Future<void> _mostrarDialogoConvite(BuildContext context, String inviteId) async {
+    showDialog(
+      context: context, 
+      barrierDismissible: false, 
+      builder: (_) => const Center(child: CircularProgressIndicator(color: AppColors.primary))
+    );
+
+    try {
+      final doc = await FirebaseFirestore.instance.collection('invites').doc(inviteId).get();
+      
+      if (!context.mounted) return;
+      Navigator.pop(context); // Fecha loading
+      
+      if (!doc.exists || doc.data()!['status'] != 'pending') {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Este convite já foi respondido ou não está mais disponível.", style: TextStyle(color: Colors.black)), backgroundColor: Colors.white));
+        return;
+      }
+      
+      final data = doc.data()!;
+      final personalName = data['personalName'] ?? data['fromPersonalName'] ?? 'Personal';
+
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text("Convite Pendente", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          content: Text("$personalName quer ser o seu treinador no Okan.", style: const TextStyle(color: Colors.white70)),
+          actions: [
+             TextButton(
+               onPressed: () {
+                 Navigator.pop(ctx);
+                 _responderConvite(context, inviteId, false);
+               },
+               child: const Text("Recusar", style: TextStyle(color: AppColors.error)),
+             ),
+             ElevatedButton(
+               style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+               onPressed: () {
+                 Navigator.pop(ctx);
+                 _responderConvite(context, inviteId, true);
+               },
+               child: const Text("Aceitar", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+             ),
+          ]
+        )
+      );
+    } catch(e) {
+      if (context.mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro: $e")));
+      }
+    }
+  }
+
   // --- HELPERS VISUAIS ---
   Color _getColorByType(String? type) {
     switch (type) {
       case 'message': return Colors.blueAccent;
-      case 'workout': return AppColors.primary; 
+      case 'workout': 
+      case 'workout_update': return AppColors.primary; 
       case 'assessment': return AppColors.secondary; 
+      case 'invite': return Colors.amber; // Cor única para convites
       default: return Colors.grey;
     }
   }
@@ -299,8 +367,10 @@ class NotificationsPage extends StatelessWidget {
     
     switch (type) {
       case 'message': icon = Icons.chat_bubble; break;
-      case 'workout': icon = Icons.fitness_center; break;
+      case 'workout': 
+      case 'workout_update': icon = Icons.fitness_center; break;
       case 'assessment': icon = Icons.monitor_weight; break;
+      case 'invite': icon = Icons.person_add; break;
       default: icon = Icons.notifications;
     }
 
@@ -335,7 +405,7 @@ class NotificationsPage extends StatelessWidget {
     );
   }
 
-  // --- LÓGICA DE CONVITE ---
+  // --- LÓGICA DE RESPOSTA DO CONVITE ---
   Future<void> _responderConvite(BuildContext context, String inviteId, bool aceitar) async {
     try {
       final inviteDoc = await FirebaseFirestore.instance.collection('invites').doc(inviteId).get();
@@ -343,7 +413,6 @@ class NotificationsPage extends StatelessWidget {
 
       final data = inviteDoc.data()!;
       final studentId = FirebaseAuth.instance.currentUser!.uid;
-      // Compatibilidade com bancos antigos (personalId) e novos (fromPersonalId)
       final personalId = data['personalId'] ?? data['fromPersonalId'];
       final personalName = data['personalName'] ?? data['fromPersonalName'];
 
