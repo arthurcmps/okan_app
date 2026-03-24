@@ -7,6 +7,8 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:firebase_app_check/firebase_app_check.dart'; // <--- Import mantido
+
 import 'firebase_options.dart';
 import 'features/auth/presentation/pages/login_page.dart';
 import 'features/auth/presentation/pages/home_page.dart';
@@ -47,6 +49,14 @@ void main() async {
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
+    );
+
+    // =====================================================
+    // ATIVAÇÃO DO APP CHECK (Resolve o erro do console)
+    // =====================================================
+    await FirebaseAppCheck.instance.activate(
+      androidProvider: AndroidProvider.debug, 
+      appleProvider: AppleProvider.debug,
     );
     
     // Verificação do Onboarding (Shared Preferences)
@@ -177,13 +187,13 @@ final ThemeData sportTheme = ThemeData(
   ),
   
   checkboxTheme: CheckboxThemeData(
-    fillColor: MaterialStateProperty.resolveWith((states) {
-      if (states.contains(MaterialState.selected)) {
+    fillColor: WidgetStateProperty.resolveWith((states) {
+      if (states.contains(WidgetState.selected)) {
         return AppColors.primary; 
       }
       return Colors.transparent;
     }),
-    checkColor: MaterialStateProperty.all(Colors.black), 
+    checkColor: WidgetStateProperty.all(Colors.black), 
     side: const BorderSide(color: AppColors.textSub, width: 2),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
   ),
@@ -200,7 +210,6 @@ class OkanApp extends StatelessWidget {
       title: 'Okan App',
       debugShowCheckedModeBanner: false,
       theme: sportTheme,
-      // Passamos a informação para o AuthCheck
       home: AuthCheck(showOnboarding: showOnboarding), 
       builder: (context, child) {
         return Scaffold(
@@ -227,12 +236,10 @@ class AuthCheck extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 1. Se for a primeira vez, mostra Onboarding independente de estar logado ou não
     if (showOnboarding) {
       return const OnboardingPage();
     }
 
-    // 2. Se não for a primeira vez, verifica o login
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {

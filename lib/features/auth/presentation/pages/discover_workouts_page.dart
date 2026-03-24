@@ -1,6 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:http/http.dart' as http;
 import '../../../../core/theme/app_colors.dart'; 
 import '../../data/models/workout_plans_model.dart';
 
@@ -14,6 +17,9 @@ class DiscoverWorkoutsPage extends StatefulWidget {
 class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
   final String currentUserId = FirebaseAuth.instance.currentUser!.uid;
   List<String> _userTags = [];
+
+  // Chave Pública do Mercado Pago
+  final String _mercadoPagoPublicKey = "TEST-7836166911445116-031722-d0c5e5953a3c421c2de9067cfad9f2f4-230652618";
 
   @override
   void initState() {
@@ -55,40 +61,41 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
   }
 
   // ==============================================================
-  // LÓGICA DE AQUISIÇÃO E APLICAÇÃO
+  // LÓGICA DE AQUISIÇÃO E APLICAÇÃO (Agora com Mercado Pago)
   // ==============================================================
 
-  // 1. O Aluno clica em Comprar/Adicionar na Loja
   void _processarAquisicao(String templateId, Map<String, dynamic> treinoData) {
     final double preco = (treinoData['preco'] ?? 0.0).toDouble();
 
     if (preco <= 0) {
       _registrarCompraNoPerfil(templateId); // É grátis, pega direto
     } else {
-      // Simulação de Pagamento
-      showDialog(
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      // Abre o Checkout Real do Mercado Pago
+      showModalBottomSheet(
         context: context,
-        builder: (context) => AlertDialog(
-          backgroundColor: AppColors.surface,
-          title: const Text("Pagamento (Em Breve)", style: TextStyle(color: AppColors.primary)),
-          content: Text("Aqui o aluno fará o PIX de R\$ ${preco.toStringAsFixed(2)}. Após o pagamento, o treino vai para a biblioteca dele.", style: const TextStyle(color: Colors.white70)),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar", style: TextStyle(color: Colors.white54))),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-              onPressed: () {
-                Navigator.pop(context);
-                _registrarCompraNoPerfil(templateId);
-              },
-              child: const Text("Simular Pagamento Aprovado", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-            )
-          ],
+        isScrollControlled: true,
+        backgroundColor: AppColors.background,
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+        builder: (ctx) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: TemplateCheckoutSheet(
+            templateId: templateId,
+            templateNome: treinoData['nome'] ?? 'Treino Premium',
+            preco: preco,
+            publicKey: _mercadoPagoPublicKey,
+            usuarioAtual: user,
+            onSuccess: () {
+              _registrarCompraNoPerfil(templateId); // Libera o treino após pagamento aprovado
+            },
+          ),
         ),
       );
     }
   }
 
-  // 2. Salva o ID do treino no perfil do aluno
   Future<void> _registrarCompraNoPerfil(String templateId) async {
     try {
       await FirebaseFirestore.instance.collection('users').doc(currentUserId).update({
@@ -102,7 +109,6 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
     }
   }
 
-  // 3. O Aluno escolhe os dias para treinar (Funciona tanto após comprar quanto na aba Meus Treinos)
   void _escolherDiasParaOTreino(Map<String, dynamic> treinoData) {
     final List<String> diasSemana = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
     final List<String> diasNomes = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
@@ -163,7 +169,6 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
     );
   }
 
-  // 4. Copia os exercícios para o WeeklyPlan
   Future<void> _inserirTreinoNaFicha(Map<String, dynamic> treinoData, List<String> diasSelecionados) async {
     showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator(color: AppColors.primary)));
 
@@ -189,7 +194,7 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
       await docRef.set(planoAtual, SetOptions(merge: true));
 
       if (mounted) {
-        Navigator.pop(context); // Fecha loading
+        Navigator.pop(context); 
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Treino aplicado com sucesso à sua semana! 💪"), backgroundColor: AppColors.primary));
       }
     } catch (e) {
@@ -201,7 +206,7 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
   }
 
   // ==============================================================
-  // UI: DETALHES DO TREINO (Muda o botão se ele já comprou)
+  // UI: DETALHES DO TREINO
   // ==============================================================
   void _abrirDetalhesDoTreino(String templateId, Map<String, dynamic> treinoData, int matchScore, bool jaAdquirido) {
     showModalBottomSheet(
@@ -245,7 +250,6 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
               ),
             ),
             
-            // BOTÃO DINÂMICO: COMPRAR vs APLICAR NA SEMANA
             SizedBox(
               width: double.infinity,
               height: 56,
@@ -255,7 +259,7 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
                 onPressed: () {
-                  Navigator.pop(context); // Fecha bottom sheet
+                  Navigator.pop(context); 
                   if (jaAdquirido) {
                     _escolherDiasParaOTreino(treinoData);
                   } else {
@@ -276,9 +280,6 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
     );
   }
 
-  // ==============================================================
-  // UI: CONSTRUÇÃO DAS ABAS (LOJA E BIBLIOTECA)
-  // ==============================================================
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
@@ -300,7 +301,6 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
             ],
           ),
         ),
-        // O Stream principal escuta o Perfil do Usuário para saber o que ele já comprou em tempo real
         body: StreamBuilder<DocumentSnapshot>(
           stream: FirebaseFirestore.instance.collection('users').doc(currentUserId).snapshots(),
           builder: (context, userSnapshot) {
@@ -309,22 +309,19 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
             final userData = userSnapshot.data?.data() as Map<String, dynamic>? ?? {};
             final List<String> meusTreinosIds = List<String>.from(userData['purchased_templates'] ?? []);
 
-            // Stream secundário busca todos os treinos da loja
             return StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance.collection('workout_templates').where('isPremium', isEqualTo: true).snapshots(),
               builder: (context, templatesSnapshot) {
                 if (templatesSnapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
                 
                 final allTemplates = templatesSnapshot.data?.docs ?? [];
-
-                // Separa os treinos entre "Loja" (não tenho) e "Meus" (já tenho)
                 final lojaTemplates = allTemplates.where((doc) => !meusTreinosIds.contains(doc.id)).toList();
                 final meusTemplates = allTemplates.where((doc) => meusTreinosIds.contains(doc.id)).toList();
 
                 return TabBarView(
                   children: [
-                    _buildListaTreinos(lojaTemplates, true), // Aba Loja
-                    _buildListaTreinos(meusTemplates, false), // Aba Meus Treinos
+                    _buildListaTreinos(lojaTemplates, true),
+                    _buildListaTreinos(meusTemplates, false),
                   ],
                 );
               },
@@ -339,7 +336,7 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
     if (docs.isEmpty) {
       return Center(
         child: Text(
-          isLoja ? "Nenhum treino novo disponível no momento." : "Sua biblioteca está vazia.\\nAdquira treinos na loja!", 
+          isLoja ? "Nenhum treino novo disponível no momento." : "Sua biblioteca está vazia.\nAdquira treinos na loja!", 
           textAlign: TextAlign.center,
           style: const TextStyle(color: Colors.white54, fontSize: 16)
         )
@@ -349,7 +346,7 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
     var treinos = docs.map((doc) {
       final data = doc.data() as Map<String, dynamic>;
       final tagsDoTreino = data['tags'] as List<dynamic>? ?? [];
-      final score = isLoja ? _calcularScoreDeMatch(tagsDoTreino) : 0; // Só calcula match na loja
+      final score = isLoja ? _calcularScoreDeMatch(tagsDoTreino) : 0;
       return {'docId': doc.id, 'data': data, 'score': score};
     }).toList();
 
@@ -413,6 +410,265 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
           ),
         );
       },
+    );
+  }
+}
+
+// ============================================================================
+// COMPONENTE DE CHECKOUT PARA TEMPLATES (Idêntico à Assinatura)
+// ============================================================================
+class TemplateCheckoutSheet extends StatefulWidget {
+  final String templateId;
+  final String templateNome;
+  final double preco;
+  final String publicKey;
+  final User usuarioAtual;
+  final VoidCallback onSuccess;
+
+  const TemplateCheckoutSheet({
+    super.key, 
+    required this.templateId, 
+    required this.templateNome, 
+    required this.preco, 
+    required this.publicKey, 
+    required this.usuarioAtual,
+    required this.onSuccess,
+  });
+
+  @override
+  State<TemplateCheckoutSheet> createState() => _TemplateCheckoutSheetState();
+}
+
+class _TemplateCheckoutSheetState extends State<TemplateCheckoutSheet> {
+  int _metodoSelecionado = 0; // 0 = PIX, 1 = Cartão
+  bool _isProcessing = false;
+  String? _qrCodeBase64;
+  String? _pixCopiaCola;
+
+  final _numCartaoCtrl = TextEditingController();
+  final _validadeCtrl = TextEditingController();
+  final _cvvCtrl = TextEditingController();
+  final _nomeCtrl = TextEditingController();
+  final _cpfCtrl = TextEditingController();
+
+  Future<void> _gerarPix() async {
+    setState(() => _isProcessing = true);
+    try {
+      await FirebaseAuth.instance.currentUser?.getIdToken(true);
+      
+      final callable = FirebaseFunctions.instanceFor(region: 'us-central1').httpsCallable('criarPagamentoPix');
+      final response = await callable.call({'planoNome': widget.templateNome, 'preco': widget.preco});
+      
+      setState(() {
+        _qrCodeBase64 = response.data['qr_code_base64'];
+        _pixCopiaCola = response.data['qr_code'];
+        _isProcessing = false;
+      });
+    } catch (e) {
+      setState(() => _isProcessing = false);
+      _mostrarErro("Erro ao gerar PIX: $e");
+    }
+  }
+
+  Future<void> _processarCartao() async {
+    if (_numCartaoCtrl.text.isEmpty || _cvvCtrl.text.isEmpty || _cpfCtrl.text.isEmpty || _validadeCtrl.text.isEmpty) {
+      _mostrarErro("Preencha todos os campos do cartão.");
+      return;
+    }
+
+    setState(() => _isProcessing = true);
+
+    try {
+      String dataValidade = _validadeCtrl.text.replaceAll(RegExp(r'[^0-9]'), '');
+      if (dataValidade.length < 4) throw Exception("Validade incorreta. Use MM/AA.");
+      
+      final mes = dataValidade.substring(0, 2);
+      final anoRaw = dataValidade.substring(2);
+      final ano = anoRaw.length == 2 ? "20$anoRaw" : anoRaw;
+
+      await FirebaseAuth.instance.currentUser?.getIdToken(true);
+
+      final url = Uri.parse('https://api.mercadopago.com/v1/card_tokens?public_key=${widget.publicKey}');
+      final mpResponse = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          "card_number": _numCartaoCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''),
+          "expiration_month": int.parse(mes),
+          "expiration_year": int.parse(ano),
+          "security_code": _cvvCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''),
+          "cardholder": {
+            "name": _nomeCtrl.text,
+            "identification": {
+              "type": "CPF",
+              "number": _cpfCtrl.text.replaceAll(RegExp(r'[^0-9]'), '')
+            }
+          }
+        }),
+      );
+
+      final tokenData = jsonDecode(mpResponse.body);
+      if (tokenData['id'] == null) throw Exception("Dados do cartão recusados pelo Mercado Pago.");
+
+      final String cardToken = tokenData['id'];
+
+      final callable = FirebaseFunctions.instanceFor(region: 'us-central1').httpsCallable('criarPagamentoCartao');
+      final result = await callable.call({
+        'planoNome': widget.templateNome,
+        'preco': widget.preco,
+        'tokenCartao': cardToken,
+        'parcelas': 1, 
+        'metodoPagamentoId': 'master', 
+        'emailPagador': widget.usuarioAtual.email ?? 'email@teste.com',
+        'tipoDoc': 'CPF',
+        'numeroDoc': _cpfCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''),
+      });
+
+      if (result.data['status'] == 'approved' || result.data['status'] == 'in_process') {
+        if (mounted) {
+          Navigator.pop(context); // Fecha o checkout
+          widget.onSuccess(); // Libera o treino na conta do aluno!
+        }
+      } else {
+        throw Exception(result.data['status_detail']);
+      }
+
+    } catch (e) {
+      _mostrarErro("Pagamento recusado: $e");
+    } finally {
+      if(mounted) setState(() => _isProcessing = false);
+    }
+  }
+
+  void _mostrarErro(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: AppColors.error));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      height: MediaQuery.of(context).size.height * 0.75,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text("Comprar Treino", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Text("${widget.templateNome} - R\$ ${widget.preco.toStringAsFixed(2)}", style: const TextStyle(color: AppColors.primary, fontSize: 16)),
+          const SizedBox(height: 20),
+          
+          Row(
+            children: [
+              Expanded(child: ChoiceChip(
+                label: const Text("Pagar com PIX"),
+                selected: _metodoSelecionado == 0,
+                onSelected: (val) => setState(() { _metodoSelecionado = 0; _qrCodeBase64 = null; }),
+                selectedColor: AppColors.primary,
+                labelStyle: TextStyle(color: _metodoSelecionado == 0 ? Colors.black : Colors.white),
+              )),
+              const SizedBox(width: 12),
+              Expanded(child: ChoiceChip(
+                label: const Text("Cartão de Crédito"),
+                selected: _metodoSelecionado == 1,
+                onSelected: (val) => setState(() { _metodoSelecionado = 1; _qrCodeBase64 = null; }),
+                selectedColor: AppColors.primary,
+                labelStyle: TextStyle(color: _metodoSelecionado == 1 ? Colors.black : Colors.white),
+              )),
+            ],
+          ),
+          
+          const SizedBox(height: 24),
+
+          Expanded(
+            child: _metodoSelecionado == 0 ? _buildPixView() : _buildCartaoView(),
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPixView() {
+    if (_qrCodeBase64 != null && _pixCopiaCola != null) {
+      return Column(
+        children: [
+          const Text("Escaneie o QR Code abaixo:", style: TextStyle(color: Colors.white)),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+            child: Image.memory(base64Decode(_qrCodeBase64!), width: 200, height: 200),
+          ),
+          const SizedBox(height: 24),
+          const Text("Ou copie o código PIX:", style: TextStyle(color: Colors.white70)),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(8)),
+            child: SelectableText(_pixCopiaCola!, style: const TextStyle(color: AppColors.primary, fontSize: 12)),
+          ),
+          const Spacer(),
+          const Text("Aguardando pagamento... O seu treino será liberado automaticamente assim que o banco confirmar.", textAlign: TextAlign.center, style: TextStyle(color: Colors.white54, fontSize: 12)),
+        ],
+      );
+    }
+
+    return Center(
+      child: _isProcessing 
+        ? const CircularProgressIndicator(color: AppColors.primary)
+        : ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
+            icon: const Icon(Icons.qr_code, color: Colors.black),
+            label: const Text("GERAR CÓDIGO PIX", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+            onPressed: _gerarPix,
+          ),
+    );
+  }
+
+  Widget _buildCartaoView() {
+    return ListView(
+      children: [
+        _buildTextField(_numCartaoCtrl, "Número do Cartão", Icons.credit_card, TextInputType.number),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(child: _buildTextField(_validadeCtrl, "Validade (MM/AA)", Icons.date_range, TextInputType.datetime)),
+            const SizedBox(width: 12),
+            Expanded(child: _buildTextField(_cvvCtrl, "CVV", Icons.security, TextInputType.number)),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _buildTextField(_nomeCtrl, "Nome impresso no cartão", Icons.person, TextInputType.name),
+        const SizedBox(height: 12),
+        _buildTextField(_cpfCtrl, "CPF do Titular", Icons.badge, TextInputType.number),
+        
+        const SizedBox(height: 30),
+        SizedBox(
+          height: 50,
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+            onPressed: _isProcessing ? null : _processarCartao,
+            child: _isProcessing 
+                ? const CircularProgressIndicator(color: Colors.black)
+                : const Text("CONFIRMAR PAGAMENTO", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          ),
+        )
+      ],
+    );
+  }
+
+  Widget _buildTextField(TextEditingController ctrl, String label, IconData icon, TextInputType type) {
+    return TextField(
+      controller: ctrl,
+      keyboardType: type,
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(color: Colors.white54),
+        prefixIcon: Icon(icon, color: Colors.white54),
+        filled: true,
+        fillColor: Colors.black26,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+      ),
     );
   }
 }

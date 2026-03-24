@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../../core/theme/app_colors.dart';
-import 'verify_email_page.dart'; // <--- Nova tela que vamos criar
+import 'verify_email_page.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -18,7 +18,7 @@ class _RegisterPageState extends State<RegisterPage> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController(); // <--- Novo
+  final _confirmPasswordController = TextEditingController();
   
   String _selectedRole = 'aluno';
   bool _isLoading = false;
@@ -36,20 +36,25 @@ class _RegisterPageState extends State<RegisterPage> {
         password: _passwordController.text.trim(),
       );
 
-      // 2. Salva os dados no Firestore
+      // 2. Salva os dados no Firestore (Agora alinhado com o Painel Web)
       String uid = userCredential.user!.uid;
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'uid': uid,
         'name': _nameController.text.trim(),
         'email': _emailController.text.trim(),
-        'tipo': _selectedRole,
+        'role': _selectedRole, // Mudamos de 'tipo' para 'role'
+        'isPremium': false,    // Adicionado para o painel web identificar o plano padrão
         'createdAt': FieldValue.serverTimestamp(),
-        // Inicializa campos padrão para evitar null safety errors
+        
+        // Inicializa campos padrão dependendo do tipo de conta
         if (_selectedRole == 'aluno') ...{
            'peso': '--',
            'altura': '--',
            'objetivo': 'Definir',
            'freq_semanal': '3x',
+        } else if (_selectedRole == 'professor') ...{
+           'academiaId': null, // Começa como autônomo até ser vinculado no painel
+           'academiaNome': null,
         }
       });
       
@@ -107,7 +112,8 @@ class _RegisterPageState extends State<RegisterPage> {
                 children: [
                   Expanded(child: _buildRoleCard("Aluno", "aluno", Icons.fitness_center)),
                   const SizedBox(width: 16),
-                  Expanded(child: _buildRoleCard("Personal", "personal", Icons.assignment_ind)),
+                  // Valor alterado de "personal" para "professor" para o painel web reconhecer
+                  Expanded(child: _buildRoleCard("Personal", "professor", Icons.assignment_ind)),
                 ],
               ),
               const SizedBox(height: 24),
@@ -122,7 +128,6 @@ class _RegisterPageState extends State<RegisterPage> {
               _buildTextField(controller: _passwordController, label: "Senha", icon: Icons.lock, isPassword: true),
               const SizedBox(height: 16),
               
-              // --- CONFIRMAÇÃO DE SENHA ---
               _buildTextField(
                 controller: _confirmPasswordController, 
                 label: "Confirmar Senha", 

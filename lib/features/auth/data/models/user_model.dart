@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class UserModel {
   final String id;
   final String name;
-  final String role; // professor ou aluno [cite: 31]
+  final String role;
   final String? photoUrl;
   final String age;
   final double weight;
