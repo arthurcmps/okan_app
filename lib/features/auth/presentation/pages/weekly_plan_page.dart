@@ -31,7 +31,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
 
   bool _isVerificandoPerfil = true;
   bool _souProfessor = false;
-  bool _isAlunoSemPersonal = false; 
   bool _modoEdicao = false;
 
   bool get _isMeuProprioTreino => FirebaseAuth.instance.currentUser?.uid == widget.studentId;
@@ -66,7 +65,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
       final data = doc.data();
       
       bool isProf = false;
-      bool isSelfManaged = false;
 
       if (data != null) {
         final role = data['role']?.toString().toLowerCase();
@@ -76,17 +74,11 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
         if (role == 'personal' || role == 'professor' || tipo == 'personal' || isPersonal) {
           isProf = true;
         }
-
-        final pId = data['personalId'];
-        if (!isProf && (pId == null || pId.toString().trim().isEmpty)) {
-          isSelfManaged = true;
-        }
       }
       
       if (mounted) {
         setState(() {
           _souProfessor = isProf;
-          _isAlunoSemPersonal = isSelfManaged; 
           _modoEdicao = false; 
           _isVerificandoPerfil = false;
         });
@@ -107,13 +99,12 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
 
   Future<void> _notificarPersonal(String titulo, String corpo) async {
     if (_isMeuProprioTreino && _souProfessor) return;
-    if (_isAlunoSemPersonal) return; 
 
     try {
       final docAluno = await FirebaseFirestore.instance.collection('users').doc(widget.studentId).get();
       final personalId = docAluno.data()?['personalId'];
         
-      if (personalId == null || personalId.toString().isEmpty) return;
+      if (personalId == null || personalId.toString().isEmpty || personalId == 'SYSTEM_ADMIN') return;
 
       await FirebaseFirestore.instance
           .collection('users')
@@ -155,7 +146,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     }
   }
 
-  // --- CORREÇÃO AQUI (Uso do ctx) ---
   void _limparDiaDialog(String diaKey) {
     showDialog(
       context: context,
@@ -168,13 +158,12 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () async {
-              Navigator.pop(ctx); // Fecha o dialog com segurança
+              Navigator.pop(ctx);
               setState(() {
                 _cacheExercicios[diaKey] = [];
               });
               await _salvarListaDoDia(diaKey);
               if (mounted) {
-                // Usa o context original da página para o SnackBar
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Treino do dia apagado com sucesso!"), backgroundColor: AppColors.success));
               }
             },
@@ -220,7 +209,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
               },
             ),
 
-          if ((_souProfessor || _isAlunoSemPersonal) && _isMeuProprioTreino)
+          if (_isMeuProprioTreino)
             IconButton(
               icon: Icon(_modoEdicao ? Icons.visibility : Icons.edit, color: AppColors.primary),
               tooltip: _modoEdicao ? "Mudar para Modo Treino" : "Mudar para Modo Edição",
@@ -354,7 +343,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
                       ),
                       icon: const Icon(Icons.check_circle, color: Colors.black),
-                      label: const Text("FINALIZAR TREINO", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black)),
+                      label: const Text("FINALIZAR TREINO AQUI", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black)),
                       onPressed: () => _confirmarFinalizacao(diaKey),
                     ),
                   ),
@@ -466,7 +455,9 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (!_modoEdicao && !_isMeuProprioTreino && !_isAlunoSemPersonal)
+                      // --- CORREÇÃO DA VISIBILIDADE DO BOTÃO DE TROCA ---
+                      // O botão de pedir troca agora aparece sempre que o usuário for o dono do treino (não em edição)
+                      if (!_modoEdicao && _isMeuProprioTreino)
                         IconButton(
                           icon: Icon(
                             ex.solicitarAlteracao ? Icons.warning : Icons.change_circle_outlined,
@@ -535,7 +526,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
       );
     }
 
-    if ((_isMeuProprioTreino && _souProfessor) || _isAlunoSemPersonal) {
+    if (_isMeuProprioTreino && _souProfessor) {
       return const SizedBox.shrink();
     }
 
@@ -564,7 +555,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
             child: TextButton.icon(
               onPressed: () => _salvarFeedback(diaKey),
               icon: const Icon(Icons.send, color: AppColors.primary, size: 18),
-              label: const Text("Enviar Feedback", style: TextStyle(color: AppColors.primary)),
+              label: const Text("Enviar Feedback para o Personal", style: TextStyle(color: AppColors.primary)),
             ),
           )
         ],
@@ -591,7 +582,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     }
   }
 
-  // --- CORREÇÃO AQUI (Uso do ctx) ---
   void _solicitarAlteracao(String diaKey, WorkoutExercise ex) {
     if (ex.solicitarAlteracao) return; 
 
@@ -624,7 +614,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     );
   }
 
-  // --- CORREÇÃO AQUI (Uso do ctx) ---
   void _confirmarFinalizacao(String diaKey) {
     showDialog(
       context: context,
@@ -650,12 +639,16 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
   Future<void> _salvarHistoricoEResetar(String diaKey) async {
     final exerciciosAtuais = _cacheExercicios[diaKey] ?? [];
     
+    // Captura o feedback preenchido nesta página
+    final feedbackTexto = _feedbackControllers[diaKey]?.text.trim() ?? '';
+    
     try {
       await FirebaseFirestore.instance.collection('workout_history').add({
         'studentId': widget.studentId,
         'diaDaSemana': diaKey,
         'dataRealizacao': FieldValue.serverTimestamp(),
         'exercicios': exerciciosAtuais.map((e) => e.toMap()).toList(),
+        'feedback': feedbackTexto, // Salva na coleção do histórico corretamente
       });
 
       for (var ex in exerciciosAtuais) {
@@ -695,7 +688,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     _salvarListaDoDia(diaKey);
   }
 
-  // --- CORREÇÃO AQUI (Uso do ctx) ---
   void _editarCargaDialog(String diaKey, WorkoutExercise ex) {
     final cargaCtrl = TextEditingController(text: ex.carga);
     showDialog(
@@ -730,7 +722,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     );
   }
 
-  // --- CORREÇÃO AQUI (Uso do ctx) ---
   void _editarExercicioCompletoDialog(String diaKey, WorkoutExercise ex) {
     final nomeCtrl = TextEditingController(text: ex.nome);
     final seriesCtrl = TextEditingController(text: ex.series);
@@ -782,7 +773,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     );
   }
 
-  // --- CORREÇÃO AQUI (Uso do ctx) ---
   void _adicionarExercicioDialog() {
     final nomeCtrl = TextEditingController();
     final seriesCtrl = TextEditingController(text: '3');
@@ -863,7 +853,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     await _salvarListaDoDia(diaKey);
   }
 
-  // --- CORREÇÃO AQUI (Uso do ctx) ---
   void _mostrarOpcoesAdicionar() {
     showModalBottomSheet(
       context: context,
@@ -914,7 +903,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     );
   }
 
-  // --- CORREÇÃO AQUI (Uso do ctx) ---
   void _importarExercicioDaBibliotecaDialog(String diaKey) {
     showModalBottomSheet(
       context: context,
@@ -965,7 +953,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     );
   }
 
-  // --- CORREÇÃO AQUI (Uso do ctx) ---
   void _configurarExercicioImportado(String diaKey, Map<String, dynamic> dadosExercicio) {
     final seriesCtrl = TextEditingController(text: '3');
     final repsCtrl = TextEditingController(text: '12');
@@ -1014,7 +1001,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     );
   }
 
-  // --- CORREÇÃO AQUI (Uso do ctx) ---
   void _salvarComoTemplateDialog(String diaKey) {
     final exercicios = _cacheExercicios[diaKey] ?? [];
     if (exercicios.isEmpty) {
@@ -1065,7 +1051,6 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     );
   }
 
-  // --- CORREÇÃO AQUI (Uso do ctx) ---
   void _importarTemplateDialog(String diaKey) {
     showModalBottomSheet(
       context: context,
@@ -1086,14 +1071,12 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                 stream: FirebaseFirestore.instance
                     .collection('workout_templates')
                     .where('personalId', isEqualTo: FirebaseAuth.instance.currentUser!.uid)
-                    // REMOVIDO: orderBy('timestamp', descending: true) para evitar erro de índice
                     .snapshots(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: AppColors.secondary));
                   
                   final docsRaw = snapshot.data?.docs ?? [];
                   
-                  // ORDENAÇÃO LOCAL NO TELEMÓVEL (Mais recentes no topo)
                   final docs = docsRaw.toList();
                   docs.sort((a, b) {
                     final dataA = a.data() as Map<String, dynamic>;

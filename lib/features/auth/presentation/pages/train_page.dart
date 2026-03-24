@@ -1,14 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../../../../core/widgets/universal_video_player.dart';
-import '../../../../core/services/time_service.dart';
-
-// Importe suas cores. Se der erro, apague e digite "AppColors" para o VS Code sugerir
 import '../../../../core/theme/app_colors.dart';
 
 class TrainPage extends StatefulWidget {
-  final String workoutId;
+  final String workoutId; // É o dia da semana (ex: 'segunda')
 
   const TrainPage({super.key, required this.workoutId});
 
@@ -20,249 +16,175 @@ class _TrainPageState extends State<TrainPage> {
   final Map<int, bool> _concluidos = {};
   final Map<int, String> _cargas = {};
 
-  void _finalizarTreino(String nomeTreino, List<dynamic> exerciciosOriginais) async {
+  // NOVO: Pergunta o feedback antes de finalizar!
+  void _pedirFeedbackEFinalizar(String nomeTreino, List<dynamic> exerciciosOriginais) {
+    final TextEditingController feedbackCtrl = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text("Treino Concluído! 🎉", style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Deixe um feedback para o seu personal (Opcional):", 
+              style: TextStyle(color: Colors.white70, fontSize: 13)
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: feedbackCtrl,
+              style: const TextStyle(color: Colors.white),
+              maxLines: 3,
+              decoration: InputDecoration(
+                hintText: "Senti facilidade, ou dor no ombro...",
+                hintStyle: const TextStyle(color: Colors.white30),
+                filled: true,
+                fillColor: Colors.black26,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx), 
+            child: const Text("Cancelar", style: TextStyle(color: Colors.white54))
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.secondary),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _finalizarTreino(nomeTreino, exerciciosOriginais, feedbackCtrl.text.trim());
+            },
+            child: const Text("Salvar Histórico", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          )
+        ],
+      ),
+    );
+  }
+
+  void _finalizarTreino(String nomeTreino, List<dynamic> exerciciosOriginais, String feedbackTexto) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
     List<Map<String, dynamic>> detalheExercicios = [];
     
     for (int i = 0; i < exerciciosOriginais.length; i++) {
-      if (_concluidos[i] == true) {
-        detalheExercicios.add({
-          'nome': exerciciosOriginais[i]['nome'],
-          'carga': _cargas[i] ?? '0',
-          'series': exerciciosOriginais[i]['series'],
-          'repeticoes': exerciciosOriginais[i]['repeticoes'],
-        });
+      detalheExercicios.add({
+        'nome': exerciciosOriginais[i]['nome'],
+        'carga': _cargas[i] ?? exerciciosOriginais[i]['carga'] ?? '',
+        'series': exerciciosOriginais[i]['series'],
+        'repeticoes': exerciciosOriginais[i]['repeticoes'],
+        'concluido': _concluidos[i] == true,
+        'id': exerciciosOriginais[i]['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+      });
+    }
+
+    try {
+      // SALVA NO HISTÓRICO COM O FEEDBACK EMBUTIDO!
+      await FirebaseFirestore.instance.collection('workout_history').add({
+        'studentId': user.uid,
+        'diaDaSemana': widget.workoutId,
+        'dataRealizacao': FieldValue.serverTimestamp(),
+        'exercicios': detalheExercicios,
+        'feedback': feedbackTexto, 
+      });
+
+      // Desmarca os exercícios na ficha original para a próxima semana
+      final docRef = FirebaseFirestore.instance.collection('workout_plans').doc(user.uid);
+      final snapshot = await docRef.get();
+      if (snapshot.exists) {
+        List<dynamic> diaAtualizado = List.from(snapshot.data()![widget.workoutId] ?? []);
+        for (var ex in diaAtualizado) {
+          if (ex is Map<String, dynamic>) {
+            ex['concluido'] = false;
+          }
+        }
+        await docRef.update({widget.workoutId: diaAtualizado});
       }
+
+      if (mounted) {
+        Navigator.pop(context); // Volta pra tela anterior
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Treino finalizado e salvo no histórico!"), backgroundColor: AppColors.success));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro ao salvar: $e"), backgroundColor: Colors.red));
     }
-
-    await FirebaseFirestore.instance.collection('historico').add({
-      'usuarioId': user.uid,
-      'treinoId': widget.workoutId,
-      'treinoNome': nomeTreino,
-      'data': FieldValue.serverTimestamp(),
-      'exerciciosConcluidos': _concluidos.length,
-      'detalhes': detalheExercicios,
-    });
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text("Treino Salvo! 🔥", style: TextStyle(color: Colors.black)), 
-        backgroundColor: AppColors.secondary,
-      ));
-      Navigator.pop(context);
-    }
-  }
-
-  void _abrirVideo(String url) {
-    if (url.isEmpty) return;
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.black,
-        insetPadding: EdgeInsets.zero,
-        child: Stack(
-          children: [
-            Center(child: UniversalVideoPlayer(videoUrl: url)),
-            Positioned(
-              top: 20, right: 20,
-              child: IconButton(
-                icon: const Icon(Icons.close, color: Colors.white), 
-                onPressed: () => Navigator.pop(context)
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _iniciarDescansoManual() {
-    print("Iniciando descanso..."); // Log para debug
-    TimerService.instance.start(60);
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-      content: Text("Descanso: 60s ⏱️"),
-      duration: Duration(seconds: 1),
-      backgroundColor: AppColors.surface,
-    ));
   }
 
   @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return const Scaffold();
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text("Hora do Treino 🔥"), 
+        title: Text("Treino - ${widget.workoutId.toUpperCase()}"),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        centerTitle: true,
       ),
-      body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance.collection('workouts').doc(widget.workoutId).snapshots(),
+      body: FutureBuilder<DocumentSnapshot>(
+        future: FirebaseFirestore.instance.collection('workout_plans').doc(user.uid).get(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: AppColors.secondary));
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: AppColors.secondary));
           
-          if (!snapshot.hasData || !snapshot.data!.exists) {
-            return const Center(child: Text("Treino não encontrado.", style: TextStyle(color: AppColors.textSub)));
-          }
+          final data = snapshot.data?.data() as Map<String, dynamic>? ?? {};
+          final listaExercicios = data[widget.workoutId] as List<dynamic>? ?? [];
 
-          final dados = snapshot.data!.data() as Map<String, dynamic>;
-          final nomeTreino = dados['nome'] ?? 'Treino';
-          final listaExercicios = List<Map<String, dynamic>>.from(dados['exercicios'] ?? []);
+          if (listaExercicios.isEmpty) {
+            return const Center(child: Text("Você não tem exercícios para hoje.", style: TextStyle(color: Colors.white54)));
+          }
 
           return Column(
             children: [
-              // HEADER
-              Container(
-                padding: const EdgeInsets.all(16.0),
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.05))),
-                ),
-                child: Column(
-                  children: [
-                    Text(
-                      nomeTreino.toUpperCase(), 
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 1.1, color: AppColors.secondary)
-                    ),
-                    Text("${listaExercicios.length} exercícios", style: const TextStyle(color: AppColors.textSub)),
-                  ],
-                ),
-              ),
-              
-              // LISTA
               Expanded(
                 child: ListView.builder(
-                  padding: const EdgeInsets.only(bottom: 100, top: 10),
                   itemCount: listaExercicios.length,
                   itemBuilder: (context, index) {
                     final ex = listaExercicios[index];
-                    final isDone = _concluidos[index] ?? false;
-
                     return Card(
-                      color: isDone ? const Color(0xFF1B3B28) : AppColors.surface,
-                      elevation: 0,
+                      color: AppColors.surface,
                       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16), 
-                        side: isDone 
-                            ? const BorderSide(color: AppColors.secondary, width: 1) 
-                            : BorderSide(color: Colors.white.withOpacity(0.05))
-                      ),
                       child: Padding(
-                        padding: const EdgeInsets.all(12.0), // Padding interno reduzido
+                        padding: const EdgeInsets.all(16.0),
                         child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
-                                // CHECKBOX
-                                Transform.scale(
-                                  scale: 1.2,
-                                  child: Checkbox(
-                                    value: isDone,
-                                    activeColor: AppColors.secondary,
-                                    checkColor: AppColors.background,
-                                    shape: const CircleBorder(),
-                                    side: const BorderSide(color: AppColors.textSub, width: 2),
-                                    onChanged: (val) {
-                                      setState(() => _concluidos[index] = val!);
-                                    },
-                                  ),
+                                Checkbox(
+                                  value: _concluidos[index] ?? false,
+                                  activeColor: AppColors.secondary,
+                                  checkColor: Colors.black,
+                                  onChanged: (val) => setState(() => _concluidos[index] = val ?? false),
                                 ),
-                                const SizedBox(width: 8),
-                                
-                                // TEXTO + REPS
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        ex['nome'], 
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold, 
-                                          fontSize: 16, 
-                                          decoration: isDone ? TextDecoration.lineThrough : null, 
-                                          color: isDone ? AppColors.textSub.withOpacity(0.5) : AppColors.textMain
-                                        )
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: AppColors.primary.withOpacity(0.2),
-                                          borderRadius: BorderRadius.circular(4)
-                                        ),
-                                        child: Text(
-                                          "${ex['series']} x ${ex['repeticoes']}", 
-                                          style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary, fontSize: 12)
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-
-                                // --- BOTÃO CRONÔMETRO (Obrigatório aparecer) ---
-                                Container(
-                                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.1),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: IconButton(
-                                    icon: const Icon(Icons.timer, color: AppColors.secondary, size: 28),
-                                    onPressed: _iniciarDescansoManual,
-                                    tooltip: "Cronômetro",
-                                    padding: const EdgeInsets.all(8),
-                                    constraints: const BoxConstraints(), // Remove restrições de tamanho
-                                  ),
-                                ),
-
-                                // BOTÃO VÍDEO
-                                if (ex['videoUrl'] != null && ex['videoUrl'].isNotEmpty)
-                                  IconButton(
-                                    icon: const Icon(Icons.play_circle_fill, color: Colors.redAccent, size: 28),
-                                    onPressed: () => _abrirVideo(ex['videoUrl']),
-                                    padding: const EdgeInsets.all(8),
-                                    constraints: const BoxConstraints(),
-                                  ),
+                                Expanded(child: Text(ex['nome'], style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold))),
                               ],
                             ),
-                            
-                            const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 8.0),
-                              child: Divider(color: Colors.white10),
-                            ),
-                            
-                            // INPUT CARGA
+                            const SizedBox(height: 8),
                             Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
                               children: [
-                                const Text("Carga:", style: TextStyle(color: AppColors.textSub, fontSize: 14)),
-                                const SizedBox(width: 8),
+                                Text("${ex['series']}x ${ex['repeticoes']}", style: const TextStyle(color: Colors.white70)),
+                                const Spacer(),
                                 SizedBox(
-                                  width: 80,
-                                  height: 35,
+                                  width: 100,
                                   child: TextField(
                                     keyboardType: TextInputType.number,
-                                    style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.bold),
-                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(color: Colors.white),
                                     decoration: InputDecoration(
-                                      hintText: "kg",
-                                      hintStyle: TextStyle(color: AppColors.textSub.withOpacity(0.3)),
-                                      contentPadding: EdgeInsets.zero,
-                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                                      labelText: "Carga",
+                                      hintText: ex['carga'] ?? '',
                                       filled: true,
                                       fillColor: Colors.black26,
                                       suffixText: "kg",
                                       suffixStyle: const TextStyle(fontSize: 10, color: AppColors.textSub),
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
                                     ),
-                                    onChanged: (val) {
-                                      _cargas[index] = val;
-                                    },
+                                    onChanged: (val) => _cargas[index] = val,
                                   ),
                                 ),
                               ],
@@ -275,19 +197,20 @@ class _TrainPageState extends State<TrainPage> {
                 ),
               ),
               
-              // CONCLUIR
+              // BOTÃO CONCLUIR QUE CHAMA O NOVO DIÁLOGO DE FEEDBACK
               Container(
                 padding: const EdgeInsets.all(16.0),
                 width: double.infinity,
                 color: AppColors.surface,
-                child: ElevatedButton(
+                child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.secondary,
                     foregroundColor: AppColors.background,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
-                  onPressed: () => _finalizarTreino(nomeTreino, listaExercicios),
-                  child: const Text("CONCLUIR TREINO", style: TextStyle(fontWeight: FontWeight.bold)),
+                  icon: const Icon(Icons.check_circle, color: Colors.black),
+                  label: const Text("FINALIZAR TREINO", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  onPressed: () => _pedirFeedbackEFinalizar(widget.workoutId, listaExercicios),
                 ),
               ),
             ],
