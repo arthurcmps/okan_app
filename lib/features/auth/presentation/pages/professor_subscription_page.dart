@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -17,8 +18,7 @@ class _ProfessorSubscriptionPageState extends State<ProfessorSubscriptionPage> {
   final user = FirebaseAuth.instance.currentUser;
   bool _isLoading = false;
 
-  // TODO: Coloque aqui a sua PUBLIC KEY do Mercado Pago
-  final String _mercadoPagoPublicKey = "TEST-7836166911445116-031722-d0c5e5953a3c421c2de9067cfad9f2f4-230652618";
+  final String _mercadoPagoPublicKey = "TEST-13b66d79-52ea-410d-9efb-57db088806b4";
 
   Future<void> _abrirCheckout(String planoNome, double preco) async {
     showModalBottomSheet(
@@ -38,7 +38,6 @@ class _ProfessorSubscriptionPageState extends State<ProfessorSubscriptionPage> {
     );
   }
 
-  // --- NOVA FUNÇÃO: CANCELAR ASSINATURA ---
   Future<void> _cancelarAssinatura() async {
     showDialog(
       context: context,
@@ -57,7 +56,7 @@ class _ProfessorSubscriptionPageState extends State<ProfessorSubscriptionPage> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () async {
-              Navigator.pop(ctx); // Fecha o modal
+              Navigator.pop(ctx); 
               setState(() => _isLoading = true);
 
               try {
@@ -118,7 +117,6 @@ class _ProfessorSubscriptionPageState extends State<ProfessorSubscriptionPage> {
                 const Text("Escolha o plano ideal para gerir os seus alunos e vender os seus treinos na plataforma.", textAlign: TextAlign.center, style: TextStyle(color: Colors.white54, fontSize: 16)),
                 const SizedBox(height: 40),
 
-                // PLANO BASE (GRÁTIS)
                 _buildCardPlano(
                   titulo: "Plano Base",
                   preco: "Grátis",
@@ -127,12 +125,11 @@ class _ProfessorSubscriptionPageState extends State<ProfessorSubscriptionPage> {
                   corDestaque: Colors.white54,
                   beneficios: ["Até 3 alunos ativos", "Criar e aplicar treinos", "Acesso à biblioteca padrão"],
                   botaoTexto: !isPremium ? "SEU PLANO ATUAL" : "REBAIXAR PLANO",
-                  onPressed: !isPremium ? null : _cancelarAssinatura, // <--- CHAMADA DA FUNÇÃO AQUI
+                  onPressed: !isPremium ? null : _cancelarAssinatura, 
                 ),
 
                 const SizedBox(height: 24),
 
-                // PLANO MESTRE SANKOFA
                 Stack(
                   clipBehavior: Clip.none,
                   children: [
@@ -223,12 +220,11 @@ class CheckoutSheet extends StatefulWidget {
 }
 
 class _CheckoutSheetState extends State<CheckoutSheet> {
-  int _metodoSelecionado = 0; // 0 = PIX, 1 = Cartão
+  int _metodoSelecionado = 0; 
   bool _isProcessing = false;
   String? _qrCodeBase64;
   String? _pixCopiaCola;
 
-  // Controladores do Cartão
   final _numCartaoCtrl = TextEditingController();
   final _validadeCtrl = TextEditingController();
   final _cvvCtrl = TextEditingController();
@@ -240,7 +236,6 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
     try {
       await FirebaseAuth.instance.currentUser?.getIdToken(true);
       
-      // Chamada explícita à região do servidor para garantir comunicação
       final callable = FirebaseFunctions.instanceFor(region: 'us-central1').httpsCallable('criarPagamentoPix');
       final response = await callable.call({'planoNome': widget.planoNome, 'preco': widget.preco});
       
@@ -255,6 +250,28 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
     }
   }
 
+  String _traduzirErroMercadoPago(String code, String fallback) {
+    switch (code) {
+      case '205': return "Digite o número do seu cartão.";
+      case '208':
+      case '209': return "Mês ou ano de validade inválido.";
+      case '212':
+      case '213':
+      case '214': return "Informe seu CPF corretamente.";
+      case '221': return "Digite o nome igual ao do cartão.";
+      case '224': return "Digite o CVV (código de segurança).";
+      case 'E301': return "Número do cartão inválido.";
+      case 'E302': return "CVV inválido. Verifique o código no verso.";
+      case '316': return "Nome do titular inválido.";
+      case '322':
+      case '323':
+      case '324': return "CPF inválido. Verifique os números.";
+      case '325':
+      case '326': return "Data de validade incorreta ou expirada.";
+      default: return fallback;
+    }
+  }
+
   Future<void> _processarCartao() async {
     if (_numCartaoCtrl.text.isEmpty || _cvvCtrl.text.isEmpty || _cpfCtrl.text.isEmpty || _validadeCtrl.text.isEmpty) {
       _mostrarErro("Preencha todos os campos do cartão.");
@@ -264,15 +281,20 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
     setState(() => _isProcessing = true);
 
     try {
-      // NOVA LÓGICA À PROVA DE FALHAS PARA A VALIDADE
-      String dataValidade = _validadeCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''); // Extrai apenas números
-      if (dataValidade.length < 4) {
-        throw Exception("Validade incorreta. Use MM/AA.");
-      }
+      String numCartao = _numCartaoCtrl.text.replaceAll(RegExp(r'[^0-9]'), '');
+      String dataValidade = _validadeCtrl.text.replaceAll(RegExp(r'[^0-9]'), '');
+      
+      if (dataValidade.length < 4) throw Exception("A validade do cartão deve ter o formato MM/AA.");
       
       final mes = dataValidade.substring(0, 2);
       final anoRaw = dataValidade.substring(2);
       final ano = anoRaw.length == 2 ? "20$anoRaw" : anoRaw;
+
+      // Bandeira dinâmica
+      String metodoPagamentoStr = 'master';
+      if (numCartao.startsWith('4')) metodoPagamentoStr = 'visa';
+      else if (numCartao.startsWith('3')) metodoPagamentoStr = 'amex';
+      else if (numCartao.startsWith('6')) metodoPagamentoStr = 'elo';
 
       await FirebaseAuth.instance.currentUser?.getIdToken(true);
 
@@ -281,7 +303,7 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
         url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          "card_number": _numCartaoCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''),
+          "card_number": numCartao,
           "expiration_month": int.parse(mes),
           "expiration_year": int.parse(ano),
           "security_code": _cvvCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''),
@@ -298,19 +320,25 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
       final tokenData = jsonDecode(mpResponse.body);
       
       if (tokenData['id'] == null) {
-        throw Exception("Dados do cartão recusados pelo Mercado Pago. Verifique os números.");
+        String msgErro = 'Dados inválidos. Verifique as informações.';
+        if (tokenData['cause'] != null && tokenData['cause'].isNotEmpty) {
+          String causeCode = tokenData['cause'][0]['code'].toString();
+          msgErro = _traduzirErroMercadoPago(causeCode, tokenData['cause'][0]['description']);
+        } else if (tokenData['message'] != null) {
+          msgErro = tokenData['message'];
+        }
+        throw Exception(msgErro);
       }
 
       final String cardToken = tokenData['id'];
 
-      // Chamada explícita à região us-central1
       final callable = FirebaseFunctions.instanceFor(region: 'us-central1').httpsCallable('criarPagamentoCartao');
       final result = await callable.call({
         'planoNome': widget.planoNome,
         'preco': widget.preco,
         'tokenCartao': cardToken,
         'parcelas': 1, 
-        'metodoPagamentoId': 'master', 
+        'metodoPagamentoId': metodoPagamentoStr, 
         'emailPagador': widget.usuarioAtual.email ?? 'email@teste.com',
         'tipoDoc': 'CPF',
         'numeroDoc': _cpfCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''),
@@ -326,14 +354,14 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
       }
 
     } catch (e) {
-      _mostrarErro("Pagamento recusado: $e");
+      _mostrarErro(e.toString());
     } finally {
       if(mounted) setState(() => _isProcessing = false);
     }
   }
 
   void _mostrarErro(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: AppColors.error));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg.replaceAll('Exception:', '').trim()), backgroundColor: AppColors.error));
   }
 
   @override
@@ -419,19 +447,19 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
   Widget _buildCartaoView() {
     return ListView(
       children: [
-        _buildTextField(_numCartaoCtrl, "Número do Cartão", Icons.credit_card, TextInputType.number),
+        _buildTextField(_numCartaoCtrl, "Número do Cartão", Icons.credit_card, TextInputType.number, formatters: [CardInputFormatter()]),
         const SizedBox(height: 12),
         Row(
           children: [
-            Expanded(child: _buildTextField(_validadeCtrl, "Validade (MM/AA)", Icons.date_range, TextInputType.datetime)),
+            Expanded(child: _buildTextField(_validadeCtrl, "Validade (MM/AA)", Icons.date_range, TextInputType.number, formatters: [DateInputFormatter()])),
             const SizedBox(width: 12),
-            Expanded(child: _buildTextField(_cvvCtrl, "CVV", Icons.security, TextInputType.number)),
+            Expanded(child: _buildTextField(_cvvCtrl, "CVV", Icons.security, TextInputType.number, formatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(4)])),
           ],
         ),
         const SizedBox(height: 12),
         _buildTextField(_nomeCtrl, "Nome impresso no cartão", Icons.person, TextInputType.name),
         const SizedBox(height: 12),
-        _buildTextField(_cpfCtrl, "CPF do Titular", Icons.badge, TextInputType.number),
+        _buildTextField(_cpfCtrl, "CPF do Titular", Icons.badge, TextInputType.number, formatters: [CpfInputFormatter()]),
         
         const SizedBox(height: 30),
         SizedBox(
@@ -448,10 +476,11 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
     );
   }
 
-  Widget _buildTextField(TextEditingController ctrl, String label, IconData icon, TextInputType type) {
+  Widget _buildTextField(TextEditingController ctrl, String label, IconData icon, TextInputType type, {List<TextInputFormatter>? formatters}) {
     return TextField(
       controller: ctrl,
       keyboardType: type,
+      inputFormatters: formatters,
       style: const TextStyle(color: Colors.white),
       decoration: InputDecoration(
         labelText: label,
@@ -462,5 +491,48 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
       ),
     );
+  }
+}
+
+class DateInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    var text = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (text.length > 4) text = text.substring(0, 4);
+    var formatted = '';
+    for (int i = 0; i < text.length; i++) {
+      formatted += text[i];
+      if (i == 1 && text.length > 2) formatted += '/';
+    }
+    return TextEditingValue(text: formatted, selection: TextSelection.collapsed(offset: formatted.length));
+  }
+}
+
+class CardInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    var text = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (text.length > 16) text = text.substring(0, 16);
+    var formatted = '';
+    for (int i = 0; i < text.length; i++) {
+      if (i > 0 && i % 4 == 0) formatted += ' ';
+      formatted += text[i];
+    }
+    return TextEditingValue(text: formatted, selection: TextSelection.collapsed(offset: formatted.length));
+  }
+}
+
+class CpfInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    var text = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (text.length > 11) text = text.substring(0, 11);
+    var formatted = '';
+    for (int i = 0; i < text.length; i++) {
+      if (i == 3 || i == 6) formatted += '.';
+      if (i == 9) formatted += '-';
+      formatted += text[i];
+    }
+    return TextEditingValue(text: formatted, selection: TextSelection.collapsed(offset: formatted.length));
   }
 }

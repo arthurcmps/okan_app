@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -19,7 +20,7 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
   List<String> _userTags = [];
 
   // Chave Pública do Mercado Pago
-  final String _mercadoPagoPublicKey = "TEST-7836166911445116-031722-d0c5e5953a3c421c2de9067cfad9f2f4-230652618";
+  final String _mercadoPagoPublicKey = "TEST-13b66d79-52ea-410d-9efb-57db088806b4";
 
   @override
   void initState() {
@@ -60,20 +61,15 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
     return score;
   }
 
-  // ==============================================================
-  // LÓGICA DE AQUISIÇÃO E APLICAÇÃO (Agora com Mercado Pago)
-  // ==============================================================
-
   void _processarAquisicao(String templateId, Map<String, dynamic> treinoData) {
     final double preco = (treinoData['preco'] ?? 0.0).toDouble();
 
     if (preco <= 0) {
-      _registrarCompraNoPerfil(templateId); // É grátis, pega direto
+      _registrarCompraNoPerfil(templateId); 
     } else {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      // Abre o Checkout Real do Mercado Pago
       showModalBottomSheet(
         context: context,
         isScrollControlled: true,
@@ -88,7 +84,7 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
             publicKey: _mercadoPagoPublicKey,
             usuarioAtual: user,
             onSuccess: () {
-              _registrarCompraNoPerfil(templateId); // Libera o treino após pagamento aprovado
+              _registrarCompraNoPerfil(templateId); 
             },
           ),
         ),
@@ -205,9 +201,6 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
     }
   }
 
-  // ==============================================================
-  // UI: DETALHES DO TREINO
-  // ==============================================================
   void _abrirDetalhesDoTreino(String templateId, Map<String, dynamic> treinoData, int matchScore, bool jaAdquirido) {
     showModalBottomSheet(
       context: context,
@@ -415,7 +408,7 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
 }
 
 // ============================================================================
-// COMPONENTE DE CHECKOUT PARA TEMPLATES (Idêntico à Assinatura)
+// COMPONENTE DE CHECKOUT
 // ============================================================================
 class TemplateCheckoutSheet extends StatefulWidget {
   final String templateId;
@@ -440,7 +433,7 @@ class TemplateCheckoutSheet extends StatefulWidget {
 }
 
 class _TemplateCheckoutSheetState extends State<TemplateCheckoutSheet> {
-  int _metodoSelecionado = 0; // 0 = PIX, 1 = Cartão
+  int _metodoSelecionado = 0; 
   bool _isProcessing = false;
   String? _qrCodeBase64;
   String? _pixCopiaCola;
@@ -470,6 +463,28 @@ class _TemplateCheckoutSheetState extends State<TemplateCheckoutSheet> {
     }
   }
 
+  String _traduzirErroMercadoPago(String code, String fallback) {
+    switch (code) {
+      case '205': return "Digite o número do seu cartão.";
+      case '208':
+      case '209': return "Mês ou ano de validade inválido.";
+      case '212':
+      case '213':
+      case '214': return "Informe seu CPF corretamente.";
+      case '221': return "Digite o nome igual ao do cartão.";
+      case '224': return "Digite o CVV (código de segurança).";
+      case 'E301': return "Número do cartão inválido.";
+      case 'E302': return "CVV inválido. Verifique o código no verso.";
+      case '316': return "Nome do titular inválido.";
+      case '322':
+      case '323':
+      case '324': return "CPF inválido. Verifique os números.";
+      case '325':
+      case '326': return "Data de validade incorreta ou expirada.";
+      default: return fallback;
+    }
+  }
+
   Future<void> _processarCartao() async {
     if (_numCartaoCtrl.text.isEmpty || _cvvCtrl.text.isEmpty || _cpfCtrl.text.isEmpty || _validadeCtrl.text.isEmpty) {
       _mostrarErro("Preencha todos os campos do cartão.");
@@ -479,12 +494,20 @@ class _TemplateCheckoutSheetState extends State<TemplateCheckoutSheet> {
     setState(() => _isProcessing = true);
 
     try {
+      String numCartao = _numCartaoCtrl.text.replaceAll(RegExp(r'[^0-9]'), '');
       String dataValidade = _validadeCtrl.text.replaceAll(RegExp(r'[^0-9]'), '');
-      if (dataValidade.length < 4) throw Exception("Validade incorreta. Use MM/AA.");
+      
+      if (dataValidade.length < 4) throw Exception("A validade do cartão deve ter o formato MM/AA.");
       
       final mes = dataValidade.substring(0, 2);
       final anoRaw = dataValidade.substring(2);
       final ano = anoRaw.length == 2 ? "20$anoRaw" : anoRaw;
+
+      // Descobre a bandeira automaticamente pelo primeiro dígito para não forçar "master"
+      String metodoPagamentoStr = 'master';
+      if (numCartao.startsWith('4')) metodoPagamentoStr = 'visa';
+      else if (numCartao.startsWith('3')) metodoPagamentoStr = 'amex';
+      else if (numCartao.startsWith('6')) metodoPagamentoStr = 'elo';
 
       await FirebaseAuth.instance.currentUser?.getIdToken(true);
 
@@ -493,7 +516,7 @@ class _TemplateCheckoutSheetState extends State<TemplateCheckoutSheet> {
         url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          "card_number": _numCartaoCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''),
+          "card_number": numCartao,
           "expiration_month": int.parse(mes),
           "expiration_year": int.parse(ano),
           "security_code": _cvvCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''),
@@ -508,7 +531,17 @@ class _TemplateCheckoutSheetState extends State<TemplateCheckoutSheet> {
       );
 
       final tokenData = jsonDecode(mpResponse.body);
-      if (tokenData['id'] == null) throw Exception("Dados do cartão recusados pelo Mercado Pago.");
+      
+      if (tokenData['id'] == null) {
+        String msgErro = 'Dados inválidos. Verifique as informações.';
+        if (tokenData['cause'] != null && tokenData['cause'].isNotEmpty) {
+          String causeCode = tokenData['cause'][0]['code'].toString();
+          msgErro = _traduzirErroMercadoPago(causeCode, tokenData['cause'][0]['description']);
+        } else if (tokenData['message'] != null) {
+          msgErro = tokenData['message'];
+        }
+        throw Exception(msgErro);
+      }
 
       final String cardToken = tokenData['id'];
 
@@ -518,7 +551,7 @@ class _TemplateCheckoutSheetState extends State<TemplateCheckoutSheet> {
         'preco': widget.preco,
         'tokenCartao': cardToken,
         'parcelas': 1, 
-        'metodoPagamentoId': 'master', 
+        'metodoPagamentoId': metodoPagamentoStr, 
         'emailPagador': widget.usuarioAtual.email ?? 'email@teste.com',
         'tipoDoc': 'CPF',
         'numeroDoc': _cpfCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''),
@@ -526,22 +559,22 @@ class _TemplateCheckoutSheetState extends State<TemplateCheckoutSheet> {
 
       if (result.data['status'] == 'approved' || result.data['status'] == 'in_process') {
         if (mounted) {
-          Navigator.pop(context); // Fecha o checkout
-          widget.onSuccess(); // Libera o treino na conta do aluno!
+          Navigator.pop(context); 
+          widget.onSuccess(); 
         }
       } else {
         throw Exception(result.data['status_detail']);
       }
 
     } catch (e) {
-      _mostrarErro("Pagamento recusado: $e");
+      _mostrarErro(e.toString());
     } finally {
       if(mounted) setState(() => _isProcessing = false);
     }
   }
 
   void _mostrarErro(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: AppColors.error));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg.replaceAll('Exception:', '').trim()), backgroundColor: AppColors.error));
   }
 
   @override
@@ -627,19 +660,19 @@ class _TemplateCheckoutSheetState extends State<TemplateCheckoutSheet> {
   Widget _buildCartaoView() {
     return ListView(
       children: [
-        _buildTextField(_numCartaoCtrl, "Número do Cartão", Icons.credit_card, TextInputType.number),
+        _buildTextField(_numCartaoCtrl, "Número do Cartão", Icons.credit_card, TextInputType.number, formatters: [CardInputFormatter()]),
         const SizedBox(height: 12),
         Row(
           children: [
-            Expanded(child: _buildTextField(_validadeCtrl, "Validade (MM/AA)", Icons.date_range, TextInputType.datetime)),
+            Expanded(child: _buildTextField(_validadeCtrl, "Validade (MM/AA)", Icons.date_range, TextInputType.number, formatters: [DateInputFormatter()])),
             const SizedBox(width: 12),
-            Expanded(child: _buildTextField(_cvvCtrl, "CVV", Icons.security, TextInputType.number)),
+            Expanded(child: _buildTextField(_cvvCtrl, "CVV", Icons.security, TextInputType.number, formatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(4)])),
           ],
         ),
         const SizedBox(height: 12),
         _buildTextField(_nomeCtrl, "Nome impresso no cartão", Icons.person, TextInputType.name),
         const SizedBox(height: 12),
-        _buildTextField(_cpfCtrl, "CPF do Titular", Icons.badge, TextInputType.number),
+        _buildTextField(_cpfCtrl, "CPF do Titular", Icons.badge, TextInputType.number, formatters: [CpfInputFormatter()]),
         
         const SizedBox(height: 30),
         SizedBox(
@@ -656,10 +689,11 @@ class _TemplateCheckoutSheetState extends State<TemplateCheckoutSheet> {
     );
   }
 
-  Widget _buildTextField(TextEditingController ctrl, String label, IconData icon, TextInputType type) {
+  Widget _buildTextField(TextEditingController ctrl, String label, IconData icon, TextInputType type, {List<TextInputFormatter>? formatters}) {
     return TextField(
       controller: ctrl,
       keyboardType: type,
+      inputFormatters: formatters,
       style: const TextStyle(color: Colors.white),
       decoration: InputDecoration(
         labelText: label,
@@ -670,5 +704,48 @@ class _TemplateCheckoutSheetState extends State<TemplateCheckoutSheet> {
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
       ),
     );
+  }
+}
+
+class DateInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    var text = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (text.length > 4) text = text.substring(0, 4);
+    var formatted = '';
+    for (int i = 0; i < text.length; i++) {
+      formatted += text[i];
+      if (i == 1 && text.length > 2) formatted += '/';
+    }
+    return TextEditingValue(text: formatted, selection: TextSelection.collapsed(offset: formatted.length));
+  }
+}
+
+class CardInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    var text = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (text.length > 16) text = text.substring(0, 16);
+    var formatted = '';
+    for (int i = 0; i < text.length; i++) {
+      if (i > 0 && i % 4 == 0) formatted += ' ';
+      formatted += text[i];
+    }
+    return TextEditingValue(text: formatted, selection: TextSelection.collapsed(offset: formatted.length));
+  }
+}
+
+class CpfInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    var text = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (text.length > 11) text = text.substring(0, 11);
+    var formatted = '';
+    for (int i = 0; i < text.length; i++) {
+      if (i == 3 || i == 6) formatted += '.';
+      if (i == 9) formatted += '-';
+      formatted += text[i];
+    }
+    return TextEditingValue(text: formatted, selection: TextSelection.collapsed(offset: formatted.length));
   }
 }
