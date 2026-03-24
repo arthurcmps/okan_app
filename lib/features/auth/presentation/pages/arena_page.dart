@@ -116,7 +116,6 @@ class _ArenaPageState extends State<ArenaPage> with SingleTickerProviderStateMix
     }
   }
 
-  // --- NOVA FUNÇÃO: SAIR DE UM DUELO EM ANDAMENTO ---
   void _confirmarSaidaDuelo(String docId) {
     showDialog(
       context: context, 
@@ -143,7 +142,6 @@ class _ArenaPageState extends State<ArenaPage> with SingleTickerProviderStateMix
     );
   }
 
-  // --- NOVA FUNÇÃO: EXCLUIR AMIGO ---
   void _confirmarExclusaoAmigo(String friendshipDocId, String nomeAmigo) {
     showDialog(
       context: context, 
@@ -223,7 +221,7 @@ class _ArenaPageState extends State<ArenaPage> with SingleTickerProviderStateMix
   }
 
   // ==========================================
-  // ABA: DUELOS (Mostra Apenas Duelos Aceitos)
+  // ABA: DUELOS 
   // ==========================================
   Widget _buildDuelosAba() {
     return StreamBuilder<QuerySnapshot>(
@@ -301,17 +299,24 @@ class _ArenaPageState extends State<ArenaPage> with SingleTickerProviderStateMix
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(color: isEncerrado ? Colors.amber.withOpacity(0.2) : Colors.deepOrangeAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-                            child: Text(isEncerrado ? "DUELO ENCERRADO 🏅" : "Duelo de $metricaNome", style: TextStyle(color: isEncerrado ? Colors.amber : Colors.deepOrangeAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                          // --- CORREÇÃO DO RENDER FLEX OVERFLOW AQUI ---
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(color: isEncerrado ? Colors.amber.withOpacity(0.2) : Colors.deepOrangeAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
+                              child: Text(
+                                isEncerrado ? "DUELO ENCERRADO 🏅" : "Duelo de $metricaNome", 
+                                style: TextStyle(color: isEncerrado ? Colors.amber : Colors.deepOrangeAccent, fontWeight: FontWeight.bold, fontSize: 12),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                           ),
+                          const SizedBox(width: 8),
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               if (!isEncerrado) Text("$diasRestantes dias restantes", style: const TextStyle(color: Colors.white54, fontSize: 12)),
                               const SizedBox(width: 8),
-                              // BOTÃO PARA SAIR DO DUELO
                               IconButton(
                                 padding: EdgeInsets.zero,
                                 constraints: const BoxConstraints(),
@@ -339,7 +344,7 @@ class _ArenaPageState extends State<ArenaPage> with SingleTickerProviderStateMix
   }
 
   // ==========================================
-  // ABA: CONVITES (Amizades E Duelos)
+  // ABA: CONVITES 
   // ==========================================
   Widget _buildConvitesAba() {
     return SingleChildScrollView(
@@ -515,7 +520,6 @@ class _ArenaPageState extends State<ArenaPage> with SingleTickerProviderStateMix
               child: ListTile(
                 leading: UserAvatar(photoUrl: souEu ? data['receiverPhoto'] : data['requesterPhoto'], name: nomeAmigo, radius: 20),
                 title: Text(nomeAmigo, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                // BOTÃO DE EXCLUIR AMIGO
                 trailing: IconButton(
                   icon: const Icon(Icons.person_remove, color: Colors.redAccent),
                   tooltip: "Desfazer Amizade",
@@ -574,7 +578,7 @@ class _ArenaPageState extends State<ArenaPage> with SingleTickerProviderStateMix
   }
 
   // ==========================================
-  // O PLACAR (RANKING E MATEMÁTICA INTELIGENTE)
+  // O PLACAR
   // ==========================================
   void _abrirRankingDuelo(DocumentSnapshot desafioDoc, bool isEncerrado) {
     showModalBottomSheet(
