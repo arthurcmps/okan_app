@@ -30,10 +30,10 @@ dependencies:
   firebase_core: ^3.15.2
   firebase_auth: ^5.7.0
   cloud_firestore: ^5.6.12
-  firebase_storage: ^12.4.0
+  firebase_storage: ^12.4.10
   
   # --- UTILITÁRIOS E UI ---
-  image_picker: ^1.1.2
+  image_picker: ^1.2.1
   google_sign_in: ^6.1.0
   fl_chart: ^1.1.1
   url_launcher: ^6.2.0
