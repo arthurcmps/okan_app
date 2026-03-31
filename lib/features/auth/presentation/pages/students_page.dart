@@ -63,12 +63,12 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
 
         final totalAlunos = ativosSnap.docs.length + pendentesSnap.docs.length;
 
-        if (totalAlunos >= 3) {
+        if (totalAlunos >= 1) {
           if (mounted) {
             Navigator.pop(context); // Fecha o modal do convite
             _mostrarAlerta(
               "Limite Atingido ⚠️", 
-              "O seu Plano Base permite até 3 alunos (ativos ou pendentes). Vá ao seu Perfil e torne-se Mestre Sankofa para ter alunos ilimitados e faturar mais!"
+              "O seu Plano Base permite até 1 aluno (ativo ou pendente). Vá ao seu Perfil e torne-se Mestre Sankofa para ter alunos ilimitados e faturar mais!"
             );
           }
           setState(() => _isLoading = false);
@@ -315,71 +315,103 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
     );
   }
 
-  // --- LISTA 1: ALUNOS ATIVOS ---
+  // --- LISTA 1: ALUNOS ATIVOS (COM TRAVA DE DOWNGRADE) ---
   Widget _buildActiveStudentsList() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('users')
-          .where('personalId', isEqualTo: _personalId)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+    return StreamBuilder<DocumentSnapshot>(
+      // 1º Stream: Fica a ouvir o status Premium do Personal
+      stream: FirebaseFirestore.instance.collection('users').doc(_personalId).snapshots(),
+      builder: (context, personalSnapshot) {
+        if (personalSnapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator(color: AppColors.secondary));
         }
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.people_outline, size: 80, color: Colors.white.withOpacity(0.2)),
-                const SizedBox(height: 16),
-                const Text("Nenhum aluno ativo.", style: TextStyle(color: Colors.white54)),
-              ],
-            ),
-          );
-        }
-        
-        final alunos = snapshot.data!.docs;
 
-        return ListView.builder(
-          itemCount: alunos.length,
-          padding: const EdgeInsets.all(16),
-          itemBuilder: (context, index) {
-            final doc = alunos[index];
-            final dados = doc.data() as Map<String, dynamic>;
-            final String nome = dados['name'] ?? 'Aluno';
-            final String email = dados['email'] ?? '';
+        final bool isPremium = personalSnapshot.data?.data() != null 
+            ? (personalSnapshot.data!.data() as Map<String, dynamic>)['isPremium'] == true 
+            : false;
 
-            return Card(
-              color: AppColors.surface,
-              margin: const EdgeInsets.only(bottom: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.white.withOpacity(0.05))),
-              child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                leading: UserAvatar(photoUrl: dados['photoUrl'], name: nome, radius: 25),
-                title: Text(nome, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                subtitle: Text(email, style: const TextStyle(color: Colors.white70)),
-                onTap: () {
-                  Navigator.push(context, MaterialPageRoute(
-                    builder: (context) => StudentDetailPage(studentId: doc.id, studentName: nome, studentEmail: email),
-                  ));
-                },
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
+        return StreamBuilder<QuerySnapshot>(
+          // 2º Stream: Fica a ouvir a lista de alunos
+          stream: FirebaseFirestore.instance
+              .collection('users')
+              .where('personalId', isEqualTo: _personalId)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator(color: AppColors.secondary));
+            }
+            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    IconButton(
-                      icon: const Icon(Icons.chat_bubble_outline, color: AppColors.primary),
-                      onPressed: () {
-                        Navigator.push(context, MaterialPageRoute(builder: (context) => ChatPage(otherUserId: doc.id, otherUserName: nome)));
-                      },
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline, color: AppColors.error),
-                      onPressed: () => _confirmarRemocao(doc.id, email, nome),
-                    ),
+                    Icon(Icons.people_outline, size: 80, color: Colors.white.withOpacity(0.2)),
+                    const SizedBox(height: 16),
+                    const Text("Nenhum aluno ativo.", style: TextStyle(color: Colors.white54)),
                   ],
                 ),
-              ),
+              );
+            }
+            
+            final alunos = snapshot.data!.docs;
+
+            return ListView.builder(
+              itemCount: alunos.length,
+              padding: const EdgeInsets.all(16),
+              itemBuilder: (context, index) {
+                final doc = alunos[index];
+                final dados = doc.data() as Map<String, dynamic>;
+                final String nome = dados['name'] ?? 'Aluno';
+                final String email = dados['email'] ?? '';
+                
+                // REGRA DE NEGÓCIO 10.4: Se não for premium, bloqueia do 2º aluno em diante (índice > 0)
+                final bool isBloqueado = !isPremium && index > 0;
+
+                return Card(
+                  color: isBloqueado ? AppColors.background : AppColors.surface,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12), 
+                    side: BorderSide(color: isBloqueado ? Colors.redAccent.withOpacity(0.3) : Colors.white.withOpacity(0.05))
+                  ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    leading: isBloqueado 
+                        ? const CircleAvatar(backgroundColor: Colors.black45, child: Icon(Icons.lock, color: Colors.redAccent))
+                        : UserAvatar(photoUrl: dados['photoUrl'], name: nome, radius: 25),
+                    title: Text(nome, style: TextStyle(fontWeight: FontWeight.bold, color: isBloqueado ? Colors.white38 : Colors.white)),
+                    subtitle: Text(email, style: TextStyle(color: isBloqueado ? Colors.white24 : Colors.white70)),
+                    onTap: () {
+                      if (isBloqueado) {
+                        _mostrarAlerta(
+                          "Aluno Bloqueado 🔒", 
+                          "O seu plano Gratuito expirou ou atingiu o limite. Assine o plano Premium para desbloquear o acesso a $nome e gerir todos os seus alunos!"
+                        );
+                      } else {
+                        Navigator.push(context, MaterialPageRoute(
+                          builder: (context) => StudentDetailPage(studentId: doc.id, studentName: nome, studentEmail: email),
+                        ));
+                      }
+                    },
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (!isBloqueado) // Esconde o botão de chat se estiver bloqueado
+                          IconButton(
+                            icon: const Icon(Icons.chat_bubble_outline, color: AppColors.primary),
+                            onPressed: () {
+                              Navigator.push(context, MaterialPageRoute(builder: (context) => ChatPage(otherUserId: doc.id, otherUserName: nome)));
+                            },
+                          ),
+                        IconButton(
+                          // O botão de excluir FICA DISPONÍVEL, para ele poder excluir os extras e voltar a ter só 1
+                          icon: const Icon(Icons.delete_outline, color: AppColors.error),
+                          onPressed: () => _confirmarRemocao(doc.id, email, nome),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             );
           },
         );

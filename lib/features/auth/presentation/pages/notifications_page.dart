@@ -158,7 +158,10 @@ class NotificationsPage extends StatelessWidget {
               background: Container(
                 alignment: Alignment.centerRight,
                 padding: const EdgeInsets.only(right: 20),
-                color: AppColors.error,
+                decoration: BoxDecoration(
+                  color: AppColors.error,
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 child: const Icon(Icons.delete, color: Colors.white),
               ),
               onDismissed: (direction) {
@@ -174,11 +177,11 @@ class NotificationsPage extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: isRead ? AppColors.surface.withOpacity(0.5) : AppColors.surface,
                     borderRadius: BorderRadius.circular(12),
-                    border: isRead ? null : Border(left: BorderSide(color: _getColorByType(data['type']), width: 4)),
+                    border: isRead ? null : Border(left: BorderSide(color: _getColorByData(data), width: 4)),
                   ),
                   child: Row(
                     children: [
-                      _getIconByType(data['type']),
+                      _getIconByData(data),
                       const SizedBox(width: 16),
                       Expanded(
                         child: Column(
@@ -210,7 +213,7 @@ class NotificationsPage extends StatelessWidget {
                       if (!isRead)
                         Container(
                           width: 8, height: 8,
-                          decoration: BoxDecoration(color: _getColorByType(data['type']), shape: BoxShape.circle),
+                          decoration: BoxDecoration(color: _getColorByData(data), shape: BoxShape.circle),
                         )
                     ],
                   ),
@@ -223,7 +226,7 @@ class NotificationsPage extends StatelessWidget {
     );
   }
 
-  // --- LÓGICA DE NAVEGAÇÃO E AÇÃO (O CORE DA SUA PERGUNTA) ---
+  // --- LÓGICA DE NAVEGAÇÃO E AÇÃO ---
   void _handleNotificationTap(BuildContext context, DocumentSnapshot doc, Map<String, dynamic> data) async {
     // 1. Marca como lida
     if (data['isRead'] == false) {
@@ -231,11 +234,10 @@ class NotificationsPage extends StatelessWidget {
     }
 
     if (!context.mounted) return;
-    
     final currentUser = FirebaseAuth.instance.currentUser!;
     
     switch (data['type']) {
-      case 'invite': // <-- NOVO: ABRIR POP-UP DO CONVITE
+      case 'invite': 
         final inviteId = data['actionId'];
         if (inviteId != null && inviteId.toString().isNotEmpty) {
           _mostrarDialogoConvite(context, inviteId);
@@ -251,21 +253,15 @@ class NotificationsPage extends StatelessWidget {
         break;
         
       case 'workout':
+      case 'workout_update':
         final actionId = data['actionId'] ?? currentUser.uid;
 
         // Se a notificação for de OUTRO usuário, significa que você é o Personal abrindo o aviso do Aluno
         if (actionId != currentUser.uid) {
-          showDialog(
-            context: context, 
-            barrierDismissible: false,
-            builder: (_) => const Center(child: CircularProgressIndicator(color: AppColors.primary))
-          );
-          
           final studentDoc = await FirebaseFirestore.instance.collection('users').doc(actionId).get();
           final studentData = studentDoc.data() ?? {};
           
           if (context.mounted) {
-            Navigator.pop(context); // Fecha o loading
             Navigator.push(context, MaterialPageRoute(builder: (context) => 
               StudentDetailPage(
                 studentId: actionId, 
@@ -275,17 +271,11 @@ class NotificationsPage extends StatelessWidget {
             ));
           }
         } else {
-          // Se for você mesmo
+          // Se for você mesmo (Aluno a ver a própria ficha atualizada)
           Navigator.push(context, MaterialPageRoute(builder: (context) => 
             WeeklyPlanPage(studentId: currentUser.uid, studentName: "Meus Treinos")
           ));
         }
-        break;
-
-      case 'workout_update': // <-- NOVO: ROTA DIRETA PARA A FICHA DE TREINO ATUALIZADA
-        Navigator.push(context, MaterialPageRoute(builder: (context) => 
-          WeeklyPlanPage(studentId: currentUser.uid, studentName: "Meus Treinos")
-        ));
         break;
 
       case 'assessment':
@@ -294,19 +284,11 @@ class NotificationsPage extends StatelessWidget {
     }
   }
 
-  // --- NOVO: POP-UP DE CONVITE DIRETO DA LISTA ---
+  // --- POP-UP DE CONVITE DIRETO DA LISTA ---
   Future<void> _mostrarDialogoConvite(BuildContext context, String inviteId) async {
-    showDialog(
-      context: context, 
-      barrierDismissible: false, 
-      builder: (_) => const Center(child: CircularProgressIndicator(color: AppColors.primary))
-    );
-
     try {
       final doc = await FirebaseFirestore.instance.collection('invites').doc(inviteId).get();
-      
       if (!context.mounted) return;
-      Navigator.pop(context); // Fecha loading
       
       if (!doc.exists || doc.data()!['status'] != 'pending') {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Este convite já foi respondido ou não está mais disponível.", style: TextStyle(color: Colors.black)), backgroundColor: Colors.white));
@@ -342,36 +324,57 @@ class NotificationsPage extends StatelessWidget {
         )
       );
     } catch(e) {
-      if (context.mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro: $e")));
-      }
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro: $e")));
     }
   }
 
-  // --- HELPERS VISUAIS ---
-  Color _getColorByType(String? type) {
+  // --- HELPERS VISUAIS DINÂMICOS (CORES E ÍCONES) ---
+  Color _getColorByData(Map<String, dynamic> data) {
+    final title = (data['title'] ?? '').toString().toLowerCase();
+    final type = data['type'];
+
+    // Lógica inteligente baseada no título (Para alertas automáticos)
+    if (title.contains('vencido')) return Colors.redAccent;
+    if (title.contains('vencendo') || title.contains('alteração')) return Colors.amber;
+    if (title.contains('feedback')) return Colors.blueAccent;
+
+    // Lógica padrão baseada no tipo
     switch (type) {
       case 'message': return Colors.blueAccent;
       case 'workout': 
       case 'workout_update': return AppColors.primary; 
       case 'assessment': return AppColors.secondary; 
-      case 'invite': return Colors.amber; // Cor única para convites
+      case 'invite': return Colors.amber; 
       default: return Colors.grey;
     }
   }
 
-  Widget _getIconByType(String? type) {
+  Widget _getIconByData(Map<String, dynamic> data) {
     IconData icon;
-    Color color = _getColorByType(type);
+    Color color = _getColorByData(data);
     
-    switch (type) {
-      case 'message': icon = Icons.chat_bubble; break;
-      case 'workout': 
-      case 'workout_update': icon = Icons.fitness_center; break;
-      case 'assessment': icon = Icons.monitor_weight; break;
-      case 'invite': icon = Icons.person_add; break;
-      default: icon = Icons.notifications;
+    final title = (data['title'] ?? '').toString().toLowerCase();
+    final type = data['type'];
+
+    // Ícones personalizados para os alertas automáticos
+    if (title.contains('vencido')) {
+      icon = Icons.warning_amber_rounded;
+    } else if (title.contains('vencendo')) {
+      icon = Icons.timer_outlined;
+    } else if (title.contains('alteração')) {
+      icon = Icons.change_circle_outlined;
+    } else if (title.contains('feedback')) {
+      icon = Icons.feedback_outlined;
+    } else {
+      // Ícones padrão
+      switch (type) {
+        case 'message': icon = Icons.chat_bubble; break;
+        case 'workout': 
+        case 'workout_update': icon = Icons.fitness_center; break;
+        case 'assessment': icon = Icons.monitor_weight; break;
+        case 'invite': icon = Icons.person_add; break;
+        default: icon = Icons.notifications;
+      }
     }
 
     return Container(

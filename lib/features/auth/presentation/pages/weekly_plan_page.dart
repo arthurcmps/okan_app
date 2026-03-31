@@ -48,42 +48,34 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     _carregarPerfil();
   }
 
+  // Lógica unificada para descobrir quem está a usar a página
   Future<void> _carregarPerfil() async {
-    if (!_isMeuProprioTreino) {
-      if (mounted) {
-        setState(() {
-          _souProfessor = true;
-          _modoEdicao = true; 
-          _isVerificandoPerfil = false;
-        });
-      }
-      return;
-    }
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        final dados = doc.data() as Map<String, dynamic>?;
 
-    try {
-      final doc = await FirebaseFirestore.instance.collection('users').doc(widget.studentId).get();
-      final data = doc.data();
-      
-      bool isProf = false;
+        final tipoUsuario = dados?['role']?.toString().toLowerCase() ?? dados?['tipo']?.toString().toLowerCase() ?? 'aluno';
+        final isPersonal = dados?['isPersonal'] == true;
 
-      if (data != null) {
-        final role = data['role']?.toString().toLowerCase();
-        final tipo = data['tipo']?.toString().toLowerCase();
-        final isPersonal = data['isPersonal'] == true;
-        
-        if (role == 'personal' || role == 'professor' || tipo == 'personal' || isPersonal) {
-          isProf = true;
+        if (mounted) {
+          setState(() {
+            _souProfessor = (tipoUsuario == 'professor' || tipoUsuario == 'personal' || tipoUsuario == 'super_admin' || isPersonal);
+            _isVerificandoPerfil = false;
+
+            // 🔒 TRAVA DE SEGURANÇA MÁXIMA
+            if (!_souProfessor) {
+              _modoEdicao = false; // Se não for professor, edição é BLOQUEADA.
+            } else if (!_isMeuProprioTreino) {
+              _modoEdicao = true; // Se for prof a ver ficha de aluno, entra logo em edição.
+            }
+          });
         }
+      } catch (e) {
+        if (mounted) setState(() => _isVerificandoPerfil = false);
       }
-      
-      if (mounted) {
-        setState(() {
-          _souProfessor = isProf;
-          _modoEdicao = false; 
-          _isVerificandoPerfil = false;
-        });
-      }
-    } catch (e) {
+    } else {
       if (mounted) setState(() => _isVerificandoPerfil = false);
     }
   }
@@ -139,7 +131,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
       });
       
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("O aluno foi notificado do novo treino!"), backgroundColor: AppColors.success));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("O aluno foi notificado da atualização!"), backgroundColor: AppColors.success));
       }
     } catch (e) {
       debugPrint("Erro ao notificar aluno: $e");
@@ -200,41 +192,35 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
           ],
         ),
         actions: [
-          if (_modoEdicao)
+          // Botões só aparecem se estiver em modo de edição (que por sua vez só é possível para professores)
+          if (_modoEdicao) ...[
             IconButton(
               icon: const Icon(Icons.delete_sweep, color: Colors.redAccent),
               tooltip: "Limpar Dia",
-              onPressed: () {
-                _limparDiaDialog(_diasDaSemana[_tabController.index]);
-              },
+              onPressed: () => _limparDiaDialog(_diasDaSemana[_tabController.index]),
             ),
-
-          if (_isMeuProprioTreino)
             IconButton(
-              icon: Icon(_modoEdicao ? Icons.visibility : Icons.edit, color: AppColors.primary),
-              tooltip: _modoEdicao ? "Mudar para Modo Treino" : "Mudar para Modo Edição",
+              icon: const Icon(Icons.save_outlined, color: AppColors.secondary),
+              tooltip: "Salvar dia como Template",
+              onPressed: () => _salvarComoTemplateDialog(_diasDaSemana[_tabController.index]),
+            ),
+            if (!_isMeuProprioTreino) // Não avisa a si próprio se estiver a testar a própria ficha
+              IconButton(
+                icon: const Icon(Icons.send_to_mobile, color: AppColors.primary),
+                tooltip: "Avisar Aluno das Mudanças",
+                onPressed: () => _notificarAluno("Treino Atualizado! 🏋️‍♂️", "O seu professor acabou de atualizar a sua ficha de treinos. Vá dar uma olhada!"),
+              ),
+          ],
+
+          // 🔒 A MÁGICA ESTÁ AQUI: O botão de ativar/desativar edição só aparece se FOR PROFESSOR!
+          if (_souProfessor)
+            IconButton(
+              icon: Icon(_modoEdicao ? Icons.check_circle : Icons.edit, color: _modoEdicao ? AppColors.success : Colors.white),
+              tooltip: _modoEdicao ? "Concluir Edição" : "Editar Ficha",
               onPressed: () {
                 setState(() {
                   _modoEdicao = !_modoEdicao;
                 });
-              },
-            ),
-
-          if (_modoEdicao && _souProfessor)
-            IconButton(
-              icon: const Icon(Icons.save_outlined, color: AppColors.secondary),
-              tooltip: "Salvar dia como Template",
-              onPressed: () {
-                _salvarComoTemplateDialog(_diasDaSemana[_tabController.index]);
-              },
-            ),
-
-          if (_modoEdicao && !_isMeuProprioTreino)
-            IconButton(
-              icon: const Icon(Icons.send_to_mobile, color: AppColors.primary),
-              tooltip: "Avisar Aluno das Mudanças",
-              onPressed: () {
-                _notificarAluno("Treino Atualizado! 🏋️‍♂️", "O seu professor acabou de atualizar a sua ficha de treinos. Vá dar uma olhada!");
               },
             ),
         ],
@@ -256,23 +242,31 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
         builder: (context, snapshot) {
           if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: AppColors.secondary));
 
-          final data = snapshot.data!.exists ? snapshot.data!.data() as Map<String, dynamic> : {};
+          final data = snapshot.data!.exists ? snapshot.data!.data() as Map<String, dynamic> : <String, dynamic>{};
 
-          return TabBarView(
-            controller: _tabController,
-            children: _diasDaSemana.map((diaKey) {
-              final listaRaw = data[diaKey] as List<dynamic>? ?? [];
-              final exercicios = listaRaw.map((e) => WorkoutExercise.fromMap(e as Map<String, dynamic>)).toList();
-              _cacheExercicios[diaKey] = exercicios;
-
-              final feedbackAtual = data['feedback_$diaKey'] as String? ?? '';
+          return Column(
+            children: [
+              _buildValidadeBanner(data),
               
-              if (_feedbackControllers[diaKey]!.text.isEmpty && feedbackAtual.isNotEmpty) {
-                 _feedbackControllers[diaKey]!.text = feedbackAtual;
-              }
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: _diasDaSemana.map((diaKey) {
+                    final listaRaw = data[diaKey] as List<dynamic>? ?? [];
+                    final exercicios = listaRaw.map((e) => WorkoutExercise.fromMap(e as Map<String, dynamic>)).toList();
+                    _cacheExercicios[diaKey] = exercicios;
 
-              return _buildDiaContent(diaKey, exercicios, feedbackAtual);
-            }).toList(),
+                    final feedbackAtual = data['feedback_$diaKey'] as String? ?? '';
+                    
+                    if (_feedbackControllers[diaKey]!.text.isEmpty && feedbackAtual.isNotEmpty) {
+                       _feedbackControllers[diaKey]!.text = feedbackAtual;
+                    }
+
+                    return _buildDiaContent(diaKey, exercicios, feedbackAtual);
+                  }).toList(),
+                ),
+              ),
+            ],
           );
         },
       ),
@@ -371,7 +365,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                       checkColor: Colors.black,
                       shape: const CircleBorder(),
                       side: const BorderSide(color: Colors.white54),
-                      onChanged: (val) => _atualizarStatusExercicio(diaKey, ex, val ?? false),
+                      onChanged: _modoEdicao ? null : (val) => _atualizarStatusExercicio(diaKey, ex, val ?? false),
                     ),
                   ),
                   
@@ -394,7 +388,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                         Text("${ex.series} x ${ex.repeticoes}", style: const TextStyle(color: Colors.white70)),
                         
                         InkWell(
-                          onTap: () => _editarCargaDialog(diaKey, ex),
+                          onTap: _modoEdicao ? null : () => _editarCargaDialog(diaKey, ex),
                           borderRadius: BorderRadius.circular(4),
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -455,8 +449,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // --- CORREÇÃO DA VISIBILIDADE DO BOTÃO DE TROCA ---
-                      // O botão de pedir troca agora aparece sempre que o usuário for o dono do treino (não em edição)
+                      // O botão de pedir troca aparece para o aluno se ele não for professor em edição
                       if (!_modoEdicao && _isMeuProprioTreino)
                         IconButton(
                           icon: Icon(
@@ -648,7 +641,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
         'diaDaSemana': diaKey,
         'dataRealizacao': FieldValue.serverTimestamp(),
         'exercicios': exerciciosAtuais.map((e) => e.toMap()).toList(),
-        'feedback': feedbackTexto, // Salva na coleção do histórico corretamente
+        'feedback': feedbackTexto, 
       });
 
       for (var ex in exerciciosAtuais) {
@@ -1134,5 +1127,122 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
         ),
       ),
     );
+  }
+
+  // =========================================================================
+  // SISTEMA DE VALIDADE DE TREINO E NOTIFICAÇÕES (REGRA DE NEGÓCIO 10.3)
+  // =========================================================================
+
+  Widget _buildValidadeBanner(Map<String, dynamic> data) {
+    final validadeTimestamp = data['validade'] as Timestamp?;
+    DateTime? validade;
+    bool isVencido = false;
+    bool pertoDeVencer = false;
+    int diferenca = 0;
+
+    if (validadeTimestamp != null) {
+      validade = validadeTimestamp.toDate();
+      final hoje = DateTime.now();
+      
+      final hojeData = DateTime(hoje.year, hoje.month, hoje.day);
+      final validadeData = DateTime(validade.year, validade.month, validade.day);
+      
+      diferenca = validadeData.difference(hojeData).inDays;
+      
+      if (diferenca < 0) {
+        isVencido = true;
+      } else if (diferenca <= 3) {
+        pertoDeVencer = true;
+      }
+
+      final avisadoVencimento = data['avisadoVencimento'] == true;
+      if ((isVencido || pertoDeVencer) && !avisadoVencimento) {
+        Future.microtask(() async {
+          await FirebaseFirestore.instance.collection('workout_plans').doc(widget.studentId).set({'avisadoVencimento': true}, SetOptions(merge: true));
+          
+          if (isVencido) {
+            _notificarAluno("Treino Vencido! 🚨", "A validade da sua ficha expirou. Cobre seu personal para novos estímulos!");
+            _notificarPersonal("Treino Vencido 🚨", "A ficha de ${widget.studentName} expirou. É hora de renovar!");
+          } else {
+            _notificarAluno("Treino Vencendo! ⏳", "Sua ficha vence em $diferenca dias. Avise seu personal!");
+            _notificarPersonal("Treino Vencendo ⏳", "A ficha de ${widget.studentName} vence em $diferenca dias.");
+          }
+        });
+      }
+    }
+
+    if (validade == null && !_modoEdicao) return const SizedBox.shrink();
+
+    Color bgColor = AppColors.surface;
+    Color textColor = Colors.white70;
+    IconData icon = Icons.date_range;
+    String texto = validade == null ? "Sem validade definida (Toque para adicionar)" : "Válido até: ${validade.day.toString().padLeft(2,'0')}/${validade.month.toString().padLeft(2,'0')}/${validade.year}";
+
+    if (isVencido) {
+      bgColor = Colors.redAccent.withOpacity(0.2);
+      textColor = Colors.redAccent;
+      icon = Icons.warning_amber_rounded;
+      texto = "Treino Vencido! (Expirou em ${validade!.day.toString().padLeft(2,'0')}/${validade.month.toString().padLeft(2,'0')})";
+    } else if (pertoDeVencer) {
+      bgColor = Colors.amber.withOpacity(0.2);
+      textColor = Colors.amber;
+      icon = Icons.timer_outlined;
+      texto = "Vence em $diferenca dias! (${validade!.day.toString().padLeft(2,'0')}/${validade.month.toString().padLeft(2,'0')})";
+    }
+
+    return GestureDetector(
+      onTap: _modoEdicao ? _definirValidade : null,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+        color: bgColor,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: textColor, size: 18),
+            const SizedBox(width: 8),
+            Text(texto, style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 13)),
+            if (_modoEdicao) ...[
+              const SizedBox(width: 8),
+              const Icon(Icons.edit, color: Colors.white54, size: 14),
+            ]
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _definirValidade() async {
+    final dataAtual = DateTime.now();
+    final dataEscolhida = await showDatePicker(
+      context: context,
+      initialDate: dataAtual.add(const Duration(days: 30)), 
+      firstDate: dataAtual,
+      lastDate: dataAtual.add(const Duration(days: 365)),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: AppColors.secondary,
+              onPrimary: Colors.black,
+              surface: AppColors.surface,
+              onSurface: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (dataEscolhida != null) {
+      await FirebaseFirestore.instance.collection('workout_plans').doc(widget.studentId).set({
+        'validade': Timestamp.fromDate(dataEscolhida),
+        'avisadoVencimento': false, 
+      }, SetOptions(merge: true));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Validade do treino definida com sucesso!", style: TextStyle(color: Colors.black)), backgroundColor: AppColors.success));
+      }
+    }
   }
 }
