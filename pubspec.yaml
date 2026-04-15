@@ -10,16 +10,14 @@ dependencies:
   flutter:
     sdk: flutter
   cloud_functions: ^5.6.2
-  http: ^1.1.0
-    
+  http: ^1.1.0    
   firebase_messaging: ^15.2.10
-  
   cached_network_image: ^3.3.1
   
   # --- TRADUÇÕES ---
   flutter_localizations:
     sdk: flutter
-  intl: ^0.20.2 # <--- VOLTAMOS PARA A VERSÃO CORRETA AQUI
+  intl: ^0.20.2
 
   # --- VÍDEOS ---
   youtube_player_flutter: ^9.0.1
@@ -32,9 +30,10 @@ dependencies:
   cloud_firestore: ^5.6.12
   firebase_storage: ^12.4.10
   
+  
   # --- UTILITÁRIOS E UI ---
   image_picker: ^1.2.1
-  google_sign_in: ^6.1.0
+  google_sign_in: ^6.2.1
   fl_chart: ^1.1.1
   url_launcher: ^6.2.0
 
