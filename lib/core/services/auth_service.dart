@@ -13,7 +13,7 @@ class AuthService {
     required String email,
     required String password,
     required String tipo, // 'personal' ou 'aluno'
-    required DateTime? dataNascimento, // <--- OBRIGATÓRIO (pode ser nulo se vier de outra fonte, mas aqui pedimos)
+    required DateTime? dataNascimento,
   }) async {
     try {
       // 1. Cria o usuário no Auth
