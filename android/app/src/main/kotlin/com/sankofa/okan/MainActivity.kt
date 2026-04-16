@@ -1,4 +1,4 @@
-package com.example.okan_app
+package com.sankofa.okan
 
 import io.flutter.embedding.android.FlutterActivity
 
