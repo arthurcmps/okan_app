@@ -89,6 +89,40 @@ class _ArenaPageState extends State<ArenaPage> with SingleTickerProviderStateMix
   Future<void> _enviarConvite() async {
     if (_usuarioEncontrado == null || user == null) return;
     final receiverId = _usuarioEncontrado!['uid'];
+
+    // =================================================================
+    // TRAVA DE SEGURANÇA: Verifica se já existe amizade ou convite
+    // =================================================================
+    
+    // 1. Verifica se EU já enviei um convite para ele(a) (Pendente ou Aceito)
+    final enviouParaEle = await FirebaseFirestore.instance.collection('friendships')
+        .where('requesterId', isEqualTo: user!.uid)
+        .where('receiverId', isEqualTo: receiverId)
+        .get();
+
+    // 2. Verifica se ELE(A) já me enviou um convite (Pendente ou Aceito)
+    final enviouParaMim = await FirebaseFirestore.instance.collection('friendships')
+        .where('requesterId', isEqualTo: receiverId)
+        .where('receiverId', isEqualTo: user!.uid)
+        .get();
+
+    // Se encontrou qualquer documento, significa que o vínculo já existe
+    if (enviouParaEle.docs.isNotEmpty || enviouParaMim.docs.isNotEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Vocês já são amigos ou já existe um convite pendente!"),
+            backgroundColor: Colors.amber, // Cor de alerta
+          )
+        );
+      }
+      setState(() => _usuarioEncontrado = null);
+      _searchCtrl.clear();
+      return; // Interrompe a função aqui para não criar duplicação
+    }
+    // =================================================================
+
+    // Se passou pela trava, continua o envio normal
     final meuDoc = await FirebaseFirestore.instance.collection('users').doc(user!.uid).get();
     final meuNome = meuDoc.data()?['name'] ?? meuDoc.data()?['nome'] ?? 'Atleta';
 
@@ -107,7 +141,11 @@ class _ArenaPageState extends State<ArenaPage> with SingleTickerProviderStateMix
 
     setState(() => _usuarioEncontrado = null);
     _searchCtrl.clear();
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Pedido de amizade enviado!"), backgroundColor: AppColors.primary));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Pedido de amizade enviado!"), backgroundColor: AppColors.primary)
+      );
+    }
   }
 
   Future<void> _responderConvite(String docId, bool aceitou, String requesterId) async {
