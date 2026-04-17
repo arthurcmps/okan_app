@@ -84,6 +84,42 @@
           ]
         }
       }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1080333508962:android:8e02f4cfaa15282d4ccc3b",
+        "android_client_info": {
+          "package_name": "com.sankofa.okan"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1080333508962-08q17itvn84sbd4q63o27cfpfk3nsoq1.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAexNOHGsp24JmCmK7JF-ajxv_147sc_U8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1080333508962-08q17itvn84sbd4q63o27cfpfk3nsoq1.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "1080333508962-bi1v1rtier2uuo3sa17jul2s4dpceh6j.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.okanApp"
+              }
+            }
+          ]
+        }
+      }
     }
   ],
   "configuration_version": "1"

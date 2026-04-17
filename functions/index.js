@@ -7,7 +7,7 @@ const {MercadoPagoConfig, Payment} = require("mercadopago");
 admin.initializeApp();
 
 // 1. CONFIGURAÇÃO DO MERCADO PAGO
-const accessToken = "TEST-7836166911445116-031722-d0c5e5953a3c421c2de9067cfad9f2f4-230652618";
+const accessToken = "APP_USR-7836166911445116-031722-dde7689607260b71af1f35ca9b360890-230652618";
 const client = new MercadoPagoConfig({accessToken: accessToken});
 
 // 2. MOTOR DE NOTIFICAÇÕES PUSH
