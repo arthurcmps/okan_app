@@ -18,6 +18,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
+    // 1. ALTERADO AQUI: O namespace precisa acompanhar o novo nome
     namespace = "com.sankofa.okan"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
@@ -33,10 +34,9 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
+        // 2. ALTERADO AQUI: O ID oficial que a Play Store exige
         applicationId = "com.sankofa.okan"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -57,7 +57,6 @@ android {
 
     buildTypes {
         release {
-            
             // 1. Assinatura (usa = e getByName)
             signingConfig = signingConfigs.getByName("release")
             
