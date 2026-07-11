@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../../core/theme/app_colors.dart';
 
 class TrainPage extends StatefulWidget {
-  final String workoutId; // É o dia da semana (ex: 'segunda')
+  final String workoutId;
 
   const TrainPage({super.key, required this.workoutId});
 

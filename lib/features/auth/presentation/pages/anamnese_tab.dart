@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../../core/theme/app_colors.dart';
-// IMPORTANTE: O widget de notas que criamos
 import '../../../../core/widgets/professor_notes_widget.dart'; 
 
 class AnamneseTab extends StatefulWidget {
@@ -71,8 +70,6 @@ class _AnamneseTabState extends State<AnamneseTab> {
       _controllers.forEach((key, controller) {
         _formData[key] = controller.text;
       });
-
-      // Removemos a lógica de 'personal_notes' daqui pois agora é um widget separado
 
       await FirebaseFirestore.instance
           .collection('users')

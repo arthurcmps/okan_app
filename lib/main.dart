@@ -8,7 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
-
+import 'package:flutter/foundation.dart';
 import 'firebase_options.dart';
 import 'features/auth/presentation/pages/login_page.dart';
 import 'features/auth/presentation/pages/home_page.dart';
@@ -54,10 +54,14 @@ void main() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
 
-    // ATIVAÇÃO DO APP CHECK
+// ATIVAÇÃO DO APP CHECK INTELIGENTE
     await FirebaseAppCheck.instance.activate(
-      androidProvider: AndroidProvider.debug, 
-      appleProvider: AppleProvider.debug,
+      androidProvider: kReleaseMode 
+          ? AndroidProvider.playIntegrity 
+          : AndroidProvider.debug,
+      appleProvider: kReleaseMode 
+          ? AppleProvider.deviceCheck 
+          : AppleProvider.debug,
     );
     
     // Verificação do Onboarding
