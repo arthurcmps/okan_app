@@ -1,11 +1,32 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter/foundation.dart'; // Para kIsWeb
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
+
+  // Construtor para forçar a persistência local
+  AuthService() {
+    _configurarPersistencia();
+  }
+
+  Future<void> _configurarPersistencia() async {
+    try {
+      // kIsWeb é usado porque a persistência na web (se você compilar para web no futuro) é diferente
+      if (kIsWeb) {
+        await _auth.setPersistence(Persistence.LOCAL);
+      } else {
+        // No mobile (Android/iOS), LOCAL é o padrão, mas chamamos explicitamente
+        // para contornar bugs do SDK em algumas versões.
+        await _auth.setPersistence(Persistence.LOCAL);
+      }
+    } catch (e) {
+      debugPrint("Erro ao configurar persistência: $e");
+    }
+  }
 
   // --- CADASTRO POR E-MAIL (Com Data de Nascimento) ---
   Future<String?> cadastrarUsuario({
@@ -58,6 +79,7 @@ class AuthService {
     required String password,
   }) async {
     try {
+      await _configurarPersistencia(); // Reforça a persistência antes de logar
       await _auth.signInWithEmailAndPassword(email: email, password: password);
       return null;
     } on FirebaseAuthException catch (e) {
@@ -73,6 +95,8 @@ class AuthService {
   // --- LOGIN COM GOOGLE ---
   Future<String?> entrarComGoogle() async {
     try {
+      await _configurarPersistencia(); // Reforça a persistência antes de logar
+
       // 1. Inicia o fluxo do Google
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser == null) return "Login cancelado pelo usuário.";
