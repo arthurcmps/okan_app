@@ -2,13 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart'; 
-import '../../features/auth/presentation/pages/notifications_page.dart'; 
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import '../../features/auth/presentation/pages/notifications_page.dart';
 
 class PushNotificationService {
   final FirebaseMessaging _fcm = FirebaseMessaging.instance;
   
-  // Guardamos a chave mestra da navegação aqui
+  // Instância do plugin de notificações locais declarada aqui para evitar erros
+  final FlutterLocalNotificationsPlugin _localNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
+
   GlobalKey<NavigatorState>? _navigatorKey;
 
   Future<void> initialize() async {
@@ -26,21 +29,31 @@ class PushNotificationService {
       debugPrint('Permissão de Push concedida!');
       
       await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
-        alert: true, 
-        badge: true, 
-        sound: true, 
+        alert: true,
+        badge: true,
+        sound: true,
       );
 
-      String? token = await _fcm.getToken();
-      
-      if (token != null) {
-        await _saveTokenToDatabase(token);
-        debugPrint('FCM Token gerado: $token');
-      }
+      // Garante que tentaremos pegar e salvar o token no banco
+      await salvarTokenAtual();
 
+      // Fica ouvindo caso o token do dispositivo mude
       _fcm.onTokenRefresh.listen(_saveTokenToDatabase);
     } else {
       debugPrint('Usuário negou a permissão de Push.');
+    }
+  }
+
+  // Função isolada para poder ser chamada de fora quando o usuário logar
+  Future<void> salvarTokenAtual() async {
+    try {
+      String? token = await _fcm.getToken();
+      if (token != null) {
+        await _saveTokenToDatabase(token);
+        debugPrint('FCM Token gerado e salvo: $token');
+      }
+    } catch (e) {
+      debugPrint('Erro ao obter token do FCM: $e');
     }
   }
 
@@ -55,23 +68,44 @@ class PushNotificationService {
     });
   }
   
-  // --- AGORA RECEBE O NAVIGATOR KEY COMO PARÂMETRO ---
   void setupInteractions(GlobalKey<NavigatorState> navigatorKey) {
     _navigatorKey = navigatorKey;
 
+    // 1. ABERTO EM PRIMEIRO PLANO (Foreground) - Mostra o banner Android
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       debugPrint("Recebi notificação no foreground: ${message.notification?.title}");
-    });
+      
+      RemoteNotification? notification = message.notification;
+      AndroidNotification? android = message.notification?.android;
 
+      if (notification != null && android != null) {
+        _localNotificationsPlugin.show(
+          id: notification.hashCode,
+          title: notification.title,
+          body: notification.body,
+          notificationDetails: const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'high_importance_channel',
+              'Notificações Importantes',
+              importance: Importance.max,
+              priority: Priority.high,
+              icon: '@mipmap/ic_launcher',
+            ),
+          ),
+        );
+      }
+    }); // <-- AQUI ESTAVA FALTANDO FECHAR O ");"
+
+    // 2. CLIQUE EM SEGUNDO PLANO (Background)
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
       debugPrint("Usuário clicou na notificação que estava em background!");
       _handleNotificationClick(message);
     });
 
+    // 3. CLIQUE COM APP FECHADO (Terminated)
     FirebaseMessaging.instance.getInitialMessage().then((RemoteMessage? message) {
       if (message != null) {
         debugPrint("App foi aberto a partir de uma notificação!");
-        // Pequeno delay para garantir que o MaterialApp já foi construído antes de empurrar a nova rota
         Future.delayed(const Duration(milliseconds: 500), () {
           _handleNotificationClick(message);
         });
@@ -85,11 +119,7 @@ class PushNotificationService {
 
     debugPrint('Redirecionando pelo tipo: $type, ID: $actionId');
 
-    // Verifica se temos a chave e se o navegador já está pronto
     if (_navigatorKey != null && _navigatorKey!.currentState != null) {
-      
-      // Independentemente se é um convite (invite), treino atualizado (workout_update), ou mensagem (message)
-      // A NotificationsPage é a "Central de Comando" onde ele resolve tudo.
       if (type == 'invite' || type == 'workout_update' || type == 'message' || type == 'workout') {
         _navigatorKey!.currentState!.push(
           MaterialPageRoute(builder: (context) => const NotificationsPage()),

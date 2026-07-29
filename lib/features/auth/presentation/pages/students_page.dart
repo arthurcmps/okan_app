@@ -42,11 +42,12 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
 
     try {
       // =========================================================
-      // 1. TRAVA DE NEGÓCIO (LIMITAÇÃO DO PLANO BASE)
+      // 1. TRAVA DE NEGÓCIO CORRIGIDA (PLANO BASE vs PREMIUM)
       // =========================================================
       final personalDoc = await FirebaseFirestore.instance.collection('users').doc(user!.uid).get();
       final isPremium = personalDoc.data()?['isPremium'] == true;
 
+      // SÓ aplica o bloqueio se o professor NÃO for premium
       if (!isPremium) {
         // Conta alunos já ativos
         final ativosSnap = await FirebaseFirestore.instance
@@ -63,16 +64,17 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
 
         final totalAlunos = ativosSnap.docs.length + pendentesSnap.docs.length;
 
-        if (totalAlunos >= 1) {
+        // Limite do Plano Gratuito é 3 alunos (entre ativos e pendentes)
+        if (totalAlunos >= 3) {
           if (mounted) {
-            Navigator.pop(context); // Fecha o modal do convite
+            Navigator.pop(context); // Fecha a modal do convite
             _mostrarAlerta(
               "Limite Atingido ⚠️", 
-              "O seu Plano Base permite até 1 aluno (ativo ou pendente). Vá ao seu Perfil e torne-se Mestre Sankofa para ter alunos ilimitados e faturar mais!"
+              "O seu Plano Base permite até 3 alunos (ativos ou pendentes). Vá ao seu Perfil e torne-se Mestre Sankofa para ter alunos ilimitados e faturar mais!"
             );
           }
           setState(() => _isLoading = false);
-          return;
+          return; // Para a execução aqui
         }
       }
       // =========================================================
@@ -94,8 +96,8 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
       final alunoDoc = querySnapshot.docs.first;
       final dadosAluno = alunoDoc.data();
 
-      // 3. Validações
-      if (alunoDoc.id == user.uid) {
+      // 3. Validações adicionais
+      if (alunoDoc.id == user!.uid) {
         _mostrarSnack('Você não pode convidar a si mesmo.', isError: true);
         setState(() => _isLoading = false);
         return;
@@ -146,7 +148,7 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
 
       if (mounted) {
         _mostrarSnack('Convite enviado para ${dadosAluno['name']}! 🚀', isError: false);
-        Navigator.pop(context); // Fecha o modal
+        Navigator.pop(context); // Fecha a modal
         _emailController.clear();
       }
     } catch (e) {
@@ -315,7 +317,7 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
     );
   }
 
-  // --- LISTA 1: ALUNOS ATIVOS (COM TRAVA DE DOWNGRADE) ---
+  // --- LISTA 1: ALUNOS ATIVOS (COM TRAVA DE DOWNGRADE CORRIGIDA) ---
   Widget _buildActiveStudentsList() {
     return StreamBuilder<DocumentSnapshot>(
       // 1º Stream: Fica a ouvir o status Premium do Personal
@@ -363,8 +365,8 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
                 final String nome = dados['name'] ?? 'Aluno';
                 final String email = dados['email'] ?? '';
                 
-                // REGRA DE NEGÓCIO 10.4: Se não for premium, bloqueia do 2º aluno em diante (índice > 0)
-                final bool isBloqueado = !isPremium && index > 0;
+                // REGRA DE DOWNGRADE: Se não for premium, bloqueia do 4º aluno em diante (índice > 2)
+                final bool isBloqueado = !isPremium && index > 2;
 
                 return Card(
                   color: isBloqueado ? AppColors.background : AppColors.surface,
@@ -384,7 +386,7 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
                       if (isBloqueado) {
                         _mostrarAlerta(
                           "Aluno Bloqueado 🔒", 
-                          "O seu plano Gratuito expirou ou atingiu o limite. Assine o plano Premium para desbloquear o acesso a $nome e gerir todos os seus alunos!"
+                          "O seu plano Gratuito expirou ou atingiu o limite de 3 alunos. Assine o plano Premium para desbloquear o acesso a $nome e gerir todos os seus alunos!"
                         );
                       } else {
                         Navigator.push(context, MaterialPageRoute(
@@ -403,7 +405,7 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
                             },
                           ),
                         IconButton(
-                          // O botão de excluir FICA DISPONÍVEL, para ele poder excluir os extras e voltar a ter só 1
+                          // O botão de excluir FICA DISPONÍVEL, para ele poder excluir os extras e voltar a ter menos de 3
                           icon: const Icon(Icons.delete_outline, color: AppColors.error),
                           onPressed: () => _confirmarRemocao(doc.id, email, nome),
                         ),

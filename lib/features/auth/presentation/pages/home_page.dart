@@ -11,7 +11,8 @@ import 'chat_page.dart';
 import 'notifications_page.dart'; 
 import 'arena_page.dart';
 import '../../../../core/theme/app_colors.dart';
-import 'discover_workouts_page.dart'; // IMPORT DA LOJA
+import 'discover_workouts_page.dart';
+import '../../../../core/services/push_notification_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -22,6 +23,13 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final user = FirebaseAuth.instance.currentUser;
+
+  @override
+  void initState() {
+  super.initState();
+  // Garante que o token do dispositivo seja vinculado a este usuário logado
+  PushNotificationService().salvarTokenAtual();
+}
 
   String _getDiaSemanaKey() {
     final now = DateTime.now();

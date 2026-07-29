@@ -105,10 +105,22 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
     }
   }
 
+  // --- NOVA LÓGICA DE DISTRIBUIÇÃO DAS FICHAS NA SEMANA ---
   void _escolherDiasParaOTreino(Map<String, dynamic> treinoData) {
+    // Conversão inteligente para formato de Dicionário (Suporta treinos novos e antigos)
+    Map<String, dynamic> fichasMap = treinoData['fichas'] != null
+        ? Map<String, dynamic>.from(treinoData['fichas'])
+        : {'A': treinoData['exercicios'] ?? []};
+        
+    List<String> letrasDisponiveis = fichasMap.keys.toList()..sort();
+
     final List<String> diasSemana = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
     final List<String> diasNomes = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
-    List<String> diasSelecionados = [];
+    
+    // Mapeia qual letra da ficha vai para qual dia da semana
+    Map<String, String?> mapeamentoDias = {
+      'segunda': null, 'terca': null, 'quarta': null, 'quinta': null, 'sexta': null, 'sabado': null, 'domingo': null
+    };
 
     showDialog(
       context: context,
@@ -117,45 +129,61 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
           builder: (context, setDialogState) {
             return AlertDialog(
               backgroundColor: AppColors.surface,
-              title: const Text("Aplicar na Semana", style: TextStyle(color: Colors.white)),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("Em quais dias da semana você deseja fazer esta ficha?", style: TextStyle(color: Colors.white70, fontSize: 13)),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    children: List.generate(diasSemana.length, (index) {
+              title: const Text("Distribuir na Semana", style: TextStyle(color: Colors.white)),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("Selecione qual ficha deseja treinar em cada dia:", style: TextStyle(color: Colors.white70, fontSize: 13)),
+                    const SizedBox(height: 16),
+                    ...List.generate(diasSemana.length, (index) {
                       final diaKey = diasSemana[index];
-                      final isSelected = diasSelecionados.contains(diaKey);
-                      return FilterChip(
-                        label: Text(diasNomes[index]),
-                        selected: isSelected,
-                        selectedColor: AppColors.secondary,
-                        backgroundColor: Colors.black26,
-                        checkmarkColor: Colors.black,
-                        labelStyle: TextStyle(color: isSelected ? Colors.black : Colors.white70),
-                        onSelected: (val) {
-                          setDialogState(() {
-                            if (val) diasSelecionados.add(diaKey);
-                            else diasSelecionados.remove(diaKey);
-                          });
-                        },
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(diasNomes[index], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                            DropdownButton<String?>(
+                              value: mapeamentoDias[diaKey],
+                              dropdownColor: AppColors.background,
+                              hint: const Text("Descanso", style: TextStyle(color: Colors.white30)),
+                              style: const TextStyle(color: AppColors.secondary, fontWeight: FontWeight.bold),
+                              underline: Container(),
+                              items: [
+                                const DropdownMenuItem<String?>(
+                                  value: null,
+                                  child: Text("Descanso", style: TextStyle(color: Colors.white54)),
+                                ),
+                                ...letrasDisponiveis.map((letra) => DropdownMenuItem<String?>(
+                                  value: letra,
+                                  child: Text("Ficha $letra"),
+                                )),
+                              ],
+                              onChanged: (val) {
+                                setDialogState(() {
+                                  mapeamentoDias[diaKey] = val;
+                                });
+                              },
+                            ),
+                          ],
+                        ),
                       );
                     }),
-                  )
-                ],
+                  ],
+                ),
               ),
               actions: [
                 TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar", style: TextStyle(color: Colors.grey))),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: AppColors.success),
-                  onPressed: diasSelecionados.isEmpty ? null : () {
+                  // Bloqueia o botão se o aluno não escolheu nenhum dia
+                  onPressed: mapeamentoDias.values.every((v) => v == null) ? null : () {
                     Navigator.pop(context);
-                    _inserirTreinoNaFicha(treinoData, diasSelecionados);
+                    _inserirTreinoNaFicha(fichasMap, mapeamentoDias);
                   },
-                  child: const Text("Aplicar Ficha", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                  child: const Text("Aplicar Treino", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
                 )
               ],
             );
@@ -165,27 +193,30 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
     );
   }
 
-  Future<void> _inserirTreinoNaFicha(Map<String, dynamic> treinoData, List<String> diasSelecionados) async {
+  // Insere os exercícios mapeados no banco de dados do usuário
+  Future<void> _inserirTreinoNaFicha(Map<String, dynamic> fichasMap, Map<String, String?> mapeamentoDias) async {
     showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator(color: AppColors.primary)));
 
     try {
-      final List exerciciosRaw = treinoData['exercicios'] ?? [];
-      List<Map<String, dynamic>> exerciciosMapeados = exerciciosRaw.map((e) {
-        final ex = WorkoutExercise.fromMap(e as Map<String, dynamic>);
-        ex.id = DateTime.now().microsecondsSinceEpoch.toString() + ex.nome.hashCode.toString();
-        ex.concluido = false;
-        return ex.toMap();
-      }).toList();
-
       final docRef = FirebaseFirestore.instance.collection('workout_plans').doc(currentUserId);
       final docSnap = await docRef.get();
       Map<String, dynamic> planoAtual = docSnap.exists ? docSnap.data()! : {};
 
-      for (var dia in diasSelecionados) {
-        List<dynamic> exerciciosDoDia = planoAtual[dia] ?? [];
-        exerciciosDoDia.addAll(exerciciosMapeados);
-        planoAtual[dia] = exerciciosDoDia;
-      }
+      mapeamentoDias.forEach((diaDaSemana, letraFicha) {
+        if (letraFicha != null && fichasMap.containsKey(letraFicha)) {
+          List exerciciosRaw = fichasMap[letraFicha] ?? [];
+          List<Map<String, dynamic>> exerciciosMapeados = exerciciosRaw.map((e) {
+            final ex = WorkoutExercise.fromMap(e as Map<String, dynamic>);
+            ex.id = DateTime.now().microsecondsSinceEpoch.toString() + ex.nome.hashCode.toString();
+            ex.concluido = false;
+            return ex.toMap();
+          }).toList();
+
+          List<dynamic> exerciciosDoDia = planoAtual[diaDaSemana] ?? [];
+          exerciciosDoDia.addAll(exerciciosMapeados);
+          planoAtual[diaDaSemana] = exerciciosDoDia;
+        }
+      });
 
       await docRef.set(planoAtual, SetOptions(merge: true));
 
@@ -202,6 +233,12 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
   }
 
   void _abrirDetalhesDoTreino(String templateId, Map<String, dynamic> treinoData, int matchScore, bool jaAdquirido) {
+    Map<String, dynamic> fichasMap = treinoData['fichas'] != null
+        ? Map<String, dynamic>.from(treinoData['fichas'])
+        : {'A': treinoData['exercicios'] ?? []};
+        
+    List<String> letrasFichas = fichasMap.keys.toList()..sort();
+
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.surface,
@@ -209,7 +246,7 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) => Container(
         padding: const EdgeInsets.all(24),
-        height: MediaQuery.of(context).size.height * 0.8,
+        height: MediaQuery.of(context).size.height * 0.85,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -226,23 +263,37 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
               ),
               
             const SizedBox(height: 24),
-            const Text("O que inclui:", style: TextStyle(color: Colors.white70, fontSize: 16)),
+            Text("Estrutura do Treino (${letrasFichas.length} Fichas):", style: const TextStyle(color: Colors.white70, fontSize: 16)),
             const SizedBox(height: 12),
+            
             Expanded(
               child: ListView.builder(
-                itemCount: (treinoData['exercicios'] as List).length,
+                itemCount: letrasFichas.length,
                 itemBuilder: (context, index) {
-                  final ex = treinoData['exercicios'][index];
-                  return ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.check_circle, color: AppColors.secondary),
-                    title: Text(ex['nome'], style: const TextStyle(color: Colors.white)),
-                    subtitle: Text("${ex['series']}x ${ex['repeticoes']}", style: const TextStyle(color: Colors.white54)),
+                  String letra = letrasFichas[index];
+                  List exercicios = fichasMap[letra] ?? [];
+                  
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12.0),
+                        child: Text("Ficha $letra", style: const TextStyle(color: AppColors.secondary, fontWeight: FontWeight.bold, fontSize: 18)),
+                      ),
+                      ...exercicios.map((ex) => ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.check_circle, color: AppColors.secondary, size: 20),
+                        title: Text(ex['nome'], style: const TextStyle(color: Colors.white, fontSize: 14)),
+                        subtitle: Text("${ex['series']}x ${ex['repeticoes']}", style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                      )),
+                      const Divider(color: Colors.white10),
+                    ],
                   );
                 },
               ),
             ),
             
+            const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
               height: 56,
@@ -261,7 +312,7 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
                 },
                 child: Text(
                   jaAdquirido 
-                    ? "APLICAR NA MINHA SEMANA" 
+                    ? "DISTRIBUIR NA MINHA SEMANA" 
                     : ((treinoData['preco'] ?? 0) > 0 ? "COMPRAR POR R\$ ${treinoData['preco'].toStringAsFixed(2)}" : "ADICIONAR GRÁTIS"),
                   style: TextStyle(color: jaAdquirido ? Colors.white : Colors.black, fontWeight: FontWeight.bold, fontSize: 16),
                 ),
@@ -354,7 +405,18 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
         final data = treino['data'] as Map<String, dynamic>;
         final score = treino['score'] as int;
         final preco = data['preco'] ?? 0.0;
-        final exercicios = data['exercicios'] as List<dynamic>? ?? [];
+        
+        final fichasMap = data['fichas'] as Map<String, dynamic>?;
+        final exerciciosAntigos = data['exercicios'] as List<dynamic>? ?? [];
+        
+        int qtdFichas = 0;
+        if (fichasMap != null) {
+          qtdFichas = fichasMap.keys.length;
+        } else if (exerciciosAntigos.isNotEmpty) {
+          qtdFichas = 1;
+        }
+        
+        String subtitulo = qtdFichas > 0 ? "$qtdFichas Ficha(s)" : "Sem exercícios";
 
         return GestureDetector(
           onTap: () => _abrirDetalhesDoTreino(templateId, data, score, !isLoja),
@@ -397,7 +459,7 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
                 const SizedBox(height: 12),
                 Text(data['nome'] ?? 'Sem Nome', style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 4),
-                Text("${exercicios.length} exercícios", style: const TextStyle(color: Colors.white54, fontSize: 14)),
+                Text(subtitulo, style: const TextStyle(color: Colors.white54, fontSize: 14)),
               ],
             ),
           ),

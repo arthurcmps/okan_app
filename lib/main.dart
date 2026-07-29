@@ -238,26 +238,37 @@ class OkanApp extends StatelessWidget {
   }
 }
 
-// --- AUTH CHECK COM LÓGICA DE ONBOARDING ---
+// --- AUTH CHECK COM LÓGICA DE ONBOARDING BLINDADA ---
 class AuthCheck extends StatelessWidget {
   final bool showOnboarding;
   const AuthCheck({super.key, required this.showOnboarding});
 
   @override
   Widget build(BuildContext context) {
-    if (showOnboarding) {
-      return const OnboardingPage();
+    // 1. Verificação SÍNCRONA (Instantânea): Se o Firebase já tiver o utilizador em memória, entra direto!
+    if (FirebaseAuth.instance.currentUser != null) {
+      return const HomePage();
     }
 
+    // 2. Verificação ASSÍNCRONA (Aguardando resposta do Cofre)
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(
+            backgroundColor: AppColors.background,
+            body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+          );
         }
-        if (snapshot.hasData) {
+        
+        if (snapshot.hasData && snapshot.data != null) {
           return const HomePage();
         }
+
+        if (showOnboarding) {
+          return const OnboardingPage();
+        }
+
         return const LoginPage();
       },
     );

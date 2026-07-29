@@ -254,32 +254,44 @@ class NotificationsPage extends StatelessWidget {
         
       case 'workout':
       case 'workout_update':
-        final actionId = data['actionId'] ?? currentUser.uid;
+        // 1. Lemos o perfil de quem está clicando no app agora
+        final myDoc = await FirebaseFirestore.instance.collection('users').doc(currentUser.uid).get();
+        final myData = myDoc.data() ?? {};
+        final bool isPersonal = myData['tipo'] == 'personal' || myData['role'] == 'personal';
 
-        // Se a notificação for de OUTRO usuário, significa que você é o Personal abrindo o aviso do Aluno
-        if (actionId != currentUser.uid) {
-          final studentDoc = await FirebaseFirestore.instance.collection('users').doc(actionId).get();
+        // 2. SE FOR O ALUNO CLICANDO: Vai SEMPRE direto para a tela do treino dele!
+        if (!isPersonal) {
+          if (context.mounted) {
+            Navigator.push(context, MaterialPageRoute(builder: (context) => 
+              WeeklyPlanPage(studentId: currentUser.uid, studentName: "Meus Treinos")
+            ));
+          }
+          break;
+        }
+
+        // 3. SE FOR O PERSONAL CLICANDO: Abre a ficha do aluno (actionId = ID do aluno)
+        final studentId = data['actionId'] ?? data['studentId'];
+        if (studentId != null && studentId.toString().isNotEmpty && studentId != currentUser.uid) {
+          final studentDoc = await FirebaseFirestore.instance.collection('users').doc(studentId).get();
           final studentData = studentDoc.data() ?? {};
           
           if (context.mounted) {
             Navigator.push(context, MaterialPageRoute(builder: (context) => 
               StudentDetailPage(
-                studentId: actionId, 
+                studentId: studentId, 
                 studentName: studentData['name'] ?? studentData['nome'] ?? 'Aluno', 
                 studentEmail: studentData['email'] ?? ''
               )
             ));
           }
         } else {
-          // Se for você mesmo (Aluno a ver a própria ficha atualizada)
-          Navigator.push(context, MaterialPageRoute(builder: (context) => 
-            WeeklyPlanPage(studentId: currentUser.uid, studentName: "Meus Treinos")
-          ));
+          // Fallback de segurança se o ID não vier na notificação
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Abra a aba 'Meus Alunos' para conferir o treino."))
+            );
+          }
         }
-        break;
-
-      case 'assessment':
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Vá em Perfil > Avaliações para ver os detalhes.")));
         break;
     }
   }

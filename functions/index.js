@@ -7,7 +7,7 @@ const {MercadoPagoConfig, Payment} = require("mercadopago");
 admin.initializeApp();
 
 // 1. CONFIGURAÇÃO DO MERCADO PAGO
-const accessToken = "APP_USR-7836166911445116-031722-dde7689607260b71af1f35ca9b360890-230652618";
+const accessToken = "TEST-7836166911445116-031722-d0c5e5953a3c421c2de9067cfad9f2f4-230652618";
 const client = new MercadoPagoConfig({accessToken: accessToken});
 
 // 2. MOTOR DE NOTIFICAÇÕES PUSH
@@ -93,10 +93,10 @@ exports.criarPagamentoCartao = onCall(async (request) => {
     const payment = new Payment(client);
     const result = await payment.create({
       body: {
-        transaction_amount: preco,
+        transaction_amount: Number(preco), // Garantimos que vai como Número
         token: tokenCartao,
         description: planoNome,
-        installments: parcelas,
+        installments: Number(parcelas), // Garantimos que vai como Número
         payment_method_id: metodoPagamentoId,
         payer: {
           email: emailPagador,
@@ -112,8 +112,18 @@ exports.criarPagamentoCartao = onCall(async (request) => {
       status_detail: result.status_detail,
     };
   } catch (error) {
-    console.error(error);
-    throw new HttpsError("internal", "Erro ao processar cartão.");
+    console.error("Erro MP Detalhado:", JSON.stringify(error));
+    
+    // Extrai a mensagem real do Mercado Pago para mostrar no app
+    let mensagemReal = "Erro desconhecido no pagamento.";
+    if (error.cause && error.cause.length > 0) {
+        mensagemReal = error.cause[0].description;
+    } else if (error.message) {
+        mensagemReal = error.message;
+    }
+
+    // Dispara o erro detalhado para o aplicativo 
+    throw new HttpsError("invalid-argument", `Aviso do Banco: ${mensagemReal}`);
   }
 });
 

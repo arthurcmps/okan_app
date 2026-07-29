@@ -258,7 +258,11 @@ class _EvolutionChartsPageState extends State<EvolutionChartsPage> with SingleTi
                 // Procura se o aluno fez este exercício neste dia
                 for (var ex in listaEx) {
                   if (ex['nome'] == _exercicioSelecionado && ex['carga'] != null) {
-                    double carga = double.tryParse(ex['carga'].toString().replaceAll(',', '.')) ?? 0.0;
+                    String cargaLimpa = ex['carga'].toString()
+                        .replaceAll(',', '.')
+                        .replaceAll(RegExp(r'[^0-9.]'), '');
+
+                    double carga = double.tryParse(cargaLimpa) ?? 0.0;
                     
                     if (carga > 0) {
                       DateTime dataRef = (data['dataRealizacao'] as Timestamp).toDate();
@@ -303,7 +307,7 @@ class _EvolutionChartsPageState extends State<EvolutionChartsPage> with SingleTi
     return LineChart(
       LineChartData(
         minX: 0,
-        maxX: (spots.length - 1).toDouble(),
+        maxX: spots.length > 1 ? (spots.length - 1).toDouble() : 1.0,
         minY: (minY - margem).clamp(0, double.infinity), // Nunca fica abaixo de 0
         maxY: maxY + margem,
         

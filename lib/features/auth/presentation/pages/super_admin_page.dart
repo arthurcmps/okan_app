@@ -59,6 +59,10 @@ class SuperAdminPage extends StatelessWidget {
               final data = doc.data() as Map<String, dynamic>;
               final preco = data['preco'] ?? 0.0;
               
+              // Verifica quantidade de fichas no template
+              final fichasMap = data['fichas'] as Map<String, dynamic>?;
+              final qtdFichas = fichasMap?.keys.length ?? (data['exercicios'] != null ? 1 : 0);
+              
               return Card(
                 color: AppColors.surface,
                 margin: const EdgeInsets.symmetric(vertical: 6),
@@ -69,11 +73,14 @@ class SuperAdminPage extends StatelessWidget {
                 child: ListTile(
                   leading: const CircleAvatar(backgroundColor: Colors.redAccent, child: Icon(Icons.store, color: Colors.white)),
                   title: Text(data['nome'] ?? 'Sem nome', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                  subtitle: Text("R\$ ${preco.toStringAsFixed(2)} • ${(data['tags'] as List?)?.join(', ') ?? ''}", style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                  subtitle: Text(
+                    "R\$ ${preco.toStringAsFixed(2)} • $qtdFichas Ficha(s)\n${(data['tags'] as List?)?.join(', ') ?? ''}", 
+                    style: const TextStyle(color: Colors.white54, fontSize: 12)
+                  ),
+                  isThreeLine: true,
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // --- NOVO BOTÃO DE EDITAR ---
                       IconButton(
                         icon: const Icon(Icons.edit, color: Colors.blueAccent), 
                         onPressed: () {
@@ -82,7 +89,7 @@ class SuperAdminPage extends StatelessWidget {
                             MaterialPageRoute(
                               builder: (_) => SystemTemplateBuilderScreen(
                                 templateId: doc.id, 
-                                templateData: data, // Passamos os dados para preencher a tela
+                                templateData: data,
                               )
                             )
                           );
@@ -111,10 +118,10 @@ class SuperAdminPage extends StatelessWidget {
 }
 
 // ============================================================================
-// CONSTRUTOR DA LOJA (Agora funciona para Criar E Editar)
+// CONSTRUTOR DA LOJA (Com Fichas Múltiplas e Filtros de Exercícios)
 // ============================================================================
 class SystemTemplateBuilderScreen extends StatefulWidget {
-  final String? templateId; // Se vier preenchido, sabemos que é modo Edição
+  final String? templateId;
   final Map<String, dynamic>? templateData; 
 
   const SystemTemplateBuilderScreen({super.key, this.templateId, this.templateData});
@@ -126,8 +133,11 @@ class SystemTemplateBuilderScreen extends StatefulWidget {
 class _SystemTemplateBuilderScreenState extends State<SystemTemplateBuilderScreen> {
   final TextEditingController _nomeTemplateController = TextEditingController();
   final TextEditingController _precoController = TextEditingController(text: "0.00"); 
-  final List<WorkoutExercise> _exerciciosDoTemplate = [];
   
+  // MAPA DE FICHAS: Ex => {'A': [WorkoutExercise, ...], 'B': [...]}
+  final Map<String, List<WorkoutExercise>> _fichasDoTemplate = {'A': []};
+  String _fichaAtiva = 'A';
+
   final List<String> _tagsDisponiveis = [
     'Hipertrofia', 'Emagrecimento', 'Condicionamento',
     'Iniciante', 'Intermediário', 'Avançado',
@@ -140,7 +150,6 @@ class _SystemTemplateBuilderScreenState extends State<SystemTemplateBuilderScree
   @override
   void initState() {
     super.initState();
-    // Se for modo de edição, carregamos todos os dados nos campos!
     if (_isEditing && widget.templateData != null) {
       _nomeTemplateController.text = widget.templateData!['nome'] ?? '';
       _precoController.text = (widget.templateData!['preco'] ?? 0.0).toStringAsFixed(2);
@@ -148,13 +157,48 @@ class _SystemTemplateBuilderScreenState extends State<SystemTemplateBuilderScree
       final tagsSalvas = widget.templateData!['tags'] as List<dynamic>? ?? [];
       _tagsSelecionadas.addAll(tagsSalvas.map((t) => t.toString()));
 
-      final exerciciosSalvos = widget.templateData!['exercicios'] as List<dynamic>? ?? [];
-      _exerciciosDoTemplate.addAll(
-        exerciciosSalvos.map((e) => WorkoutExercise.fromMap(e as Map<String, dynamic>))
-      );
+      // Lê estrutura de 'fichas' (ou converte treino antigo 'exercicios' em Ficha A)
+      final fichasMap = widget.templateData!['fichas'] as Map<String, dynamic>?;
+      if (fichasMap != null && fichasMap.isNotEmpty) {
+        _fichasDoTemplate.clear();
+        fichasMap.forEach((letra, listaRaw) {
+          final listEx = (listaRaw as List<dynamic>)
+              .map((e) => WorkoutExercise.fromMap(e as Map<String, dynamic>))
+              .toList();
+          _fichasDoTemplate[letra] = listEx;
+        });
+        _fichaAtiva = _fichasDoTemplate.keys.first;
+      } else {
+        final exSalvos = widget.templateData!['exercicios'] as List<dynamic>? ?? [];
+        _fichasDoTemplate['A'] = exSalvos.map((e) => WorkoutExercise.fromMap(e as Map<String, dynamic>)).toList();
+      }
     }
   }
 
+  // --- CONTROLE DAS ABAS DE FICHAS ---
+  void _adicionarFicha() {
+    const alfabeto = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    for (int i = 0; i < alfabeto.length; i++) {
+      String letra = alfabeto[i];
+      if (!_fichasDoTemplate.containsKey(letra)) {
+        setState(() {
+          _fichasDoTemplate[letra] = [];
+          _fichaAtiva = letra;
+        });
+        break;
+      }
+    }
+  }
+
+  void _removerFicha(String letra) {
+    if (_fichasDoTemplate.length <= 1) return;
+    setState(() {
+      _fichasDoTemplate.remove(letra);
+      _fichaAtiva = _fichasDoTemplate.keys.first;
+    });
+  }
+
+  // --- CRIAR NOVO EXERCÍCIO GLOBAL NO BANCO ---
   void _criarExercicioGlobalDialog() {
     final nomeCtrl = TextEditingController();
     final grupoCtrl = TextEditingController();
@@ -208,7 +252,6 @@ class _SystemTemplateBuilderScreenState extends State<SystemTemplateBuilderScree
               if (mounted) {
                 Navigator.pop(context); 
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Exercício salvo no catálogo global!"), backgroundColor: Colors.green));
-                _abrirCatalogoExercicios();
               }
             },
             child: const Text("Salvar", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -218,61 +261,149 @@ class _SystemTemplateBuilderScreenState extends State<SystemTemplateBuilderScree
     );
   }
 
+  // --- CATÁLOGO COM FILTROS (BUSCA E GRUPOS MUSCULARES) ---
   void _abrirCatalogoExercicios() {
+    String queryBusca = '';
+    String? grupoSelecionado;
+
+    final List<String> gruposMusculares = [
+      'Peito', 'Costas', 'Pernas', 'Ombros', 'Bíceps', 'Tríceps', 'Abdômen', 'Cardio'
+    ];
+
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.surface,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (context) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.7,
-        builder: (context, scrollController) => Column(
-          children: [
-            const Padding(
-              padding: EdgeInsets.all(20.0),
-              child: Text("Catálogo de Exercícios", style: TextStyle(color: Colors.redAccent, fontSize: 18, fontWeight: FontWeight.bold)),
-            ),
-            ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: Colors.redAccent, 
-                child: Icon(Icons.add, color: Colors.white)
-              ),
-              title: const Text("CRIAR NOVO EXERCÍCIO", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
-              subtitle: const Text("Adicionar um exercício inédito ao banco global", style: TextStyle(color: Colors.white54, fontSize: 12)),
-              onTap: () {
-                Navigator.pop(context); 
-                _criarExercicioGlobalDialog(); 
-              },
-            ),
-            const Divider(color: Colors.white24),
-            Expanded(
-              child: StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance.collection('exercises').orderBy('nome').snapshots(),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Colors.redAccent));
-                  final docs = snapshot.data!.docs;
-                  return ListView.builder(
-                    controller: scrollController,
-                    itemCount: docs.length,
-                    itemBuilder: (context, index) {
-                      final data = docs[index].data() as Map<String, dynamic>;
-                      return ListTile(
-                        leading: const Icon(Icons.fitness_center, color: Colors.white54),
-                        title: Text(data['nome'] ?? '', style: const TextStyle(color: Colors.white)),
-                        trailing: const Icon(Icons.add_circle_outline, color: Colors.redAccent),
-                        onTap: () {
-                          Navigator.pop(context);
-                          _configurarSeriesEReps(data);
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return DraggableScrollableSheet(
+            expand: false,
+            initialChildSize: 0.8,
+            builder: (context, scrollController) => Column(
+              children: [
+                const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Text("Catálogo de Exercícios", style: TextStyle(color: Colors.redAccent, fontSize: 18, fontWeight: FontWeight.bold)),
+                ),
+                
+                // BARRA DE BUSCA
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: TextField(
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: "Buscar exercício...",
+                      hintStyle: const TextStyle(color: Colors.white30),
+                      prefixIcon: const Icon(Icons.search, color: Colors.white54),
+                      filled: true,
+                      fillColor: AppColors.background,
+                      isDense: true,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    ),
+                    onChanged: (val) {
+                      setModalState(() {
+                        queryBusca = val.toLowerCase().trim();
+                      });
+                    },
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // FILTRO POR GRUPO MUSCULAR
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Row(
+                    children: [
+                      FilterChip(
+                        label: const Text("Todos"),
+                        selected: grupoSelecionado == null,
+                        selectedColor: Colors.redAccent,
+                        backgroundColor: Colors.black26,
+                        labelStyle: TextStyle(color: grupoSelecionado == null ? Colors.white : Colors.white70, fontSize: 12),
+                        onSelected: (_) => setModalState(() => grupoSelecionado = null),
+                      ),
+                      const SizedBox(width: 8),
+                      ...gruposMusculares.map((grupo) {
+                        final isSel = grupoSelecionado == grupo;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: FilterChip(
+                            label: Text(grupo),
+                            selected: isSel,
+                            selectedColor: Colors.redAccent,
+                            backgroundColor: Colors.black26,
+                            labelStyle: TextStyle(color: isSel ? Colors.white : Colors.white70, fontSize: 12),
+                            onSelected: (_) => setModalState(() => grupoSelecionado = isSel ? null : grupo),
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+
+                ListTile(
+                  leading: const CircleAvatar(backgroundColor: Colors.redAccent, child: Icon(Icons.add, color: Colors.white)),
+                  title: const Text("CRIAR NOVO EXERCÍCIO", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                  subtitle: const Text("Adicionar exercício inédito ao banco", style: TextStyle(color: Colors.white54, fontSize: 12)),
+                  onTap: () {
+                    Navigator.pop(context); 
+                    _criarExercicioGlobalDialog(); 
+                  },
+                ),
+                const Divider(color: Colors.white24),
+                
+                // LISTA COM A APLICAÇÃO DOS FILTROS
+                Expanded(
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance.collection('exercises').orderBy('nome').snapshots(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Colors.redAccent));
+                      
+                      var docs = snapshot.data!.docs;
+
+                      // Aplica filtro em memória por Nome e Grupo
+                      docs = docs.where((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final nomeEx = (data['nome'] ?? '').toString().toLowerCase();
+                        final grupoEx = (data['grupo'] ?? '').toString();
+
+                        final matchBusca = queryBusca.isEmpty || nomeEx.contains(queryBusca);
+                        final matchGrupo = grupoSelecionado == null || 
+                                           grupoEx.toLowerCase() == grupoSelecionado!.toLowerCase();
+
+                        return matchBusca && matchGrupo;
+                      }).toList();
+
+                      if (docs.isEmpty) {
+                        return const Center(child: Text("Nenhum exercício encontrado.", style: TextStyle(color: Colors.white54)));
+                      }
+
+                      return ListView.builder(
+                        controller: scrollController,
+                        itemCount: docs.length,
+                        itemBuilder: (context, index) {
+                          final data = docs[index].data() as Map<String, dynamic>;
+                          return ListTile(
+                            leading: const Icon(Icons.fitness_center, color: Colors.white54),
+                            title: Text(data['nome'] ?? '', style: const TextStyle(color: Colors.white)),
+                            subtitle: Text(data['grupo'] ?? 'Geral', style: const TextStyle(color: Colors.white30, fontSize: 12)),
+                            trailing: const Icon(Icons.add_circle_outline, color: Colors.redAccent),
+                            onTap: () {
+                              Navigator.pop(context);
+                              _configurarSeriesEReps(data);
+                            },
+                          );
                         },
                       );
                     },
-                  );
-                },
-              ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          );
+        }
       ),
     );
   }
@@ -299,7 +430,13 @@ class _SystemTemplateBuilderScreenState extends State<SystemTemplateBuilderScree
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () {
               setState(() {
-                _exerciciosDoTemplate.add(WorkoutExercise(id: DateTime.now().millisecondsSinceEpoch.toString(), nome: dadosExercicio['nome'], series: seriesCtrl.text, repeticoes: repsCtrl.text, videoUrl: dadosExercicio['videoUrl']));
+                _fichasDoTemplate[_fichaAtiva]!.add(WorkoutExercise(
+                  id: DateTime.now().millisecondsSinceEpoch.toString(), 
+                  nome: dadosExercicio['nome'], 
+                  series: seriesCtrl.text, 
+                  repeticoes: repsCtrl.text, 
+                  videoUrl: dadosExercicio['videoUrl']
+                ));
               });
               Navigator.pop(context);
             },
@@ -311,27 +448,37 @@ class _SystemTemplateBuilderScreenState extends State<SystemTemplateBuilderScree
   }
 
   void _salvarTemplateFinal() async {
-    if (_nomeTemplateController.text.trim().isEmpty || _exerciciosDoTemplate.isEmpty) return;
+    // Garante que exista algum exercício
+    bool temExercicios = _fichasDoTemplate.values.any((list) => list.isNotEmpty);
+    if (_nomeTemplateController.text.trim().isEmpty || !temExercicios) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Preencha o nome e adicione exercícios!"), backgroundColor: AppColors.error));
+      return;
+    }
 
     try {
       final double preco = double.tryParse(_precoController.text.replaceAll(',', '.')) ?? 0.0;
 
+      // Converte o Mapa de Objetos para o formato Firestore {A: [map, ...], B: [map, ...]}
+      Map<String, dynamic> fichasGravacao = {};
+      _fichasDoTemplate.forEach((letra, listaEx) {
+        fichasGravacao[letra] = listaEx.map((e) => e.toMap()).toList();
+      });
+
       final dataMap = {
         'personalId': 'SYSTEM_ADMIN', 
         'nome': _nomeTemplateController.text.trim(),
-        'exercicios': _exerciciosDoTemplate.map((e) => e.toMap()).toList(),
+        'fichas': fichasGravacao,
+        // E também salva uma cópia dos exercícios da primeira ficha em 'exercicios' para retrocompatibilidade
+        'exercicios': fichasGravacao['A'] ?? [],
         'tags': _tagsSelecionadas, 
         'preco': preco, 
         'isPremium': true, 
-        // Atualiza a data se for novo, ou mantém a mesma se for edição (para não bagunçar a ordem)
         if (!_isEditing) 'timestamp': FieldValue.serverTimestamp(),
       };
 
       if (_isEditing) {
-        // Atualiza o documento existente
         await FirebaseFirestore.instance.collection('workout_templates').doc(widget.templateId).update(dataMap);
       } else {
-        // Cria um documento novo
         await FirebaseFirestore.instance.collection('workout_templates').add(dataMap);
       }
       
@@ -343,6 +490,8 @@ class _SystemTemplateBuilderScreenState extends State<SystemTemplateBuilderScree
 
   @override
   Widget build(BuildContext context) {
+    final exerciciosDaFicha = _fichasDoTemplate[_fichaAtiva] ?? [];
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -379,17 +528,98 @@ class _SystemTemplateBuilderScreenState extends State<SystemTemplateBuilderScree
               ],
             ),
           ),
-          Padding(padding: const EdgeInsets.symmetric(horizontal: 16.0), child: SizedBox(width: double.infinity, height: 50, child: OutlinedButton.icon(style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.redAccent), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), icon: const Icon(Icons.add, color: Colors.redAccent), label: const Text("Adicionar Exercício", style: TextStyle(color: Colors.redAccent, fontSize: 16)), onPressed: _abrirCatalogoExercicios))),
-          const SizedBox(height: 16),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _exerciciosDoTemplate.length,
-              itemBuilder: (context, index) {
-                final ex = _exerciciosDoTemplate[index];
-                return Card(color: AppColors.surface, margin: const EdgeInsets.only(bottom: 8), child: ListTile(title: Text(ex.nome, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), subtitle: Text("${ex.series}x ${ex.repeticoes}", style: const TextStyle(color: Colors.redAccent)), trailing: IconButton(icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent), onPressed: () => setState(() => _exerciciosDoTemplate.removeAt(index)))));
-              },
+          
+          // --- BARRA DE ABAS DAS FICHAS (A, B, C...) ---
+          Container(
+            height: 50,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: _fichasDoTemplate.keys.map((letra) {
+                      final isAtiva = _fichaAtiva == letra;
+                      return GestureDetector(
+                        onTap: () => setState(() => _fichaAtiva = letra),
+                        child: Container(
+                          margin: const EdgeInsets.only(right: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: isAtiva ? Colors.redAccent : AppColors.surface,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text("Ficha $letra", style: TextStyle(color: isAtiva ? Colors.white : Colors.white70, fontWeight: FontWeight.bold)),
+                              if (_fichasDoTemplate.length > 1 && isAtiva) ...[
+                                const SizedBox(width: 6),
+                                GestureDetector(
+                                  onTap: () => _removerFicha(letra),
+                                  child: const Icon(Icons.close, size: 16, color: Colors.white),
+                                )
+                              ]
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.add_circle, color: Colors.redAccent),
+                  tooltip: "Nova Ficha",
+                  onPressed: _adicionarFicha,
+                ),
+              ],
             ),
+          ),
+          
+          const SizedBox(height: 10),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0), 
+            child: SizedBox(
+              width: double.infinity, 
+              height: 48, 
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.redAccent), 
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                ), 
+                icon: const Icon(Icons.add, color: Colors.redAccent), 
+                label: Text("Adicionar Exercício (Ficha $_fichaAtiva)", style: const TextStyle(color: Colors.redAccent, fontSize: 15)), 
+                onPressed: _abrirCatalogoExercicios
+              )
+            )
+          ),
+          const SizedBox(height: 12),
+
+          // LISTA DE EXERCÍCIOS DA FICHA ATUAL
+          Expanded(
+            child: exerciciosDaFicha.isEmpty
+                ? const Center(child: Text("Nenhum exercício na ficha selecionada.", style: TextStyle(color: Colors.white30)))
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: exerciciosDaFicha.length,
+                    itemBuilder: (context, index) {
+                      final ex = exerciciosDaFicha[index];
+                      return Card(
+                        color: AppColors.surface, 
+                        margin: const EdgeInsets.only(bottom: 8), 
+                        child: ListTile(
+                          title: Text(ex.nome, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), 
+                          subtitle: Text("${ex.series}x ${ex.repeticoes}", style: const TextStyle(color: Colors.redAccent)), 
+                          trailing: IconButton(
+                            icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent), 
+                            onPressed: () => setState(() => _fichasDoTemplate[_fichaAtiva]!.removeAt(index))
+                          )
+                        )
+                      );
+                    },
+                  ),
           ),
         ],
       ),

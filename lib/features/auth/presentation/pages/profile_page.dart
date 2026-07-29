@@ -14,7 +14,8 @@ import 'login_page.dart';
 import 'workout_history_page.dart';
 import 'personal_data_page.dart';
 import 'super_admin_page.dart';
-import 'professor_subscription_page.dart'; // <--- IMPORT DA PÁGINA DE ASSINATURA
+import 'professor_subscription_page.dart';
+import 'package:intl/intl.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -43,20 +44,46 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
     super.dispose();
   }
 
+  // Método auxiliar para formatar em dd/MM/yyyy
+  String _formatarDataNascimento(dynamic dataNascimento) {
+    if (dataNascimento == null) return "--/--/----";
+    try {
+      DateTime nascimento;
+      if (dataNascimento is Timestamp) {
+        nascimento = dataNascimento.toDate();
+      } else if (dataNascimento is DateTime) {
+        nascimento = dataNascimento;
+      } else {
+        return "--/--/----";
+      }
+      return DateFormat('dd/MM/yyyy').format(nascimento);
+    } catch (e) {
+      return "--/--/----";
+    }
+  }
+
+  // Método atualizado para calcular a idade a partir do formato correto
   String _calcularIdade(dynamic dataNascimento) {
     if (dataNascimento == null) return "--"; 
-    DateTime nascimento;
-    if (dataNascimento is Timestamp) {
-      nascimento = dataNascimento.toDate();
-    } else {
+    try {
+      DateTime nascimento;
+      if (dataNascimento is Timestamp) {
+        nascimento = dataNascimento.toDate();
+      } else if (dataNascimento is DateTime) {
+        nascimento = dataNascimento;
+      } else {
+        return "--";
+      }
+      final hoje = DateTime.now();
+      int idade = hoje.year - nascimento.year;
+      if (hoje.month < nascimento.month || 
+          (hoje.month == nascimento.month && hoje.day < nascimento.day)) {
+        idade--;
+      }
+      return "$idade anos (${DateFormat('dd/MM/yyyy').format(nascimento)})";
+    } catch (e) {
       return "--";
     }
-    final hoje = DateTime.now();
-    int idade = hoje.year - nascimento.year;
-    if (hoje.month < nascimento.month || (hoje.month == nascimento.month && hoje.day < nascimento.day)) {
-      idade--;
-    }
-    return "$idade anos";
   }
 
   Future<void> _editarDataNascimento() async {
@@ -65,6 +92,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
       initialDate: DateTime(2000),
       firstDate: DateTime(1940),
       lastDate: DateTime.now(),
+      locale: const Locale('pt', 'BR'), // <-- FORÇA O CALENDÁRIO EM PT-BR
       builder: (context, child) {
         return Theme(
           data: ThemeData.dark().copyWith(
@@ -85,8 +113,10 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
           .doc(user!.uid)
           .update({'birthDate': picked});
       
-      if(mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Idade atualizada!")));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Data atualizada para ${DateFormat('dd/MM/yyyy').format(picked)}!"))
+        );
       }
     }
   }
