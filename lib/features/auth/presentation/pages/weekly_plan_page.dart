@@ -380,66 +380,99 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                   
                   subtitle: Padding(
                     padding: const EdgeInsets.only(top: 8.0),
-                    child: Wrap(
-                      spacing: 12, 
-                      runSpacing: 8, 
-                      crossAxisAlignment: WrapCrossAlignment.center,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text("${ex.series} x ${ex.repeticoes}", style: const TextStyle(color: Colors.white70)),
-                        
-                        InkWell(
-                          onTap: _modoEdicao ? null : () => _editarCargaDialog(diaKey, ex),
-                          borderRadius: BorderRadius.circular(4),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.black26, 
+                        Wrap(
+                          spacing: 12, 
+                          runSpacing: 8, 
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text("${ex.series} x ${ex.repeticoes}", style: const TextStyle(color: Colors.white70)),
+                            
+                            InkWell(
+                              onTap: _modoEdicao ? null : () => _editarCargaDialog(diaKey, ex),
                               borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: Colors.white24)
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.black26, 
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: Colors.white24)
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.monitor_weight_outlined, size: 14, color: AppColors.secondary),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      ex.carga.isEmpty ? "Carga?" : "${ex.carga}kg",
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: ex.carga.isEmpty ? AppColors.primary : Colors.white
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            
+                            if (ex.videoUrl != null && ex.videoUrl!.isNotEmpty)
+                              InkWell(
+                                onTap: () {
+                                  Navigator.push(
+                                    context, 
+                                    MaterialPageRoute(
+                                      builder: (context) => VideoPlayerPage(videoUrl: ex.videoUrl!, exerciseName: ex.nome)
+                                    )
+                                  );
+                                },
+                                borderRadius: BorderRadius.circular(4),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.redAccent.withOpacity(0.15), 
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: Colors.redAccent.withOpacity(0.5))
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.play_circle_fill, size: 14, color: Colors.redAccent),
+                                      SizedBox(width: 4),
+                                      Text("Vídeo", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+
+                        // --- SÓ APARECE SE O PROFESSOR PREENCHEU ---
+                        if (ex.observacao != null && ex.observacao!.trim().isNotEmpty)
+                          Container(
+                            margin: const EdgeInsets.only(top: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppColors.primary.withOpacity(0.4)),
                             ),
                             child: Row(
-                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.monitor_weight_outlined, size: 14, color: AppColors.secondary),
-                                const SizedBox(width: 4),
-                                Text(
-                                  ex.carga.isEmpty ? "Carga?" : "${ex.carga}kg",
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: ex.carga.isEmpty ? AppColors.primary : Colors.white
+                                const Icon(Icons.info_outline, size: 15, color: AppColors.primary),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    ex.observacao!,
+                                    style: const TextStyle(
+                                      color: AppColors.primary,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ),
                               ],
-                            ),
-                          ),
-                        ),
-                        
-                        if (ex.videoUrl != null && ex.videoUrl!.isNotEmpty)
-                          InkWell(
-                            onTap: () {
-                              Navigator.push(
-                                context, 
-                                MaterialPageRoute(
-                                  builder: (context) => VideoPlayerPage(videoUrl: ex.videoUrl!, exerciseName: ex.nome)
-                                )
-                              );
-                            },
-                            borderRadius: BorderRadius.circular(4),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Colors.redAccent.withOpacity(0.15), 
-                                borderRadius: BorderRadius.circular(4),
-                                border: Border.all(color: Colors.redAccent.withOpacity(0.5))
-                              ),
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.play_circle_fill, size: 14, color: Colors.redAccent),
-                                  SizedBox(width: 4),
-                                  Text("Vídeo", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent)),
-                                ],
-                              ),
                             ),
                           ),
                       ],
@@ -720,6 +753,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     final seriesCtrl = TextEditingController(text: ex.series);
     final repsCtrl = TextEditingController(text: ex.repeticoes);
     final videoCtrl = TextEditingController(text: ex.videoUrl ?? ''); 
+    final obsCtrl = TextEditingController(text: ex.observacao ?? ''); // <-- CARREGA OBS ATUAL
     
     showDialog(
       context: context,
@@ -740,7 +774,9 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                 ],
               ),
               const SizedBox(height: 10),
-              _buildDialogInput(videoCtrl, "Link do YouTube (Opcional)"), 
+              _buildDialogInput(videoCtrl, "Link do YouTube (Opcional)"),
+              const SizedBox(height: 10),
+              _buildDialogInput(obsCtrl, "Observação para o Aluno (Opcional)"), // <-- CAMPO DE EDITAÇÃO
             ],
           ),
         ),
@@ -753,7 +789,8 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                 ex.nome = nomeCtrl.text;
                 ex.series = seriesCtrl.text;
                 ex.repeticoes = repsCtrl.text;
-                ex.videoUrl = videoCtrl.text.trim(); 
+                ex.videoUrl = videoCtrl.text.trim().isEmpty ? null : videoCtrl.text.trim();
+                ex.observacao = obsCtrl.text.trim().isEmpty ? null : obsCtrl.text.trim(); // <-- ATUALIZA OBS
                 ex.solicitarAlteracao = false; 
               });
               _salvarListaDoDia(diaKey);
@@ -771,6 +808,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
     final seriesCtrl = TextEditingController(text: '3');
     final repsCtrl = TextEditingController(text: '12');
     final videoCtrl = TextEditingController(); 
+    final obsCtrl = TextEditingController(); // <-- NOVO CONTROLLER
     
     showDialog(
       context: context,
@@ -791,6 +829,8 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
               ),
               const SizedBox(height: 10),
               _buildDialogInput(videoCtrl, "Link do YouTube (Opcional)"), 
+              const SizedBox(height: 10),
+              _buildDialogInput(obsCtrl, "Observação para o Aluno (Opcional)"), // <-- CAMPO DE TEXTO
             ],
           ),
         ),
@@ -805,7 +845,8 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with SingleTickerProvid
                   nome: nomeCtrl.text,
                   series: seriesCtrl.text,
                   repeticoes: repsCtrl.text,
-                  videoUrl: videoCtrl.text.trim().isEmpty ? null : videoCtrl.text.trim(), 
+                  videoUrl: videoCtrl.text.trim().isEmpty ? null : videoCtrl.text.trim(),
+                  observacao: obsCtrl.text.trim().isEmpty ? null : obsCtrl.text.trim(), // <-- SALVA A OBS
                 );
                 
                 final diaAtual = _diasDaSemana[_tabController.index];

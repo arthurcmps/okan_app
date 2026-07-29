@@ -6,7 +6,8 @@ class WorkoutExercise {
   bool concluido;
   String carga;
   bool solicitarAlteracao;
-  String? videoUrl; // <--- NOVO CAMPO AQUI
+  String? videoUrl;
+  String? observacao;
 
   WorkoutExercise({
     required this.id,
@@ -16,7 +17,8 @@ class WorkoutExercise {
     this.concluido = false,
     this.carga = '',
     this.solicitarAlteracao = false,
-    this.videoUrl, // <--- NOVO CAMPO AQUI
+    this.videoUrl,
+    this.observacao,
   });
 
   Map<String, dynamic> toMap() {
@@ -28,7 +30,8 @@ class WorkoutExercise {
       'concluido': concluido,
       'carga': carga,
       'solicitarAlteracao': solicitarAlteracao,
-      'videoUrl': videoUrl, // <--- NOVO CAMPO AQUI
+      'videoUrl': videoUrl,
+      'observacao': observacao ?? '',
     };
   }
 
@@ -41,7 +44,8 @@ class WorkoutExercise {
       concluido: map['concluido'] ?? false,
       carga: map['carga'] ?? '',
       solicitarAlteracao: map['solicitarAlteracao'] ?? false,
-      videoUrl: map['videoUrl'], // <--- NOVO CAMPO AQUI
+      videoUrl: map['videoUrl'],
+      observacao: map['observacao']?.toString(),
     );
   }
 }

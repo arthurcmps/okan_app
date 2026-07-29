@@ -163,7 +163,7 @@ class WorkoutHistoryPage extends StatelessWidget {
   Widget _buildExerciseRow(WorkoutExercise ex) {
     return ListTile(
       dense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 0),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
       leading: Icon(
         ex.concluido ? Icons.check_circle : Icons.cancel,
         color: ex.concluido ? AppColors.success : Colors.redAccent.withOpacity(0.5),
@@ -174,8 +174,16 @@ class WorkoutHistoryPage extends StatelessWidget {
         style: TextStyle(
           color: ex.concluido ? Colors.white : Colors.white54,
           decoration: ex.concluido ? null : TextDecoration.lineThrough,
+          fontWeight: FontWeight.bold,
         ),
       ),
+      // --- SÓ APARECE NO HISTÓRICO SE TIVER TEXTO ---
+      subtitle: (ex.observacao != null && ex.observacao!.trim().isNotEmpty)
+          ? Text(
+              "Obs: ${ex.observacao!}",
+              style: const TextStyle(color: Colors.white54, fontSize: 11, fontStyle: FontStyle.italic),
+            )
+          : null,
       trailing: Text(
         ex.carga.isEmpty ? "" : "${ex.carga}kg", 
         style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.secondary),

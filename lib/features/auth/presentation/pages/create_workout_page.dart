@@ -211,11 +211,26 @@ class _CreateWorkoutPageState extends State<CreateWorkoutPage> {
                   children: [
                     for (int i = 0; i < _exerciciosSelecionados.length; i++)
                       ListTile(
-                        key: ValueKey("ex_$i${_exerciciosSelecionados[i]['nome']}"), // Chave única
+                        key: ValueKey("ex_$i${_exerciciosSelecionados[i]['nome']}"),
                         tileColor: Colors.grey.shade50,
                         leading: CircleAvatar(child: Text("${i + 1}")),
                         title: Text(_exerciciosSelecionados[i]['nome']),
-                        subtitle: Text("${_exerciciosSelecionados[i]['series']}x ${_exerciciosSelecionados[i]['repeticoes']}"),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text("${_exerciciosSelecionados[i]['series']}x ${_exerciciosSelecionados[i]['repeticoes']}"),
+                            // --- SÓ MOSTRA SE NÃO ESTIVER VAZIO ---
+                            if (_exerciciosSelecionados[i]['observacao'] != null && 
+                                _exerciciosSelecionados[i]['observacao'].toString().trim().isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  "Obs: ${_exerciciosSelecionados[i]['observacao']}",
+                                  style: TextStyle(fontSize: 12, color: Colors.blue.shade700, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                          ],
+                        ),
                         trailing: IconButton(
                           icon: const Icon(Icons.delete, color: Colors.red), 
                           onPressed: () => setState(() => _exerciciosSelecionados.removeAt(i))

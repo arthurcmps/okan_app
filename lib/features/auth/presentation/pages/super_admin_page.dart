@@ -411,38 +411,143 @@ class _SystemTemplateBuilderScreenState extends State<SystemTemplateBuilderScree
   void _configurarSeriesEReps(Map<String, dynamic> dadosExercicio) {
     final seriesCtrl = TextEditingController(text: '3');
     final repsCtrl = TextEditingController(text: '12');
+    final obsCtrl = TextEditingController();
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: Text("Séries para: ${dadosExercicio['nome']}", style: const TextStyle(color: Colors.white, fontSize: 16)),
-        content: Row(
-          children: [
-            Expanded(child: TextField(controller: seriesCtrl, keyboardType: TextInputType.number, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: "Séries", labelStyle: TextStyle(color: Colors.white54)))),
-            const SizedBox(width: 16),
-            Expanded(child: TextField(controller: repsCtrl, keyboardType: TextInputType.number, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: "Reps", labelStyle: TextStyle(color: Colors.white54)))),
-          ],
+      isScrollControlled: true, // <-- PERMITE QUE O MODAL ACOMPANHE O TECLADO
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        // --- O SEGREDO DEFINITIVO: EMPURRA O MODAL EXATAMENTE NA ALTURA DO TECLADO ---
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(ctx).viewInsets.bottom,
+          left: 20,
+          right: 20,
+          top: 20,
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar", style: TextStyle(color: Colors.grey))),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-            onPressed: () {
-              setState(() {
-                _fichasDoTemplate[_fichaAtiva]!.add(WorkoutExercise(
-                  id: DateTime.now().millisecondsSinceEpoch.toString(), 
-                  nome: dadosExercicio['nome'], 
-                  series: seriesCtrl.text, 
-                  repeticoes: repsCtrl.text, 
-                  videoUrl: dadosExercicio['videoUrl']
-                ));
-              });
-              Navigator.pop(context);
-            },
-            child: const Text("Adicionar", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          )
-        ],
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      "Configurar: ${dadosExercicio['nome']}",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white54),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: seriesCtrl,
+                      keyboardType: TextInputType.number,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        labelText: "Séries",
+                        labelStyle: const TextStyle(color: Colors.white54),
+                        filled: true,
+                        fillColor: AppColors.background,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: TextField(
+                      controller: repsCtrl,
+                      keyboardType: TextInputType.number,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        labelText: "Reps",
+                        labelStyle: const TextStyle(color: Colors.white54),
+                        filled: true,
+                        fillColor: AppColors.background,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: obsCtrl,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  labelText: "Observação (Opcional)",
+                  labelStyle: const TextStyle(color: Colors.white54),
+                  filled: true,
+                  fillColor: AppColors.background,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                height: 50,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.redAccent,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _fichasDoTemplate[_fichaAtiva]!.add(
+                        WorkoutExercise(
+                          id: DateTime.now().millisecondsSinceEpoch.toString(),
+                          nome: dadosExercicio['nome'],
+                          series: seriesCtrl.text,
+                          repeticoes: repsCtrl.text,
+                          videoUrl: dadosExercicio['videoUrl'],
+                          observacao: obsCtrl.text.trim().isEmpty
+                              ? null
+                              : obsCtrl.text.trim(),
+                        ),
+                      );
+                    });
+                    Navigator.pop(ctx);
+                  },
+                  child: const Text(
+                    "ADICIONAR À FICHA",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -611,7 +716,25 @@ class _SystemTemplateBuilderScreenState extends State<SystemTemplateBuilderScree
                         margin: const EdgeInsets.only(bottom: 8), 
                         child: ListTile(
                           title: Text(ex.nome, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), 
-                          subtitle: Text("${ex.series}x ${ex.repeticoes}", style: const TextStyle(color: Colors.redAccent)), 
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text("${ex.series}x ${ex.repeticoes}", style: const TextStyle(color: Colors.redAccent)),
+                              // <-- EXIBINDO A OBSERVAÇÃO SÓ SE NÃO ESTIVER VAZIA
+                              if (ex.observacao != null && ex.observacao!.trim().isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Text(
+                                    "Obs: ${ex.observacao}",
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.white70,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ), 
                           trailing: IconButton(
                             icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent), 
                             onPressed: () => setState(() => _fichasDoTemplate[_fichaAtiva]!.removeAt(index))
