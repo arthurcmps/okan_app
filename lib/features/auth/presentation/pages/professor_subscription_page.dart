@@ -408,41 +408,100 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
   }
 
   Widget _buildPixView() {
-    if (_qrCodeBase64 != null && _pixCopiaCola != null) {
-      return Column(
+  if (_qrCodeBase64 != null && _pixCopiaCola != null) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
         children: [
-          const Text("Escaneie o QR Code abaixo:", style: TextStyle(color: Colors.white)),
+          const Text(
+            "Escaneie o QR Code abaixo:",
+            style: TextStyle(color: Colors.white),
+          ),
           const SizedBox(height: 16),
+
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-            child: Image.memory(base64Decode(_qrCodeBase64!), width: 200, height: 200),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Image.memory(
+              base64Decode(_qrCodeBase64!),
+              width: 200,
+              height: 200,
+            ),
           ),
-          const SizedBox(height: 24),
-          const Text("Ou copie o código PIX:", style: TextStyle(color: Colors.white70)),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(8)),
-            child: SelectableText(_pixCopiaCola!, style: const TextStyle(color: AppColors.primary, fontSize: 12)),
-          ),
-          const Spacer(),
-          const Text("Aguardando pagamento... O seu plano será ativado automaticamente assim que o banco confirmar.", textAlign: TextAlign.center, style: TextStyle(color: Colors.white54, fontSize: 12)),
-        ],
-      );
-    }
 
-    return Center(
-      child: _isProcessing 
-        ? const CircularProgressIndicator(color: AppColors.primary)
-        : ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
-            icon: const Icon(Icons.qr_code, color: Colors.black),
-            label: const Text("GERAR CÓDIGO PIX", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-            onPressed: _gerarPix,
+          const SizedBox(height: 24),
+
+          const Text(
+            "Ou copie o código PIX:",
+            style: TextStyle(color: Colors.white70),
           ),
+
+          const SizedBox(height: 8),
+
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.black26,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: SelectableText(
+              _pixCopiaCola!,
+              style: const TextStyle(
+                color: AppColors.primary,
+                fontSize: 12,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          const Text(
+            "Aguardando pagamento... "
+            "O seu plano será ativado automaticamente "
+            "assim que o banco confirmar.",
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white54,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
     );
   }
+
+  return Center(
+    child: _isProcessing
+        ? const CircularProgressIndicator(
+            color: AppColors.primary,
+          )
+        : ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: 12,
+              ),
+            ),
+            icon: const Icon(
+              Icons.qr_code,
+              color: Colors.black,
+            ),
+            label: const Text(
+              "GERAR CÓDIGO PIX",
+              style: TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            onPressed: _gerarPix,
+          ),
+  );
+}
 
   Widget _buildCartaoView() {
     return ListView(
