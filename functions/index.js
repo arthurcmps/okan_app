@@ -30,6 +30,67 @@ function getMercadoPagoClient() {
   });
 }
 
+/**
+ * Resolve um produto pago usando exclusivamente o catalogo do servidor.
+ *
+ * @param {string} productId ID publico do produto.
+ * @return {Promise<object>} Produto validado.
+ */
+async function resolveCheckoutProduct(productId) {
+  try {
+    const product = await resolvePaymentProduct({
+      firestore: admin.firestore(),
+      productId,
+    });
+
+    if (product.amount <= 0) {
+      throw new HttpsError(
+          "failed-precondition",
+          "Este produto não exige pagamento.",
+      );
+    }
+
+    return product;
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+
+    const code = error?.message;
+
+    if (
+      code === "INVALID_PRODUCT_ID" ||
+      code === "INVALID_PRODUCT_PRICE" ||
+      code === "INVALID_PRODUCT_NAME"
+    ) {
+      throw new HttpsError(
+          "invalid-argument",
+          "Produto inválido.",
+      );
+    }
+
+    if (
+      code === "PRODUCT_NOT_FOUND" ||
+      code === "PRODUCT_NOT_FOR_SALE"
+    ) {
+      throw new HttpsError(
+          "not-found",
+          "Produto não disponível.",
+      );
+    }
+
+    console.error(
+        "Erro ao resolver produto do checkout:",
+        error,
+    );
+
+    throw new HttpsError(
+        "internal",
+        "Erro ao consultar produto.",
+    );
+  }
+}
+
 exports.obterProdutoPagamento = onCall(
     async (request) => {
       if (!request.auth) {
@@ -159,36 +220,55 @@ exports.criarPagamentoPix = onCall(
         );
       }
 
-      const {planoNome, preco} = request.data;
+      const {productId} = request.data || {};
       const uid = request.auth.uid;
-      const email = request.auth.token.email || "email@teste.com";
+      const email =
+        request.auth.token.email || "email@teste.com";
 
       try {
+        const product =
+          await resolveCheckoutProduct(productId);
+
         const client = getMercadoPagoClient();
         const payment = new Payment(client);
 
         const result = await payment.create({
           body: {
-            transaction_amount: preco,
-            description: planoNome,
+            transaction_amount: product.amount,
+            description: product.displayName,
             payment_method_id: "pix",
             payer: {
               email,
             },
             external_reference: uid,
             notification_url: mercadoPagoWebhookUrl,
+            metadata: {
+              product_id: product.productId,
+              product_kind: product.kind,
+              source_id: product.sourceId || "",
+            },
           },
         });
 
         return {
           id: result.id,
+          productId: product.productId,
           qr_code:
-          result.point_of_interaction.transaction_data.qr_code,
+            result.point_of_interaction
+                .transaction_data.qr_code,
           qr_code_base64:
-          result.point_of_interaction.transaction_data.qr_code_base64,
+            result.point_of_interaction
+                .transaction_data.qr_code_base64,
         };
       } catch (error) {
-        console.error("Erro ao gerar pagamento PIX:", error);
+        if (error instanceof HttpsError) {
+          throw error;
+        }
+
+        console.error(
+            "Erro ao gerar pagamento PIX:",
+            error,
+        );
 
         throw new HttpsError(
             "internal",
@@ -211,27 +291,29 @@ exports.criarPagamentoCartao = onCall(
       }
 
       const {
-        planoNome,
-        preco,
+        productId,
         tokenCartao,
         parcelas,
         metodoPagamentoId,
         emailPagador,
         tipoDoc,
         numeroDoc,
-      } = request.data;
+      } = request.data || {};
 
       const uid = request.auth.uid;
 
       try {
+        const product =
+          await resolveCheckoutProduct(productId);
+
         const client = getMercadoPagoClient();
         const payment = new Payment(client);
 
         const result = await payment.create({
           body: {
-            transaction_amount: Number(preco),
+            transaction_amount: product.amount,
             token: tokenCartao,
-            description: planoNome,
+            description: product.displayName,
             installments: Number(parcelas),
             payment_method_id: metodoPagamentoId,
             payer: {
@@ -243,21 +325,39 @@ exports.criarPagamentoCartao = onCall(
             },
             external_reference: uid,
             notification_url: mercadoPagoWebhookUrl,
+            metadata: {
+              product_id: product.productId,
+              product_kind: product.kind,
+              source_id: product.sourceId || "",
+            },
           },
         });
 
         return {
           id: result.id,
+          productId: product.productId,
           status: result.status,
           status_detail: result.status_detail,
         };
       } catch (error) {
-        console.error("Erro Mercado Pago:", error);
+        if (error instanceof HttpsError) {
+          throw error;
+        }
 
-        let mensagemReal = "Erro desconhecido no pagamento.";
+        console.error(
+            "Erro Mercado Pago:",
+            error,
+        );
 
-        if (error.cause && error.cause.length > 0) {
-          mensagemReal = error.cause[0].description;
+        let mensagemReal =
+          "Erro desconhecido no pagamento.";
+
+        if (
+          error.cause &&
+          error.cause.length > 0
+        ) {
+          mensagemReal =
+            error.cause[0].description;
         } else if (error.message) {
           mensagemReal = error.message;
         }
