@@ -11,11 +11,18 @@ const {
 } = require("./payment_records");
 
 const subscriptionProduct = {
-  productId: "personal_mestre_sankofa_monthly",
-  kind: "personal_subscription",
-  displayName: "Mestre Sankofa",
+  productId:
+    "personal_mestre_sankofa_monthly",
+  kind:
+    "personal_subscription",
+  displayName:
+    "Mestre Sankofa",
   amount: 49.90,
   currency: "BRL",
+  entitlement:
+    "personal_premium",
+  billingPeriod:
+    "monthly",
 };
 
 test(
@@ -73,6 +80,16 @@ test(
           Object.hasOwn(record, "cpf"),
           false,
       );
+
+      assert.equal(
+    record.entitlement,
+    "personal_premium",
+      );
+
+      assert.equal(
+          record.billingPeriod,
+          "monthly",
+      );
     },
 );
 
@@ -85,11 +102,16 @@ test(
         product: {
           productId:
             "workout_template:template-1",
-          kind: "workout_template",
-          displayName: "Treino Premium",
+          kind:
+            "workout_template",
+          displayName:
+            "Treino Premium",
           amount: 19.90,
           currency: "BRL",
-          sourceId: "template-1",
+          entitlement:
+            "workout_template",
+          sourceId:
+            "template-1",
         },
         paymentMethodType: "card",
         providerPaymentMethodId: "visa",

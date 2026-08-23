@@ -60,6 +60,15 @@ function normalizeInstallments(value) {
  * @param {object} params Dados do pagamento.
  * @return {object} Registro normalizado.
  */
+/**
+ * Monta o documento interno de pagamento.
+ *
+ * Nenhum dado sensivel de cartao ou documento pessoal
+ * deve ser armazenado aqui.
+ *
+ * @param {object} params Dados do pagamento.
+ * @return {object} Registro normalizado.
+ */
 function buildPaymentRecord({
   providerPaymentId,
   userId,
@@ -98,6 +107,15 @@ function buildPaymentRecord({
   }
 
   if (
+    typeof product.entitlement !== "string" ||
+    !product.entitlement.trim()
+  ) {
+    throw new Error(
+        "INVALID_PRODUCT_ENTITLEMENT",
+    );
+  }
+
+  if (
     typeof product.displayName !== "string" ||
     !product.displayName.trim()
   ) {
@@ -123,17 +141,34 @@ function buildPaymentRecord({
   return {
     schemaVersion: PAYMENT_SCHEMA_VERSION,
     provider: PAYMENT_PROVIDER,
-    providerPaymentId: normalizedPaymentId,
+    providerPaymentId:
+      normalizedPaymentId,
 
     userId: userId.trim(),
 
-    productId: product.productId,
-    productKind: product.kind,
-    sourceId: product.sourceId || null,
-    displayName: product.displayName,
+    productId:
+      product.productId,
 
-    amount: Number(amount.toFixed(2)),
-    currency: product.currency || "BRL",
+    productKind:
+      product.kind,
+
+    sourceId:
+      product.sourceId || null,
+
+    displayName:
+      product.displayName,
+
+    entitlement:
+      product.entitlement,
+
+    billingPeriod:
+      product.billingPeriod || null,
+
+    amount:
+      Number(amount.toFixed(2)),
+
+    currency:
+      product.currency || "BRL",
 
     paymentMethodType:
       paymentMethodType.trim(),

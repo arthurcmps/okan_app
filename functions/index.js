@@ -11,6 +11,7 @@ const {
 } = require("./payment_catalog");
 
 const {
+  getPaymentDocumentId,
   persistPaymentRecord,
 } = require("./payment_records");
 
@@ -19,6 +20,10 @@ const {
   persistSubscriptionRecord,
   requestSubscriptionCancellation,
 } = require("./subscription_records");
+
+const {
+  grantProductEntitlement,
+} = require("./entitlements");
 
 admin.initializeApp();
 
@@ -148,6 +153,86 @@ async function persistPendingSubscriptionIfNeeded({
   });
 }
 
+/**
+ * Reconstrói o produto a partir do snapshot confiável
+ * salvo no pagamento.
+ *
+ * @param {object} paymentRecord Registro interno.
+ * @return {object} Produto.
+ */
+function buildProductFromPaymentRecord(
+    paymentRecord,
+) {
+  if (
+    !paymentRecord ||
+    !paymentRecord.productId ||
+    !paymentRecord.productKind ||
+    !paymentRecord.displayName ||
+    !paymentRecord.entitlement
+  ) {
+    throw new Error(
+        "INVALID_PAYMENT_PRODUCT_SNAPSHOT",
+    );
+  }
+
+  return {
+    productId: paymentRecord.productId,
+    kind: paymentRecord.productKind,
+    displayName: paymentRecord.displayName,
+
+    amount:
+      Number(paymentRecord.amount),
+
+    currency:
+      paymentRecord.currency || "BRL",
+
+    entitlement:
+      paymentRecord.entitlement,
+
+    sourceId:
+      paymentRecord.sourceId || null,
+
+    billingPeriod:
+      paymentRecord.billingPeriod || null,
+  };
+}
+
+/**
+ * Concede entitlement apenas quando o próprio provedor
+ * informou que o pagamento foi aprovado.
+ *
+ * @param {object} params Dados.
+ * @return {Promise<boolean>} Se houve concessão.
+ */
+async function grantApprovedProductIfNeeded({
+  userId,
+  product,
+  paymentId,
+  paymentStatus,
+}) {
+  if (paymentStatus !== "approved") {
+    return false;
+  }
+
+  await grantProductEntitlement({
+    firestore: admin.firestore(),
+
+    serverTimestamp: () =>
+      admin.firestore.FieldValue.serverTimestamp(),
+
+    arrayUnion: (value) =>
+      admin.firestore.FieldValue.arrayUnion(value),
+
+    userId,
+    product,
+
+    providerPaymentId: paymentId,
+    acquisitionType: "payment",
+  });
+
+  return true;
+}
+
 exports.obterProdutoPagamento = onCall(
     async (request) => {
       if (!request.auth) {
@@ -208,6 +293,107 @@ exports.obterProdutoPagamento = onCall(
         throw new HttpsError(
             "internal",
             "Erro ao consultar produto.",
+        );
+      }
+    },
+);
+
+exports.adquirirTemplateGratuito = onCall(
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError(
+            "unauthenticated",
+            "Precisa de estar autenticado.",
+        );
+      }
+
+      const {productId} = request.data || {};
+
+      try {
+        const product =
+          await resolvePaymentProduct({
+            firestore: admin.firestore(),
+            productId,
+          });
+
+        if (
+          product.kind !==
+          "workout_template"
+        ) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Este produto não é um treino.",
+          );
+        }
+
+        if (product.amount !== 0) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Este treino exige pagamento.",
+          );
+        }
+
+        const result =
+          await grantProductEntitlement({
+            firestore: admin.firestore(),
+
+            serverTimestamp: () =>
+              admin.firestore.FieldValue
+                  .serverTimestamp(),
+
+            arrayUnion: (value) =>
+              admin.firestore.FieldValue
+                  .arrayUnion(value),
+
+            userId: request.auth.uid,
+
+            product,
+
+            acquisitionType: "free",
+          });
+
+        return {
+          success: true,
+          productId: product.productId,
+          entitlementId:
+            result.entitlementId,
+        };
+      } catch (error) {
+        if (error instanceof HttpsError) {
+          throw error;
+        }
+
+        const code = error?.message;
+
+        if (
+          code === "INVALID_PRODUCT_ID" ||
+          code === "INVALID_PRODUCT_PRICE" ||
+          code === "INVALID_PRODUCT_NAME"
+        ) {
+          throw new HttpsError(
+              "invalid-argument",
+              "Produto inválido.",
+          );
+        }
+
+        if (
+          code === "PRODUCT_NOT_FOUND" ||
+          code === "PRODUCT_NOT_FOR_SALE"
+        ) {
+          throw new HttpsError(
+              "not-found",
+              "Treino não disponível.",
+          );
+        }
+
+        console.error(
+            "Erro ao adquirir treino gratuito:",
+            error,
+        );
+
+        throw new HttpsError(
+            "internal",
+            "Erro ao adquirir treino.",
         );
       }
     },
@@ -396,7 +582,7 @@ exports.criarPagamentoPix = onCall(
             result.status_detail || null,
         });
 
-        await persistPendingSubscriptionIfNeeded({
+        await grantApprovedProductIfNeeded({
           userId: uid,
           product,
           paymentId: result.id,
@@ -514,7 +700,7 @@ exports.criarPagamentoCartao = onCall(
             result.status_detail || null,
         });
 
-        await persistPendingSubscriptionIfNeeded({
+        await grantApprovedProductIfNeeded({
           userId: uid,
           product,
           paymentId: result.id,
@@ -563,39 +749,215 @@ exports.webhookMercadoPago = onRequest(
       secrets: [mercadoPagoAccessToken],
     },
     async (req, res) => {
-      const {type, data} = req.body;
+      const type = req.body?.type;
+      const requestedPaymentId =
+        req.body?.data?.id;
 
       if (type !== "payment") {
-        return res.status(200).send("Ignorado");
+        return res
+            .status(200)
+            .send("Ignorado");
+      }
+
+      if (!requestedPaymentId) {
+        return res
+            .status(400)
+            .send("Pagamento inválido");
       }
 
       try {
-        const client = getMercadoPagoClient();
-        const payment = new Payment(client);
+        const client =
+          getMercadoPagoClient();
 
-        const pagamentoInfo = await payment.get({
-          id: data.id,
-        });
+        const payment =
+          new Payment(client);
 
-        if (pagamentoInfo.status === "approved") {
-          const uid = pagamentoInfo.external_reference;
+        /*
+         * Nunca confiamos apenas no corpo do webhook.
+         * Consultamos o pagamento diretamente no MP.
+         */
+        const pagamentoInfo =
+          await payment.get({
+            id: requestedPaymentId,
+          });
 
-          await admin
-              .firestore()
-              .collection("users")
-              .doc(uid)
-              .update({
-                isPremium: true,
-                subscriptionPlan: pagamentoInfo.description,
-                subscriptionDate:
-              admin.firestore.FieldValue.serverTimestamp(),
-              });
+        const documentId =
+          getPaymentDocumentId(
+              pagamentoInfo.id,
+          );
+
+        const paymentRef =
+          admin.firestore()
+              .collection("payments")
+              .doc(documentId);
+
+        const paymentSnapshot =
+          await paymentRef.get();
+
+        /*
+         * Fail closed:
+         * sem pagamento interno conhecido,
+         * nenhum entitlement é concedido.
+         */
+        if (!paymentSnapshot.exists) {
+          console.error(
+              "Webhook recebeu pagamento " +
+              "sem registro interno:",
+              pagamentoInfo.id,
+          );
+
+          return res
+              .status(409)
+              .send(
+                  "Pagamento não registrado",
+              );
         }
 
-        return res.status(200).send("Notificação recebida");
+        const paymentRecord =
+          paymentSnapshot.data() || {};
+
+        const providerUserId =
+          String(
+              pagamentoInfo
+                  .external_reference || "",
+          );
+
+        if (
+          providerUserId !==
+          paymentRecord.userId
+        ) {
+          console.error(
+              "UID divergente no pagamento:",
+              pagamentoInfo.id,
+          );
+
+          return res
+              .status(409)
+              .send("Pagamento inconsistente");
+        }
+
+        const metadataProductId =
+          String(
+              pagamentoInfo
+                  .metadata
+                  ?.product_id || "",
+          );
+
+        if (
+          metadataProductId !==
+          paymentRecord.productId
+        ) {
+          console.error(
+              "Produto divergente no pagamento:",
+              pagamentoInfo.id,
+          );
+
+          return res
+              .status(409)
+              .send("Pagamento inconsistente");
+        }
+
+        const providerAmount =
+          Number(
+              pagamentoInfo
+                  .transaction_amount,
+          );
+
+        const recordedAmount =
+          Number(paymentRecord.amount);
+
+        if (
+          !Number.isFinite(providerAmount) ||
+          !Number.isFinite(recordedAmount) ||
+          Number(providerAmount.toFixed(2)) !==
+            Number(recordedAmount.toFixed(2))
+        ) {
+          console.error(
+              "Valor divergente no pagamento:",
+              pagamentoInfo.id,
+          );
+
+          return res
+              .status(409)
+              .send("Pagamento inconsistente");
+        }
+
+        const providerCurrency =
+          String(
+              pagamentoInfo.currency_id ||
+              "BRL",
+          );
+
+        if (
+          providerCurrency !==
+          paymentRecord.currency
+        ) {
+          console.error(
+              "Moeda divergente no pagamento:",
+              pagamentoInfo.id,
+          );
+
+          return res
+              .status(409)
+              .send("Pagamento inconsistente");
+        }
+
+        const status =
+          String(
+              pagamentoInfo.status ||
+              "unknown",
+          );
+
+        await paymentRef.set(
+            {
+              status,
+
+              statusDetail:
+                pagamentoInfo
+                    .status_detail || null,
+
+              updatedAt:
+                admin.firestore
+                    .FieldValue
+                    .serverTimestamp(),
+            },
+            {merge: true},
+        );
+
+        if (status === "approved") {
+          const product =
+            buildProductFromPaymentRecord(
+                paymentRecord,
+            );
+
+          await grantApprovedProductIfNeeded({
+            userId:
+              paymentRecord.userId,
+
+            product,
+
+            paymentId:
+              pagamentoInfo.id,
+
+            paymentStatus:
+              status,
+          });
+        }
+
+        return res
+            .status(200)
+            .send(
+                "Notificação recebida",
+            );
       } catch (error) {
-        console.error("Erro no Webhook:", error);
-        return res.status(500).send("Erro interno");
+        console.error(
+            "Erro no Webhook:",
+            error,
+        );
+
+        return res
+            .status(500)
+            .send("Erro interno");
       }
     },
 );

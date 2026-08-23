@@ -69,7 +69,7 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
     final double preco = (treinoData['preco'] ?? 0.0).toDouble();
 
     if (preco <= 0) {
-      _registrarCompraNoPerfil(templateId);
+      _adquirirTemplateGratuito(templateId);
     } else {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
@@ -92,7 +92,14 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
             publicKey: _mercadoPagoPublicKey,
             usuarioAtual: user,
             onSuccess: () {
-              _registrarCompraNoPerfil(templateId);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text("Pagamento aprovado. Treino liberado! 🎉"),
+                    backgroundColor: AppColors.success,
+                  ),
+                );
+              }
             },
           ),
         ),
@@ -100,14 +107,16 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
     }
   }
 
-  Future<void> _registrarCompraNoPerfil(String templateId) async {
+  Future<void> _adquirirTemplateGratuito(String templateId) async {
     try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserId)
-          .update({
-            'purchased_templates': FieldValue.arrayUnion([templateId]),
-          });
+      await FirebaseAuth.instance.currentUser?.getIdToken(true);
+
+      final callable = FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('adquirirTemplateGratuito');
+
+      await callable.call({'productId': 'workout_template:$templateId'});
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -117,7 +126,14 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
         );
       }
     } catch (e) {
-      debugPrint("Erro ao salvar compra: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Erro ao adquirir treino: $e"),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     }
   }
 
@@ -906,12 +922,16 @@ class _TemplateCheckoutSheetState extends State<TemplateCheckoutSheet> {
         'numeroDoc': _cpfCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''),
       });
 
-      if (result.data['status'] == 'approved' ||
-          result.data['status'] == 'in_process') {
+      if (result.data['status'] == 'approved') {
         if (mounted) {
           Navigator.pop(context);
           widget.onSuccess();
         }
+      } else if (result.data['status'] == 'in_process') {
+        throw Exception(
+          "Pagamento em análise. "
+          "O treino será liberado somente após a aprovação.",
+        );
       } else {
         throw Exception(result.data['status_detail']);
       }
