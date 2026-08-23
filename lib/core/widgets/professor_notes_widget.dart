@@ -1,7 +1,8 @@
-import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../theme/app_colors.dart'; // Ajuste o caminho das cores
+import 'package:flutter/material.dart';
+
+import '../theme/app_colors.dart';
 
 class ProfessorNotesWidget extends StatefulWidget {
   final String studentId;
@@ -14,107 +15,201 @@ class ProfessorNotesWidget extends StatefulWidget {
 
 class _ProfessorNotesWidgetState extends State<ProfessorNotesWidget> {
   final TextEditingController _controller = TextEditingController();
+
   bool _isSaving = false;
 
-  // Verifica se sou eu mesmo (Aluno) ou se é o Professor vendo
-  bool get _souPersonal {
-    final myId = FirebaseAuth.instance.currentUser?.uid;
-    return myId != widget.studentId;
+  String? get _currentUid => FirebaseAuth.instance.currentUser?.uid;
+
+  DocumentReference<Map<String, dynamic>>? get _noteRef {
+    final uid = _currentUid;
+
+    if (uid == null || uid == widget.studentId) {
+      return null;
+    }
+
+    return FirebaseFirestore.instance
+        .collection('users')
+        .doc(widget.studentId)
+        .collection('private_notes')
+        .doc(uid);
   }
 
   Future<void> _salvarNotas() async {
+    final uid = _currentUid;
+    final ref = _noteRef;
+
+    if (uid == null || ref == null) return;
+
     setState(() => _isSaving = true);
+
     try {
-      await FirebaseFirestore.instance.collection('users').doc(widget.studentId).update({
-        'teacherNotes': _controller.text, // Campo Global de Notas
-      });
+      await ref.set({
+        'personalId': uid,
+        'text': _controller.text.trim(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Anotação atualizada!"), backgroundColor: Colors.green),
+          const SnackBar(
+            content: Text('Anotação atualizada!'),
+            backgroundColor: Colors.green,
+          ),
         );
-        FocusScope.of(context).unfocus(); // Fecha teclado
+
+        FocusScope.of(context).unfocus();
       }
     } catch (e) {
-      debugPrint("Erro: $e");
+      debugPrint('Erro ao salvar anotação privada: $e');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Não foi possível salvar a anotação.')),
+        );
+      }
     } finally {
-      if (mounted) setState(() => _isSaving = false);
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
     }
   }
 
   @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // SEGREDO: Se não for o personal, não mostra NADA (SizedBox.shrink)
-    if (!_souPersonal) {
+    final uid = _currentUid;
+
+    // O próprio aluno nunca visualiza notas privadas.
+    if (uid == null || uid == widget.studentId) {
       return const SizedBox.shrink();
     }
 
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance.collection('users').doc(widget.studentId).snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) return const SizedBox(height: 50, child: Center(child: CircularProgressIndicator()));
-
-        final data = snapshot.data!.data() as Map<String, dynamic>?;
-        final notasSalvas = data?['teacherNotes'] ?? "";
-
-        // Só atualiza o texto do controller se o usuário NÃO estiver digitando
-        // para evitar que o cursor pule enquanto digita
-        if (_controller.text.isEmpty && notasSalvas.isNotEmpty) {
-           _controller.text = notasSalvas;
+    /*
+     * Primeiro confirmamos no vínculo do aluno se o usuário
+     * atual é realmente o personal responsável.
+     */
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.studentId)
+          .snapshots(),
+      builder: (context, studentSnapshot) {
+        if (!studentSnapshot.hasData || !studentSnapshot.data!.exists) {
+          return const SizedBox.shrink();
         }
 
-        return Card(
-          color: const Color(0xFF2A273A), // Fundo escuro destaque
-          margin: const EdgeInsets.only(bottom: 20),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: const BorderSide(color: AppColors.primary, width: 1), // Borda Terracota
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        final studentData = studentSnapshot.data!.data() ?? {};
+
+        final linkedPersonalId = studentData['personalId']?.toString();
+
+        if (linkedPersonalId != uid) {
+          return const SizedBox.shrink();
+        }
+
+        final noteRef = _noteRef;
+
+        if (noteRef == null) {
+          return const SizedBox.shrink();
+        }
+
+        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          stream: noteRef.snapshots(),
+          builder: (context, noteSnapshot) {
+            if (noteSnapshot.connectionState == ConnectionState.waiting) {
+              return const SizedBox(
+                height: 50,
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+
+            final noteData = noteSnapshot.data?.data();
+
+            final savedText = noteData?['text']?.toString() ?? '';
+
+            if (!_controller.selection.isValid &&
+                _controller.text != savedText) {
+              _controller.text = savedText;
+            } else if (_controller.text.isEmpty && savedText.isNotEmpty) {
+              _controller.text = savedText;
+            }
+
+            return Card(
+              color: const Color(0xFF2A273A),
+              margin: const EdgeInsets.only(bottom: 20),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: const BorderSide(color: AppColors.primary, width: 1),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Row(
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Icon(Icons.lock_outline, color: AppColors.primary, size: 18),
-                        SizedBox(width: 8),
-                        Text(
-                          "Anotações Privadas (Só você vê)", 
-                          style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)
+                        const Expanded(
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.lock_outline,
+                                color: AppColors.primary,
+                                size: 18,
+                              ),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Anotações privadas do personal',
+                                  style: TextStyle(
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
+                        if (_isSaving)
+                          const SizedBox(
+                            width: 15,
+                            height: 15,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.primary,
+                            ),
+                          )
+                        else
+                          IconButton(
+                            icon: const Icon(Icons.save, color: Colors.white),
+                            tooltip: 'Salvar anotação',
+                            onPressed: _salvarNotas,
+                          ),
                       ],
                     ),
-                    if (_isSaving)
-                      const SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary))
-                    else
-                      IconButton(
-                        icon: const Icon(Icons.save, color: Colors.white),
-                        tooltip: "Salvar Anotação",
-                        onPressed: _salvarNotas,
-                        constraints: const BoxConstraints(),
-                        padding: EdgeInsets.zero,
-                      )
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _controller,
+                      maxLines: 4,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: const InputDecoration(
+                        hintText:
+                            'Evolução, dores relatadas, estratégia de treino...',
+                        hintStyle: TextStyle(color: Colors.white24),
+                        border: InputBorder.none,
+                        filled: true,
+                        fillColor: Colors.black26,
+                      ),
+                    ),
                   ],
                 ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _controller,
-                  maxLines: 4,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(
-                    hintText: "Evolução, dores relatadas, estratégia de treino...",
-                    hintStyle: TextStyle(color: Colors.white24),
-                    border: InputBorder.none,
-                    filled: true,
-                    fillColor: Colors.black26,
-                  ),
-                ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );

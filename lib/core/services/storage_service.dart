@@ -1,50 +1,88 @@
 import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 class StorageService {
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final ImagePicker _picker = ImagePicker();
 
-  // Função para selecionar imagem da Galeria
-  Future<File?> selecionarImagem() async {
-    final XFile? image = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
-    if (image != null) {
-      return File(image.path);
+  static const String _userPhotosPath = 'user_photos';
+  static const String _arenaDuelsPath = 'arena_duels';
+
+  Future<File?> selecionarImagem({
+    ImageSource source = ImageSource.gallery,
+    int imageQuality = 70,
+  }) async {
+    final XFile? image = await _picker.pickImage(
+      source: source,
+      imageQuality: imageQuality,
+    );
+
+    if (image == null) {
+      return null;
     }
-    return null;
+
+    return File(image.path);
   }
 
-  // Função para fazer Upload e atualizar o Perfil
-  Future<String?> uploadFotoPerfil(File imagem) async {
+  Future<String> uploadFotoPerfil(File imagem) async {
     final user = _auth.currentUser;
-    if (user == null) return null;
 
-    try {
-      // 1. Define o caminho no Storage: profile_photos/USER_ID.jpg
-      final ref = _storage.ref().child('profile_photos').child('${user.uid}.jpg');
+    if (user == null) {
+      throw StateError('Usuário não autenticado.');
+    }
 
-      // 2. Faz o upload
-      await ref.putFile(imagem);
+    final ref = _storage.ref().child(_userPhotosPath).child('${user.uid}.jpg');
 
-      // 3. Pega a URL de download (link público da foto)
-      final url = await ref.getDownloadURL();
+    await ref.putFile(imagem, SettableMetadata(contentType: 'image/jpeg'));
 
-      // 4. Atualiza o Auth (para aparecer user.photoURL)
-      await user.updatePhotoURL(url);
+    final url = await ref.getDownloadURL();
 
-      // 5. Atualiza o Firestore (para aparecer nos dados do usuário)
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-        'photoUrl': url,
-      });
+    await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+      'photoUrl': url,
+    });
 
-      return url;
-    } catch (e) {
-      print("Erro no upload: $e");
-      return null;
+    await user.updatePhotoURL(url);
+
+    return url;
+  }
+
+  Future<String> uploadImagemArena({
+    required String challengeId,
+    required Uint8List bytes,
+  }) async {
+    final user = _auth.currentUser;
+
+    if (user == null) {
+      throw StateError('Usuário não autenticado.');
+    }
+
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final fileName = '${timestamp}_${user.uid}.jpg';
+
+    final ref = _storage
+        .ref()
+        .child(_arenaDuelsPath)
+        .child(challengeId)
+        .child(fileName);
+
+    await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
+
+    return ref.getDownloadURL();
+  }
+
+  Future<void> limparImagensArena({required String challengeId}) async {
+    final ref = _storage.ref().child(_arenaDuelsPath).child(challengeId);
+
+    final result = await ref.listAll();
+
+    for (final item in result.items) {
+      await item.delete();
     }
   }
 }

@@ -2,12 +2,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import '../../../../core/services/storage_service.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/widgets/user_avatar.dart';
 import '../../../../core/theme/app_colors.dart';
-import 'anamnese_tab.dart'; 
+import 'anamnese_tab.dart';
 import 'assessments_tab.dart';
 import 'library_admin_page.dart';
 import 'login_page.dart';
@@ -19,19 +19,21 @@ import 'package:intl/intl.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
-  
+
   @override
   State<ProfilePage> createState() => _ProfilePageState();
 }
 
-class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStateMixin {
+class _ProfilePageState extends State<ProfilePage>
+    with SingleTickerProviderStateMixin {
   final AuthService _authService = AuthService();
+  final StorageService _storageService = StorageService();
   final User? user = FirebaseAuth.instance.currentUser;
   late TabController _tabController;
   bool _isUploading = false;
 
   int _adminTapCount = 0;
-  
+
   @override
   void initState() {
     super.initState();
@@ -64,7 +66,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
 
   // Método atualizado para calcular a idade a partir do formato correto
   String _calcularIdade(dynamic dataNascimento) {
-    if (dataNascimento == null) return "--"; 
+    if (dataNascimento == null) return "--";
     try {
       DateTime nascimento;
       if (dataNascimento is Timestamp) {
@@ -76,7 +78,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
       }
       final hoje = DateTime.now();
       int idade = hoje.year - nascimento.year;
-      if (hoje.month < nascimento.month || 
+      if (hoje.month < nascimento.month ||
           (hoje.month == nascimento.month && hoje.day < nascimento.day)) {
         idade--;
       }
@@ -97,7 +99,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
         return Theme(
           data: ThemeData.dark().copyWith(
             colorScheme: const ColorScheme.dark(
-              primary: AppColors.primary, 
+              primary: AppColors.primary,
               onPrimary: Colors.black,
               surface: AppColors.surface,
             ),
@@ -112,10 +114,14 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
           .collection('users')
           .doc(user!.uid)
           .update({'birthDate': picked});
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Data atualizada para ${DateFormat('dd/MM/yyyy').format(picked)}!"))
+          SnackBar(
+            content: Text(
+              "Data atualizada para ${DateFormat('dd/MM/yyyy').format(picked)}!",
+            ),
+          ),
         );
       }
     }
@@ -125,20 +131,40 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (context) {
         return SafeArea(
           child: Wrap(
             children: [
               ListTile(
-                leading: const Icon(Icons.photo_library, color: AppColors.textMain),
-                title: const Text('Escolher da Galeria', style: TextStyle(color: Colors.white)),
-                onTap: () { Navigator.pop(context); _atualizarFoto(ImageSource.gallery); },
+                leading: const Icon(
+                  Icons.photo_library,
+                  color: AppColors.textMain,
+                ),
+                title: const Text(
+                  'Escolher da Galeria',
+                  style: TextStyle(color: Colors.white),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _atualizarFoto(ImageSource.gallery);
+                },
               ),
               ListTile(
-                leading: const Icon(Icons.camera_alt, color: AppColors.textMain),
-                title: const Text('Tirar Foto Agora', style: TextStyle(color: Colors.white)),
-                onTap: () { Navigator.pop(context); _atualizarFoto(ImageSource.camera); },
+                leading: const Icon(
+                  Icons.camera_alt,
+                  color: AppColors.textMain,
+                ),
+                title: const Text(
+                  'Tirar Foto Agora',
+                  style: TextStyle(color: Colors.white),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _atualizarFoto(ImageSource.camera);
+                },
               ),
             ],
           ),
@@ -149,40 +175,53 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
 
   Future<void> _atualizarFoto(ImageSource source) async {
     final picker = ImagePicker();
+
     final pickedFile = await picker.pickImage(source: source, imageQuality: 50);
+
     if (pickedFile == null) return;
 
-    File imagem = File(pickedFile.path);
+    final imagem = File(pickedFile.path);
+
     try {
       setState(() => _isUploading = true);
-      final ref = FirebaseStorage.instance.ref().child('user_photos').child('${user!.uid}.jpg');
-      await ref.putFile(imagem);
-      final url = await ref.getDownloadURL();
 
-      await FirebaseFirestore.instance.collection('users').doc(user!.uid).update({'photoUrl': url});
-      await FirebaseAuth.instance.currentUser!.updatePhotoURL(url);
+      await _storageService.uploadFotoPerfil(imagem);
+
+      if (mounted) {
+        setState(() {});
+      }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro: $e")));
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Erro ao atualizar foto: $e')));
+      }
     } finally {
-      if (mounted) setState(() => _isUploading = false);
+      if (mounted) {
+        setState(() => _isUploading = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (user == null) return const Scaffold(body: Center(child: Text("Usuário não logado.")));
+    if (user == null)
+      return const Scaffold(body: Center(child: Text("Usuário não logado.")));
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text("Meu Perfil", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text(
+          "Meu Perfil",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         centerTitle: true,
         elevation: 0,
         backgroundColor: Colors.transparent,
         foregroundColor: Colors.white,
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: AppColors.primary, 
+          indicatorColor: AppColors.primary,
           labelColor: AppColors.primary,
           unselectedLabelColor: Colors.white30,
           indicatorWeight: 3,
@@ -207,19 +246,24 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
 
   Widget _buildAccountTab() {
     return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance.collection('users').doc(user!.uid).snapshots(),
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(user!.uid)
+          .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData || !snapshot.data!.exists) return const Center(child: CircularProgressIndicator());
+        if (!snapshot.hasData || !snapshot.data!.exists)
+          return const Center(child: CircularProgressIndicator());
 
         final data = snapshot.data!.data() as Map<String, dynamic>;
         final String nome = data['name'] ?? data['nome'] ?? "Usuário";
         final String email = data['email'] ?? "";
         final String tipo = data['tipo'] ?? "aluno";
-        final String? photoUrl = data['photoUrl']; 
-        
-        final dynamic birthDateRaw = data['birthDate'] ?? data['dataNascimento'];
+        final String? photoUrl = data['photoUrl'];
+
+        final dynamic birthDateRaw =
+            data['birthDate'] ?? data['dataNascimento'];
         final String idade = _calcularIdade(birthDateRaw);
-        final bool precisaData = (birthDateRaw == null); 
+        final bool precisaData = (birthDateRaw == null);
 
         final bool isPersonal = tipo == 'personal';
 
@@ -240,9 +284,20 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                     ),
                     child: const Row(
                       children: [
-                        Icon(Icons.warning_amber_rounded, color: AppColors.primary),
+                        Icon(
+                          Icons.warning_amber_rounded,
+                          color: AppColors.primary,
+                        ),
                         SizedBox(width: 10),
-                        Expanded(child: Text("Cadastro incompleto! Toque para adicionar sua Data de Nascimento.", style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold))),
+                        Expanded(
+                          child: Text(
+                            "Cadastro incompleto! Toque para adicionar sua Data de Nascimento.",
+                            style: TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -257,120 +312,208 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                           onTap: () {
                             _adminTapCount++;
                             if (_adminTapCount >= 7) {
-                              _adminTapCount = 0; 
+                              _adminTapCount = 0;
 
                               // SUBSTITUA COM SEU EMAIL DE ADMIN
-                              if (user?.email == 'arthur.felipe1993@gmail.com' || user?.email == 'heitor.felipe2001@gmail.com') { 
+                              if (user?.email ==
+                                      'arthur.felipe1993@gmail.com' ||
+                                  user?.email ==
+                                      'heitor.felipe2001@gmail.com') {
                                 Navigator.push(
-                                  context, 
-                                  MaterialPageRoute(builder: (_) => const SuperAdminPage())
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const SuperAdminPage(),
+                                  ),
                                 );
                               } else {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text("Acesso Negado."), 
-                                    backgroundColor: AppColors.error
-                                  )
+                                    content: Text("Acesso Negado."),
+                                    backgroundColor: AppColors.error,
+                                  ),
                                 );
                               }
                             }
                           },
-                          child: UserAvatar(photoUrl: photoUrl, name: nome, radius: 60),
+                          child: UserAvatar(
+                            photoUrl: photoUrl,
+                            name: nome,
+                            radius: 60,
+                          ),
                         ),
-                        if (_isUploading) const Positioned.fill(child: CircularProgressIndicator(color: AppColors.primary)),
+                        if (_isUploading)
+                          const Positioned.fill(
+                            child: CircularProgressIndicator(
+                              color: AppColors.primary,
+                            ),
+                          ),
                         Positioned(
-                          bottom: 0, right: 0,
+                          bottom: 0,
+                          right: 0,
                           child: GestureDetector(
                             onTap: _mostrarOpcoesFoto,
                             child: Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: AppColors.primary, 
+                                color: AppColors.primary,
                                 shape: BoxShape.circle,
-                                border: Border.all(color: AppColors.background, width: 3),
+                                border: Border.all(
+                                  color: AppColors.background,
+                                  width: 3,
+                                ),
                               ),
-                              child: const Icon(Icons.camera_alt, size: 18, color: Colors.black),
+                              child: const Icon(
+                                Icons.camera_alt,
+                                size: 18,
+                                color: Colors.black,
+                              ),
                             ),
                           ),
-                        )
+                        ),
                       ],
                     ),
                     const SizedBox(height: 16),
-                    Text(nome, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
-                    
+                    Text(
+                      nome,
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+
                     if (idade != "--")
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
-                        child: Text(idade, style: const TextStyle(color: AppColors.primary, fontSize: 16, fontWeight: FontWeight.w600)),
+                        child: Text(
+                          idade,
+                          style: const TextStyle(
+                            color: AppColors.primary,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
 
                     Container(
                       margin: const EdgeInsets.only(top: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
-                        color: AppColors.secondary, 
+                        color: AppColors.secondary,
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [
-                          BoxShadow(color: AppColors.secondary.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))
-                        ]
+                          BoxShadow(
+                            color: AppColors.secondary.withOpacity(0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
                       child: Text(
-                        isPersonal ? "PERSONAL TRAINER" : "ALUNO", 
-                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1)
+                        isPersonal ? "PERSONAL TRAINER" : "ALUNO",
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1,
+                        ),
                       ),
                     ),
-                    Text(email, style: const TextStyle(color: Colors.white60, height: 2)),
+                    Text(
+                      email,
+                      style: const TextStyle(color: Colors.white60, height: 2),
+                    ),
                   ],
                 ),
               ),
-              
+
               const SizedBox(height: 30),
 
-              const Align(alignment: Alignment.centerLeft, child: Text("Configurações", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primary))),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  "Configurações",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
               const SizedBox(height: 10),
-              
+
               _buildMenuOption(
-                icon: Icons.badge_outlined, 
-                color: AppColors.secondary, 
-                title: "Informações Pessoais", 
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => PersonalDataPage(uid: user!.uid))),
+                icon: Icons.badge_outlined,
+                color: AppColors.secondary,
+                title: "Informações Pessoais",
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => PersonalDataPage(uid: user!.uid),
+                  ),
+                ),
               ),
 
               _buildMenuOption(
-                icon: Icons.history, 
-                color: Colors.white, 
-                title: "Histórico de Treinos", 
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => WorkoutHistoryPage(
-                  studentId: user!.uid,
-                  studentName: nome,
-                )))
+                icon: Icons.history,
+                color: Colors.white,
+                title: "Histórico de Treinos",
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => WorkoutHistoryPage(
+                      studentId: user!.uid,
+                      studentName: nome,
+                    ),
+                  ),
+                ),
               ),
 
               // NOVOS BOTÕES PARA QUEM É PERSONAL TRAINER
               if (isPersonal) ...[
                 _buildMenuOption(
-                  icon: Icons.workspace_premium, 
-                  color: AppColors.primary, 
-                  title: "Assinatura e Planos", 
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ProfessorSubscriptionPage()))
+                  icon: Icons.workspace_premium,
+                  color: AppColors.primary,
+                  title: "Assinatura e Planos",
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ProfessorSubscriptionPage(),
+                    ),
+                  ),
                 ),
                 _buildMenuOption(
-                  icon: Icons.library_books, 
-                  color: Colors.white, 
-                  title: "Gerenciar Biblioteca", 
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LibraryAdminPage()))
+                  icon: Icons.library_books,
+                  color: Colors.white,
+                  title: "Gerenciar Biblioteca",
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const LibraryAdminPage(),
+                    ),
+                  ),
                 ),
               ],
 
               _buildMenuOption(
-                icon: Icons.logout, 
-                color: AppColors.error, 
-                title: "Sair da Conta", 
-                isDestructive: true, 
+                icon: Icons.logout,
+                color: AppColors.error,
+                title: "Sair da Conta",
+                isDestructive: true,
                 onTap: () async {
                   await _authService.deslogar();
-                  if (mounted) Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const LoginPage()), (route) => false);
-                }
+                  if (mounted)
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const LoginPage(),
+                      ),
+                      (route) => false,
+                    );
+                },
               ),
             ],
           ),
@@ -379,7 +522,13 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
     );
   }
 
-  Widget _buildMenuOption({required IconData icon, required Color color, required String title, required VoidCallback onTap, bool isDestructive = false}) {
+  Widget _buildMenuOption({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required VoidCallback onTap,
+    bool isDestructive = false,
+  }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -389,12 +538,25 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
       ),
       child: ListTile(
         leading: Container(
-          padding: const EdgeInsets.all(8), 
-          decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)), 
-          child: Icon(icon, color: color)
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: color),
         ),
-        title: Text(title, style: TextStyle(color: isDestructive ? AppColors.error : Colors.white, fontWeight: isDestructive ? FontWeight.bold : FontWeight.normal)),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.white30),
+        title: Text(
+          title,
+          style: TextStyle(
+            color: isDestructive ? AppColors.error : Colors.white,
+            fontWeight: isDestructive ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+        trailing: const Icon(
+          Icons.arrow_forward_ios,
+          size: 16,
+          color: Colors.white30,
+        ),
         onTap: onTap,
       ),
     );
