@@ -10,6 +10,10 @@ const {
   resolvePaymentProduct,
 } = require("./payment_catalog");
 
+const {
+  persistPaymentRecord,
+} = require("./payment_records");
+
 admin.initializeApp();
 
 const mercadoPagoAccessToken = defineSecret(
@@ -250,6 +254,30 @@ exports.criarPagamentoPix = onCall(
           },
         });
 
+        await persistPaymentRecord({
+          firestore: admin.firestore(),
+
+          serverTimestamp: () =>
+            admin.firestore.FieldValue.serverTimestamp(),
+
+          providerPaymentId: result.id,
+          userId: uid,
+          product,
+
+          paymentMethodType: "pix",
+
+          providerPaymentMethodId:
+            result.payment_method_id || "pix",
+
+          installments: 1,
+
+          status:
+            result.status || "pending",
+
+          statusDetail:
+            result.status_detail || null,
+        });
+
         return {
           id: result.id,
           productId: product.productId,
@@ -331,6 +359,34 @@ exports.criarPagamentoCartao = onCall(
               source_id: product.sourceId || "",
             },
           },
+        });
+
+        await persistPaymentRecord({
+          firestore: admin.firestore(),
+
+          serverTimestamp: () =>
+            admin.firestore.FieldValue.serverTimestamp(),
+
+          providerPaymentId: result.id,
+          userId: uid,
+          product,
+
+          paymentMethodType: "card",
+
+          providerPaymentMethodId:
+            result.payment_method_id ||
+            metodoPagamentoId ||
+            null,
+
+          installments:
+            result.installments ||
+            Number(parcelas),
+
+          status:
+            result.status || "pending",
+
+          statusDetail:
+            result.status_detail || null,
         });
 
         return {
