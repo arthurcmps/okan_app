@@ -6,6 +6,10 @@ const {defineSecret} = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const {MercadoPagoConfig, Payment} = require("mercadopago");
 
+const {
+  resolvePaymentProduct,
+} = require("./payment_catalog");
+
 admin.initializeApp();
 
 const mercadoPagoAccessToken = defineSecret(
@@ -25,6 +29,71 @@ function getMercadoPagoClient() {
     accessToken: mercadoPagoAccessToken.value(),
   });
 }
+
+exports.obterProdutoPagamento = onCall(
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError(
+            "unauthenticated",
+            "Precisa de estar autenticado.",
+        );
+      }
+
+      const {productId} = request.data || {};
+
+      try {
+        const product = await resolvePaymentProduct({
+          firestore: admin.firestore(),
+          productId,
+        });
+
+        return {
+          productId: product.productId,
+          kind: product.kind,
+          displayName: product.displayName,
+          amount: product.amount,
+          currency: product.currency,
+          billingPeriod:
+            product.billingPeriod || null,
+          sourceId:
+            product.sourceId || null,
+        };
+      } catch (error) {
+        const code = error?.message;
+
+        if (
+          code === "INVALID_PRODUCT_ID" ||
+          code === "INVALID_PRODUCT_PRICE" ||
+          code === "INVALID_PRODUCT_NAME"
+        ) {
+          throw new HttpsError(
+              "invalid-argument",
+              "Produto inválido.",
+          );
+        }
+
+        if (
+          code === "PRODUCT_NOT_FOUND" ||
+          code === "PRODUCT_NOT_FOR_SALE"
+        ) {
+          throw new HttpsError(
+              "not-found",
+              "Produto não disponível.",
+          );
+        }
+
+        console.error(
+            "Erro ao consultar produto:",
+            error,
+        );
+
+        throw new HttpsError(
+            "internal",
+            "Erro ao consultar produto.",
+        );
+      }
+    },
+);
 
 exports.enviarPushNotificationGenerica = onDocumentCreated(
     "users/{userId}/notifications/{notificationId}",
