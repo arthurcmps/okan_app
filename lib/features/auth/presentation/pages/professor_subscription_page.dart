@@ -49,11 +49,14 @@ class _ProfessorSubscriptionPageState extends State<ProfessorSubscriptionPage> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
         title: const Text(
-          "Cancelar Assinatura?",
+          "Solicitar cancelamento?",
           style: TextStyle(color: Colors.white),
         ),
         content: const Text(
-          "Tem certeza que deseja voltar ao Plano Base?\n\nVocê perderá acesso às ferramentas premium. Os seus alunos atuais serão mantidos, mas não poderá adicionar novos até estar dentro do limite do plano gratuito (3 alunos).",
+          "O pedido de cancelamento será registrado com segurança. "
+          "Seu acesso não será removido diretamente pelo aplicativo; "
+          "a alteração será processada pelo servidor conforme o estado "
+          "da sua assinatura.",
           style: TextStyle(color: Colors.white70),
         ),
         actions: [
@@ -65,21 +68,32 @@ class _ProfessorSubscriptionPageState extends State<ProfessorSubscriptionPage> {
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () async {
               Navigator.pop(ctx);
-              setState(() => _isLoading = true);
+
+              if (mounted) {
+                setState(() => _isLoading = true);
+              }
 
               try {
-                await FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(user!.uid)
-                    .update({
-                      'isPremium': false,
-                      'subscriptionPlan': 'Plano Base',
-                    });
+                await FirebaseAuth.instance.currentUser?.getIdToken(true);
+
+                final callable = FirebaseFunctions.instanceFor(
+                  region: 'us-central1',
+                ).httpsCallable('solicitarCancelamentoAssinatura');
+
+                final result = await callable.call();
+
+                final data = Map<String, dynamic>.from(result.data as Map);
+
+                final alreadyInactive = data['alreadyInactive'] == true;
 
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text("Assinatura cancelada com sucesso."),
+                    SnackBar(
+                      content: Text(
+                        alreadyInactive
+                            ? "A assinatura já está inativa."
+                            : "Solicitação de cancelamento registrada.",
+                      ),
                       backgroundColor: Colors.white24,
                     ),
                   );
@@ -88,17 +102,19 @@ class _ProfessorSubscriptionPageState extends State<ProfessorSubscriptionPage> {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text("Erro ao cancelar: $e"),
+                      content: Text("Erro ao solicitar cancelamento: $e"),
                       backgroundColor: AppColors.error,
                     ),
                   );
                 }
               } finally {
-                if (mounted) setState(() => _isLoading = false);
+                if (mounted) {
+                  setState(() => _isLoading = false);
+                }
               }
             },
             child: const Text(
-              "Sim, Cancelar",
+              "Confirmar",
               style: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,

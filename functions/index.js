@@ -14,6 +14,12 @@ const {
   persistPaymentRecord,
 } = require("./payment_records");
 
+const {
+  SUBSCRIPTION_STATUS,
+  persistSubscriptionRecord,
+  requestSubscriptionCancellation,
+} = require("./subscription_records");
+
 admin.initializeApp();
 
 const mercadoPagoAccessToken = defineSecret(
@@ -95,6 +101,53 @@ async function resolveCheckoutProduct(productId) {
   }
 }
 
+/**
+ * Registra uma assinatura pendente quando o pagamento
+ * pertence a um produto de assinatura.
+ *
+ * Isso nao concede entitlement nem ativa Premium.
+ *
+ * @param {object} params Dados do pagamento.
+ * @return {Promise<void>}
+ */
+async function persistPendingSubscriptionIfNeeded({
+  userId,
+  product,
+  paymentId,
+  paymentStatus,
+}) {
+  if (product.kind !== "personal_subscription") {
+    return;
+  }
+
+  const trackableStatuses = [
+    "pending",
+    "in_process",
+    "approved",
+  ];
+
+  const normalizedStatus =
+    String(paymentStatus || "pending");
+
+  if (!trackableStatuses.includes(normalizedStatus)) {
+    return;
+  }
+
+  await persistSubscriptionRecord({
+    firestore: admin.firestore(),
+
+    serverTimestamp: () =>
+      admin.firestore.FieldValue.serverTimestamp(),
+
+    userId,
+    product,
+
+    status: SUBSCRIPTION_STATUS.PENDING,
+
+    latestPaymentId: paymentId,
+  });
+}
+
 exports.obterProdutoPagamento = onCall(
     async (request) => {
       if (!request.auth) {
@@ -155,6 +208,71 @@ exports.obterProdutoPagamento = onCall(
         throw new HttpsError(
             "internal",
             "Erro ao consultar produto.",
+        );
+      }
+    },
+);
+
+exports.solicitarCancelamentoAssinatura = onCall(
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError(
+            "unauthenticated",
+            "Precisa de estar autenticado.",
+        );
+      }
+
+      try {
+        const result =
+          await requestSubscriptionCancellation({
+            firestore: admin.firestore(),
+
+            serverTimestamp: () =>
+              admin.firestore.FieldValue
+                  .serverTimestamp(),
+
+            userId: request.auth.uid,
+          });
+
+        return {
+          success: true,
+
+          alreadyInactive:
+            result.alreadyInactive === true,
+
+          cancelAtPeriodEnd:
+            result.cancelAtPeriodEnd === true,
+
+          status:
+            result.status || null,
+        };
+      } catch (error) {
+        const code = error?.message;
+
+        if (code === "SUBSCRIPTION_NOT_FOUND") {
+          throw new HttpsError(
+              "failed-precondition",
+              "Assinatura não encontrada.",
+          );
+        }
+
+        if (
+          code === "INVALID_SUBSCRIPTION_USER_ID"
+        ) {
+          throw new HttpsError(
+              "invalid-argument",
+              "Usuário inválido.",
+          );
+        }
+
+        console.error(
+            "Erro ao solicitar cancelamento:",
+            error,
+        );
+
+        throw new HttpsError(
+            "internal",
+            "Erro ao solicitar cancelamento.",
         );
       }
     },
@@ -278,6 +396,13 @@ exports.criarPagamentoPix = onCall(
             result.status_detail || null,
         });
 
+        await persistPendingSubscriptionIfNeeded({
+          userId: uid,
+          product,
+          paymentId: result.id,
+          paymentStatus: result.status,
+        });
+
         return {
           id: result.id,
           productId: product.productId,
@@ -387,6 +512,13 @@ exports.criarPagamentoCartao = onCall(
 
           statusDetail:
             result.status_detail || null,
+        });
+
+        await persistPendingSubscriptionIfNeeded({
+          userId: uid,
+          product,
+          paymentId: result.id,
+          paymentStatus: result.status,
         });
 
         return {
