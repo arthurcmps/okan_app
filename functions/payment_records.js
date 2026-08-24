@@ -60,15 +60,6 @@ function normalizeInstallments(value) {
  * @param {object} params Dados do pagamento.
  * @return {object} Registro normalizado.
  */
-/**
- * Monta o documento interno de pagamento.
- *
- * Nenhum dado sensivel de cartao ou documento pessoal
- * deve ser armazenado aqui.
- *
- * @param {object} params Dados do pagamento.
- * @return {object} Registro normalizado.
- */
 function buildPaymentRecord({
   providerPaymentId,
   userId,

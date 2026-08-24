@@ -4,6 +4,7 @@ const ENTITLEMENT_SCHEMA_VERSION = 1;
 
 const ENTITLEMENT_STATUS = Object.freeze({
   ACTIVE: "active",
+  EXPIRED: "expired",
 });
 
 /**
@@ -62,6 +63,8 @@ function buildEntitlementRecord({
   product,
   providerPaymentId = null,
   acquisitionType = "payment",
+  validFrom = null,
+  validUntil = null,
   grantedAt,
   updatedAt,
 }) {
@@ -82,52 +85,94 @@ function buildEntitlementRecord({
     typeof product.entitlement !== "string" ||
     !product.entitlement.trim()
   ) {
-    throw new Error("INVALID_ENTITLEMENT_TYPE");
+    throw new Error(
+        "INVALID_ENTITLEMENT_TYPE",
+    );
   }
 
   if (
     acquisitionType !== "payment" &&
     acquisitionType !== "free"
   ) {
-    throw new Error("INVALID_ACQUISITION_TYPE");
+    throw new Error(
+        "INVALID_ACQUISITION_TYPE",
+    );
   }
 
   if (
     acquisitionType === "payment" &&
     !String(providerPaymentId ?? "").trim()
   ) {
-    throw new Error("PAYMENT_ID_REQUIRED");
+    throw new Error(
+        "PAYMENT_ID_REQUIRED",
+    );
   }
 
   if (
     acquisitionType === "free" &&
     Number(product.amount) !== 0
   ) {
-    throw new Error("PAID_PRODUCT_REQUIRES_PAYMENT");
+    throw new Error(
+        "PAID_PRODUCT_REQUIRES_PAYMENT",
+    );
+  }
+
+  /*
+   * Assinaturas precisam obrigatoriamente
+   * possuir um período de validade.
+   */
+  if (
+    product.kind ===
+      "personal_subscription" &&
+    (!validFrom || !validUntil)
+  ) {
+    throw new Error(
+        "SUBSCRIPTION_PERIOD_REQUIRED",
+    );
   }
 
   return {
-    schemaVersion: ENTITLEMENT_SCHEMA_VERSION,
+    schemaVersion:
+      ENTITLEMENT_SCHEMA_VERSION,
 
     entitlementId,
 
-    userId: normalizedUserId,
+    userId:
+      normalizedUserId,
 
-    entitlementType: product.entitlement,
+    entitlementType:
+      product.entitlement,
 
-    productId: product.productId,
-    productKind: product.kind,
+    productId:
+      product.productId,
 
-    sourceId: product.sourceId || null,
+    productKind:
+      product.kind,
 
-    status: ENTITLEMENT_STATUS.ACTIVE,
+    sourceId:
+      product.sourceId || null,
+
+    status:
+      ENTITLEMENT_STATUS.ACTIVE,
+
+    validFrom:
+      product.kind ===
+        "personal_subscription" ?
+        validFrom :
+        null,
+
+    validUntil:
+      product.kind ===
+        "personal_subscription" ?
+        validUntil :
+        null,
 
     acquisitionType,
 
     providerPaymentId:
-      providerPaymentId === null
-        ? null
-        : String(providerPaymentId),
+      providerPaymentId === null ?
+        null :
+        String(providerPaymentId),
 
     grantedAt,
     updatedAt,
@@ -143,7 +188,18 @@ function buildEntitlementRecord({
  * @param {object} params Dependencias e produto.
  * @return {Promise<object>} Entitlement concedido.
  */
-async function grantProductEntitlement({
+
+/**
+ * Monta todas as escritas necessárias para conceder
+ * um entitlement.
+ *
+ * A função não executa commit. Isso permite reutilizar
+ * as mesmas escritas em Batch ou Transaction.
+ *
+ * @param {object} params Dependências e produto.
+ * @return {object} Plano de escritas.
+ */
+function buildEntitlementWritePlan({
   firestore,
   serverTimestamp,
   arrayUnion,
@@ -151,34 +207,44 @@ async function grantProductEntitlement({
   product,
   providerPaymentId = null,
   acquisitionType = "payment",
+  subscriptionPeriod = null,
 }) {
   if (!firestore) {
     throw new Error("FIRESTORE_REQUIRED");
   }
 
   if (typeof serverTimestamp !== "function") {
-    throw new Error("SERVER_TIMESTAMP_REQUIRED");
+    throw new Error(
+        "SERVER_TIMESTAMP_REQUIRED",
+    );
   }
 
   if (typeof arrayUnion !== "function") {
-    throw new Error("ARRAY_UNION_REQUIRED");
-  }
-
-  if (typeof firestore.batch !== "function") {
-    throw new Error("FIRESTORE_BATCH_REQUIRED");
+    throw new Error(
+        "ARRAY_UNION_REQUIRED",
+    );
   }
 
   const timestamp = serverTimestamp();
 
   const entitlement =
-    buildEntitlementRecord({
-      userId,
-      product,
-      providerPaymentId,
-      acquisitionType,
-      grantedAt: timestamp,
-      updatedAt: timestamp,
-    });
+  buildEntitlementRecord({
+    userId,
+    product,
+    providerPaymentId,
+    acquisitionType,
+
+    validFrom:
+      subscriptionPeriod
+          ?.currentPeriodStart || null,
+
+    validUntil:
+      subscriptionPeriod
+          ?.currentPeriodEnd || null,
+
+    grantedAt: timestamp,
+    updatedAt: timestamp,
+  });
 
   const normalizedUserId =
     entitlement.userId;
@@ -191,65 +257,149 @@ async function grantProductEntitlement({
       .collection("entitlements")
       .doc(entitlement.entitlementId);
 
-  const batch = firestore.batch();
+  const writes = [
+    {
+      ref: entitlementRef,
+      data: entitlement,
+      options: {
+        merge: true,
+      },
+    },
+  ];
 
-  batch.set(
-      entitlementRef,
-      entitlement,
-      {merge: true},
-  );
+  if (
+    product.kind ===
+    "personal_subscription"
+  ) {
+    writes.push({
+      ref: userRef,
+      data: {
+        isPremium: true,
 
-  if (product.kind === "personal_subscription") {
-    batch.set(
-        userRef,
-        {
-          isPremium: true,
-          subscriptionPlan: product.displayName,
-          subscriptionDate: timestamp,
-        },
-        {merge: true},
-    );
+        subscriptionPlan:
+        product.displayName,
 
-    const subscriptionRef = firestore
+        subscriptionDate:
+        subscriptionPeriod
+            .currentPeriodStart,
+      },
+      options: {
+        merge: true,
+      },
+    });
+
+    const subscriptionRef =
+    firestore
         .collection("subscriptions")
         .doc(normalizedUserId);
 
-    batch.set(
-        subscriptionRef,
-        {
-          status: "active",
+    writes.push({
+      ref: subscriptionRef,
+      data: {
+        status: "active",
 
-          latestPaymentId:
-            String(providerPaymentId),
+        latestPaymentId:
+        String(providerPaymentId),
 
-          cancelAtPeriodEnd: false,
-          cancellationRequestedAt: null,
-          canceledAt: null,
+        currentPeriodStart:
+        subscriptionPeriod
+            .currentPeriodStart,
 
-          updatedAt: timestamp,
-        },
-        {merge: true},
-    );
-  } else if (product.kind === "workout_template") {
-    batch.set(
-        userRef,
-        {
-          purchased_templates:
-            arrayUnion(product.sourceId),
-        },
-        {merge: true},
-    );
+        currentPeriodEnd:
+        subscriptionPeriod
+            .currentPeriodEnd,
+
+        cancelAtPeriodEnd: false,
+
+        cancellationRequestedAt:
+        null,
+
+        canceledAt:
+        null,
+
+        updatedAt:
+        timestamp,
+      },
+      options: {
+        merge: true,
+      },
+    });
+  } else if (
+    product.kind ===
+    "workout_template"
+  ) {
+    writes.push({
+      ref: userRef,
+      data: {
+        purchased_templates:
+        arrayUnion(
+            product.sourceId,
+        ),
+      },
+      options: {
+        merge: true,
+      },
+    });
   } else {
-    throw new Error("UNSUPPORTED_PRODUCT_KIND");
+    throw new Error(
+        "UNSUPPORTED_PRODUCT_KIND",
+    );
   }
-
-  await batch.commit();
 
   return {
     entitlementId:
       entitlement.entitlementId,
 
     entitlement,
+
+    writes,
+  };
+}
+
+/**
+ * Concede um entitlement diretamente pelo backend.
+ *
+ * Utilizado, por exemplo, em produtos gratuitos.
+ * Pagamentos usam fulfillment transacional separado.
+ *
+ * @param {object} params Dependências e produto.
+ * @return {Promise<object>} Entitlement concedido.
+ */
+async function grantProductEntitlement(
+    params,
+) {
+  const {firestore} = params;
+
+  if (
+    !firestore ||
+    typeof firestore.batch !== "function"
+  ) {
+    throw new Error(
+        "FIRESTORE_BATCH_REQUIRED",
+    );
+  }
+
+  const plan =
+    buildEntitlementWritePlan(params);
+
+  const batch = firestore.batch();
+
+  for (const write of plan.writes) {
+    batch.set(
+        write.ref,
+        write.data,
+        write.options,
+    );
+  }
+
+  await batch.commit();
+
+  return {
+    entitlementId:
+      plan.entitlementId,
+
+    entitlement:
+      plan.entitlement,
   };
 }
 
@@ -259,5 +409,6 @@ module.exports = {
   normalizeEntitlementUserId,
   getEntitlementDocumentId,
   buildEntitlementRecord,
+  buildEntitlementWritePlan,
   grantProductEntitlement,
 };

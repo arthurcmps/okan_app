@@ -2,6 +2,14 @@ const {onDocumentCreated} = require("firebase-functions/v2/firestore");
 const {onCall, HttpsError, onRequest} =
   require("firebase-functions/v2/https");
 const {defineSecret} = require("firebase-functions/params");
+const {
+  onSchedule,
+} = require(
+    "firebase-functions/v2/scheduler",
+);
+const {
+  expirePremiumSubscriptionIfNeeded,
+} = require("./subscription_expiration");
 
 const admin = require("firebase-admin");
 const {MercadoPagoConfig, Payment} = require("mercadopago");
@@ -25,14 +33,29 @@ const {
   grantProductEntitlement,
 } = require("./entitlements");
 
+const {
+  normalizeWebhookValue,
+  verifyWebhookSignature,
+} = require("./webhook_security");
+
+const {
+  fulfillPaidProductOnce,
+} = require("./payment_fulfillment");
+
+const {
+  isWebhookEventProcessed,
+  markWebhookEventProcessed,
+} = require("./webhook_events");
+
 admin.initializeApp();
 
 const mercadoPagoAccessToken = defineSecret(
     "MERCADO_PAGO_ACCESS_TOKEN",
 );
 
-const mercadoPagoWebhookUrl =
-  "https://webhookmercadopago-pxytyhhu5q-uc.a.run.app";
+const mercadoPagoWebhookSecret = defineSecret(
+    "MERCADO_PAGO_WEBHOOK_SECRET",
+);
 
 /**
  * Cria o cliente configurado do Mercado Pago.
@@ -209,28 +232,44 @@ async function grantApprovedProductIfNeeded({
   product,
   paymentId,
   paymentStatus,
+  statusDetail = null,
 }) {
   if (paymentStatus !== "approved") {
     return false;
   }
 
-  await grantProductEntitlement({
-    firestore: admin.firestore(),
+  const result =
+    await fulfillPaidProductOnce({
+      firestore:
+        admin.firestore(),
 
-    serverTimestamp: () =>
-      admin.firestore.FieldValue.serverTimestamp(),
+      serverTimestamp:
+        () =>
+          admin.firestore
+              .FieldValue
+              .serverTimestamp(),
 
-    arrayUnion: (value) =>
-      admin.firestore.FieldValue.arrayUnion(value),
+      arrayUnion:
+        (value) =>
+          admin.firestore
+              .FieldValue
+              .arrayUnion(value),
 
-    userId,
-    product,
+      userId,
+      product,
 
-    providerPaymentId: paymentId,
-    acquisitionType: "payment",
-  });
+      providerPaymentId:
+        paymentId,
 
-  return true;
+      paymentStatus,
+
+      statusDetail,
+    });
+
+  return (
+    result.fulfilled === true ||
+    result.alreadyFulfilled === true
+  );
 }
 
 exports.obterProdutoPagamento = onCall(
@@ -549,7 +588,6 @@ exports.criarPagamentoPix = onCall(
               email,
             },
             external_reference: uid,
-            notification_url: mercadoPagoWebhookUrl,
             metadata: {
               product_id: product.productId,
               product_kind: product.kind,
@@ -580,6 +618,13 @@ exports.criarPagamentoPix = onCall(
 
           statusDetail:
             result.status_detail || null,
+        });
+
+        await persistPendingSubscriptionIfNeeded({
+          userId: uid,
+          product,
+          paymentId: result.id,
+          paymentStatus: result.status,
         });
 
         await grantApprovedProductIfNeeded({
@@ -663,7 +708,6 @@ exports.criarPagamentoCartao = onCall(
               },
             },
             external_reference: uid,
-            notification_url: mercadoPagoWebhookUrl,
             metadata: {
               product_id: product.productId,
               product_kind: product.kind,
@@ -698,6 +742,13 @@ exports.criarPagamentoCartao = onCall(
 
           statusDetail:
             result.status_detail || null,
+        });
+
+        await persistPendingSubscriptionIfNeeded({
+          userId: uid,
+          product,
+          paymentId: result.id,
+          paymentStatus: result.status,
         });
 
         await grantApprovedProductIfNeeded({
@@ -746,12 +797,87 @@ exports.criarPagamentoCartao = onCall(
 
 exports.webhookMercadoPago = onRequest(
     {
-      secrets: [mercadoPagoAccessToken],
+      secrets: [
+        mercadoPagoAccessToken,
+        mercadoPagoWebhookSecret,
+      ],
     },
     async (req, res) => {
-      const type = req.body?.type;
+      const type =
+  normalizeWebhookValue(
+      req.body?.type,
+  );
+
+      const queryPaymentId =
+  normalizeWebhookValue(
+      req.query?.["data.id"],
+  );
+
+      const bodyPaymentId =
+  normalizeWebhookValue(
+      req.body?.data?.id,
+  );
+
+      const xSignature =
+  req.headers["x-signature"];
+
+      const xRequestId =
+  req.headers["x-request-id"];
+
+      const signatureIsValid =
+  verifyWebhookSignature({
+    xSignature,
+    xRequestId,
+    dataId: queryPaymentId,
+    secret:
+      mercadoPagoWebhookSecret.value(),
+  });
+
+      if (!signatureIsValid) {
+        console.warn(
+            "Webhook Mercado Pago " +
+      "com assinatura inválida.",
+        );
+
+        return res
+            .status(401)
+            .send("Assinatura inválida");
+      }
+
+      /*
+ * O data.id usado na assinatura vem da query.
+ * O corpo deve apontar para o mesmo pagamento.
+ */
+      if (
+        !queryPaymentId ||
+  !bodyPaymentId ||
+  queryPaymentId !== bodyPaymentId
+      ) {
+        console.error(
+            "Webhook Mercado Pago com " +
+      "data.id inconsistente.",
+        );
+
+        return res
+            .status(400)
+            .send("Pagamento inconsistente");
+      }
+
       const requestedPaymentId =
-        req.body?.data?.id;
+  queryPaymentId;
+
+      const notificationId =
+  normalizeWebhookValue(
+      req.body?.id,
+  );
+
+      if (!notificationId) {
+        return res
+            .status(400)
+            .send(
+                "Notificação sem identificador",
+            );
+      }
 
       if (type !== "payment") {
         return res
@@ -766,6 +892,22 @@ exports.webhookMercadoPago = onRequest(
       }
 
       try {
+        const eventAlreadyProcessed =
+          await isWebhookEventProcessed({
+            firestore:
+              admin.firestore(),
+
+            notificationId,
+          });
+
+        if (eventAlreadyProcessed) {
+          return res
+              .status(200)
+              .send(
+                  "Notificação já processada",
+              );
+        }
+
         const client =
           getMercadoPagoClient();
 
@@ -926,23 +1068,76 @@ exports.webhookMercadoPago = onRequest(
 
         if (status === "approved") {
           const product =
-            buildProductFromPaymentRecord(
-                paymentRecord,
-            );
+              buildProductFromPaymentRecord(
+                  paymentRecord,
+              );
 
           await grantApprovedProductIfNeeded({
             userId:
-              paymentRecord.userId,
+                paymentRecord.userId,
 
             product,
 
             paymentId:
-              pagamentoInfo.id,
+                pagamentoInfo.id,
 
             paymentStatus:
-              status,
+                status,
+
+            statusDetail:
+                pagamentoInfo
+                    .status_detail || null,
           });
+        } else {
+          /*
+            * Pagamentos ainda não aprovados
+            * não têm fulfillment.
+            * Apenas reconciliamos o estado.
+            */
+          await paymentRef.set(
+              {
+                status,
+
+                statusDetail:
+                    pagamentoInfo
+                        .status_detail || null,
+
+                updatedAt:
+                    admin.firestore
+                        .FieldValue
+                        .serverTimestamp(),
+              },
+              {
+                merge: true,
+              },
+          );
         }
+
+        await markWebhookEventProcessed({
+          firestore:
+              admin.firestore(),
+
+          serverTimestamp:
+              () =>
+                admin.firestore
+                    .FieldValue
+                    .serverTimestamp(),
+
+          notificationId,
+
+          providerPaymentId:
+              pagamentoInfo.id,
+
+          requestId:
+              normalizeWebhookValue(
+                  xRequestId,
+              ),
+
+          outcome:
+              status === "approved" ?
+                "approved_reconciled" :
+                "status_reconciled",
+        });
 
         return res
             .status(200)
@@ -961,3 +1156,76 @@ exports.webhookMercadoPago = onRequest(
       }
     },
 );
+
+exports.expirarAssinaturasPremium =
+  onSchedule(
+      "every 60 minutes",
+      async () => {
+        const firestore =
+          admin.firestore();
+
+        const now =
+          admin.firestore
+              .Timestamp
+              .now();
+
+        /*
+         * currentPeriodEnd é removido quando
+         * a assinatura expira, então o documento
+         * deixa naturalmente esta consulta.
+         */
+        const snapshot =
+          await firestore
+              .collection(
+                  "subscriptions",
+              )
+              .where(
+                  "currentPeriodEnd",
+                  "<=",
+                  now,
+              )
+              .limit(200)
+              .get();
+
+        let expiredCount = 0;
+
+        for (
+          const subscription
+          of snapshot.docs
+        ) {
+          const result =
+            await expirePremiumSubscriptionIfNeeded({
+              firestore,
+
+              serverTimestamp:
+                () =>
+                  admin.firestore
+                      .FieldValue
+                      .serverTimestamp(),
+
+              userId:
+                subscription.id,
+
+              now:
+                () => now.toDate(),
+            });
+
+          if (
+            result.expired === true
+          ) {
+            expiredCount += 1;
+          }
+        }
+
+        console.log(
+            "Expiração Premium concluída.",
+            {
+              candidates:
+                snapshot.size,
+
+              expired:
+                expiredCount,
+            },
+        );
+      },
+  );

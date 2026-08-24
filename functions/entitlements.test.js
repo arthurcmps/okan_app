@@ -17,8 +17,6 @@ const subscriptionProduct = {
   currency: "BRL",
   entitlement: "personal_premium",
   billingPeriod: "monthly",
-  entitlement: "personal_premium",
-  billingPeriod: "monthly",
 };
 
 const paidWorkoutProduct = {
@@ -29,7 +27,6 @@ const paidWorkoutProduct = {
   currency: "BRL",
   entitlement: "workout_template",
   sourceId: "template-1",
-  entitlement: "workout_template",
 };
 
 const freeWorkoutProduct = {
@@ -131,6 +128,8 @@ test(
         acquisitionType: "payment",
         grantedAt: "timestamp",
         updatedAt: "timestamp",
+        validFrom: "period-start",
+        validUntil: "period-end",
       });
 
       assert.equal(
@@ -169,6 +168,12 @@ test(
           product: subscriptionProduct,
           providerPaymentId: "456",
           acquisitionType: "payment",
+          subscriptionPeriod: {
+          currentPeriodStart:
+            "period-start",
+          currentPeriodEnd:
+            "period-end",
+        },
         });
 
       assert.equal(
@@ -209,6 +214,18 @@ test(
       assert.equal(
           fake.writes[2].data.status,
           "active",
+      );
+
+      assert.equal(
+          fake.writes[0]
+              .data.validUntil,
+          "period-end",
+      );
+
+      assert.equal(
+          fake.writes[2]
+              .data.currentPeriodEnd,
+          "period-end",
       );
     },
 );
