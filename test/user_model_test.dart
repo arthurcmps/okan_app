@@ -121,5 +121,16 @@ void main() {
       expect(map.containsKey('weight'), isFalse);
       expect(map.containsKey('objectives'), isFalse);
     });
+    test('unknown user without markers remains unresolved', () {
+      final user = UserModel.fromMap({
+        'email': 'unknown@example.com',
+      }, 'unknown-1');
+
+      expect(user.role, UserRoles.unresolved);
+      expect(user.isAluno, isFalse);
+      expect(user.isProfessor, isFalse);
+      expect(user.isGymAdmin, isFalse);
+      expect(user.isSuperAdmin, isFalse);
+    });
   });
 }

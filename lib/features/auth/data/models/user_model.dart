@@ -6,6 +6,7 @@ abstract final class UserRoles {
   static const String professor = 'professor';
   static const String gymAdmin = 'gym_admin';
   static const String superAdmin = 'super_admin';
+  static const String unresolved = 'unresolved';
 
   static const Set<String> canonical = {aluno, professor, gymAdmin, superAdmin};
 }
@@ -208,7 +209,7 @@ class UserModel {
     // Fallback deliberadamente de menor privilégio.
     //
     // Nunca inferimos professor, gym_admin ou super_admin.
-    return UserRoles.aluno;
+    return UserRoles.unresolved;
   }
 
   static bool _hasStudentMarkers(Map<String, dynamic> map) {
