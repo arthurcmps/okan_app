@@ -43,6 +43,9 @@ class AuthService {
       }
 
       final normalizedEmail = email.trim().toLowerCase();
+      final memberType = role == UserRoles.professor
+          ? UserMemberTypes.professor
+          : UserMemberTypes.aluno;
 
       // 1. Cria o usuário no Firebase Auth
       final UserCredential userCredential = await _auth
@@ -63,6 +66,7 @@ class AuthService {
         'name': nome.trim(),
         'email': normalizedEmail,
         'role': role,
+        'memberType': memberType,
         'photoUrl': null,
         'academyId': null,
         'professorId': null,
@@ -155,6 +159,7 @@ class AuthService {
             'name': user.displayName ?? "Usuário Google",
             'email': normalizedEmail,
             'role': UserRoles.aluno,
+            'memberType': UserMemberTypes.aluno,
             'photoUrl': user.photoURL,
             'academyId': null,
             'professorId': null,
