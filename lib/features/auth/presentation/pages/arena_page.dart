@@ -95,10 +95,10 @@ class _ArenaPageState extends State<ArenaPage>
      *
      * Primeiro buscamos pelo e-mail e depois aceitamos
      * exclusivamente uma identidade User v2 canônica
-     * cujo papel seja aluno.
+     * cuja persona funcional seja aluno.
      *
-     * Isso impede que os quatro registros legados
-     * bloqueados na migração sejam selecionados.
+     * Isso preserva usuários híbridos, por exemplo
+     * super_admin + memberType=aluno, sem misturar RBAC com persona.
      */
       final query = await FirebaseFirestore.instance
           .collection('users')
@@ -108,7 +108,8 @@ class _ArenaPageState extends State<ArenaPage>
       final candidatos = query.docs
           .map(UserModel.fromDocument)
           .where(
-            (candidate) => candidate.isCanonicalIdentity && candidate.isAluno,
+            (candidate) =>
+                candidate.isCanonicalIdentity && candidate.isAlunoMember,
           )
           .toList();
 
