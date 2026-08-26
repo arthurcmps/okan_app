@@ -34,6 +34,9 @@ class _RegisterPageState extends State<RegisterPage> {
 
     try {
       final normalizedEmail = _emailController.text.trim().toLowerCase();
+      final memberType = _selectedRole == UserRoles.professor
+          ? UserMemberTypes.professor
+          : UserMemberTypes.aluno;
 
       // 1. Cria a conta no Firebase Auth.
       final UserCredential userCredential = await FirebaseAuth.instance
@@ -53,6 +56,7 @@ class _RegisterPageState extends State<RegisterPage> {
         'name': _nameController.text.trim(),
         'email': normalizedEmail,
         'role': _selectedRole,
+        'memberType': memberType,
         'photoUrl': null,
         'academyId': null,
         'professorId': null,
@@ -157,7 +161,6 @@ class _RegisterPageState extends State<RegisterPage> {
                     ),
                   ),
                   const SizedBox(width: 16),
-                  // Valor alterado de "personal" para "professor" para o painel web reconhecer
                   Expanded(
                     child: _buildRoleCard(
                       "Personal",
@@ -199,8 +202,9 @@ class _RegisterPageState extends State<RegisterPage> {
                 icon: Icons.lock_outline,
                 isPassword: true,
                 validator: (val) {
-                  if (val != _passwordController.text)
+                  if (val != _passwordController.text) {
                     return "As senhas não coincidem.";
+                  }
                   return null;
                 },
               ),
