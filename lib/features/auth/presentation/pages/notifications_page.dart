@@ -17,8 +17,9 @@ class NotificationsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
 
-    if (user == null)
+    if (user == null) {
       return const Scaffold(body: Center(child: Text("Não logado")));
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -484,10 +485,11 @@ class NotificationsPage extends StatelessWidget {
         ),
       );
     } catch (e) {
-      if (context.mounted)
+      if (context.mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text("Erro: $e")));
+      }
     }
   }
 
@@ -498,8 +500,9 @@ class NotificationsPage extends StatelessWidget {
 
     // Lógica inteligente baseada no título (Para alertas automáticos)
     if (title.contains('vencido')) return Colors.redAccent;
-    if (title.contains('vencendo') || title.contains('alteração'))
+    if (title.contains('vencendo') || title.contains('alteração')) {
       return Colors.amber;
+    }
     if (title.contains('feedback')) return Colors.blueAccent;
 
     // Lógica padrão baseada no tipo
@@ -612,13 +615,22 @@ class NotificationsPage extends StatelessWidget {
       final personalName = data['personalName'] ?? data['fromPersonalName'];
 
       if (aceitar) {
+        if (personalId == null || personalId.toString().trim().isEmpty) {
+          throw StateError('Convite sem identificador de professor.');
+        }
+
         await FirebaseFirestore.instance
             .collection('users')
             .doc(studentId)
             .update({
+              // Canônico User v2.
+              'professorId': personalId,
+
+              // Compatibilidade temporária com versões antigas do app.
               'personalId': personalId,
               'personalName': personalName,
               'inviteFromPersonalId': inviteId,
+              'updatedAt': FieldValue.serverTimestamp(),
             });
       }
 
@@ -640,9 +652,11 @@ class NotificationsPage extends StatelessWidget {
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Erro: $e")));
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Erro: $e")));
+      }
     }
   }
 
