@@ -95,7 +95,7 @@ class _ProfilePageState extends State<ProfilePage>
       initialDate: DateTime(2000),
       firstDate: DateTime(1940),
       lastDate: DateTime.now(),
-      locale: const Locale('pt', 'BR'), // <-- FORÇA O CALENDÁRIO EM PT-BR
+      locale: const Locale('pt', 'BR'),
       builder: (context, child) {
         return Theme(
           data: ThemeData.dark().copyWith(
@@ -206,8 +206,9 @@ class _ProfilePageState extends State<ProfilePage>
 
   @override
   Widget build(BuildContext context) {
-    if (user == null)
+    if (user == null) {
       return const Scaffold(body: Center(child: Text("Usuário não logado.")));
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -252,8 +253,9 @@ class _ProfilePageState extends State<ProfilePage>
           .doc(user!.uid)
           .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData || !snapshot.data!.exists)
+        if (!snapshot.hasData || !snapshot.data!.exists) {
           return const Center(child: CircularProgressIndicator());
+        }
 
         final data = snapshot.data!.data() as Map<String, dynamic>;
 
@@ -269,7 +271,8 @@ class _ProfilePageState extends State<ProfilePage>
         final String idade = _calcularIdade(birthDateRaw);
         final bool precisaData = (birthDateRaw == null);
 
-        final bool isProfessor = profile.isProfessor;
+        // Persona funcional do app, não RBAC.
+        final bool isProfessor = profile.isProfessorMember;
 
         String roleLabel = "ALUNO";
 
@@ -328,7 +331,6 @@ class _ProfilePageState extends State<ProfilePage>
                             if (_adminTapCount >= 7) {
                               _adminTapCount = 0;
 
-                              // SUBSTITUA COM SEU EMAIL DE ADMIN
                               if (profile.isSuperAdmin) {
                                 Navigator.push(
                                   context,
@@ -483,7 +485,7 @@ class _ProfilePageState extends State<ProfilePage>
                 ),
               ),
 
-              // NOVOS BOTÕES PARA QUEM É PERSONAL TRAINER
+              // Recursos exclusivos da persona professor no mobile.
               if (isProfessor) ...[
                 _buildMenuOption(
                   icon: Icons.workspace_premium,
@@ -516,7 +518,7 @@ class _ProfilePageState extends State<ProfilePage>
                 isDestructive: true,
                 onTap: () async {
                   await _authService.deslogar();
-                  if (mounted)
+                  if (mounted) {
                     Navigator.pushAndRemoveUntil(
                       context,
                       MaterialPageRoute(
@@ -524,6 +526,7 @@ class _ProfilePageState extends State<ProfilePage>
                       ),
                       (route) => false,
                     );
+                  }
                 },
               ),
             ],
