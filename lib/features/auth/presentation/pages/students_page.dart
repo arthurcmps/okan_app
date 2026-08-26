@@ -44,6 +44,45 @@ class _StudentsPageState extends State<StudentsPage>
     return false;
   }
 
+  bool _isPermissionDenied(Object error) {
+    return error is FirebaseException && error.code == 'permission-denied';
+  }
+
+  void _mostrarErroDeAcao(
+    Object error, {
+    required String action,
+    bool fecharDialogoAtual = false,
+  }) {
+    debugPrint('StudentsPage/$action: $error');
+
+    if (!mounted) return;
+
+    if (_isPermissionDenied(error)) {
+      if (fecharDialogoAtual && Navigator.of(context).canPop()) {
+        Navigator.pop(context);
+      }
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+
+        _mostrarAlerta(
+          'Ação indisponível no plano atual',
+          'Seu plano atual limita a gestão de alguns vínculos de alunos. '
+              'Este vínculo continua salvo e nenhum dado foi perdido. '
+              'Para voltar a gerenciar todos os alunos normalmente, '
+              'reative o Premium.',
+        );
+      });
+
+      return;
+    }
+
+    _mostrarSnack(
+      'Não foi possível $action agora. Tente novamente em instantes.',
+      isError: true,
+    );
+  }
+
   Query<Map<String, dynamic>> _activeStudentsQuery() {
     return FirebaseFirestore.instance.collection('users').where(
       Filter.or(
@@ -90,8 +129,10 @@ class _StudentsPageState extends State<StudentsPage>
           if (mounted) {
             Navigator.pop(context); // Fecha a modal do convite
             _mostrarAlerta(
-              "Limite Atingido ⚠️",
-              "O seu Plano Base permite até 3 alunos (ativos ou pendentes). Vá ao seu Perfil e torne-se Mestre Sankofa para ter alunos ilimitados e faturar mais!",
+              'Limite do Plano Base',
+              'Seu Plano Base permite até 3 alunos entre ativos e convites '
+                  'pendentes. Seus vínculos atuais permanecem seguros. '
+                  'Para adicionar novos alunos, reative o Premium.',
             );
           }
           setState(() => _isLoading = false);
@@ -117,7 +158,7 @@ class _StudentsPageState extends State<StudentsPage>
       if (alunosCanonicos.isEmpty) {
         if (mounted) {
           _mostrarAlerta(
-            "Não encontrado",
+            'Não encontrado',
             "Não achamos nenhum aluno com o e-mail '$emailInput'.",
           );
         }
@@ -128,9 +169,9 @@ class _StudentsPageState extends State<StudentsPage>
       if (alunosCanonicos.length > 1) {
         if (mounted) {
           _mostrarAlerta(
-            "Cadastro ambíguo",
-            "Existe mais de uma identidade canônica para esse e-mail. "
-                "O convite foi bloqueado por segurança.",
+            'Cadastro ambíguo',
+            'Existe mais de uma identidade canônica para esse e-mail. '
+                'O convite foi bloqueado por segurança.',
           );
         }
 
@@ -206,7 +247,7 @@ class _StudentsPageState extends State<StudentsPage>
         _emailController.clear();
       }
     } catch (e) {
-      if (mounted) _mostrarSnack('Erro ao enviar: $e', isError: true);
+      _mostrarErroDeAcao(e, action: 'enviar o convite');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -240,7 +281,11 @@ class _StudentsPageState extends State<StudentsPage>
         _mostrarSnack('Aluno desvinculado.', isError: false);
       }
     } catch (e) {
-      if (mounted) _mostrarSnack('Erro: $e', isError: true);
+      _mostrarErroDeAcao(
+        e,
+        action: 'desvincular este aluno',
+        fecharDialogoAtual: true,
+      );
     }
   }
 
@@ -253,7 +298,7 @@ class _StudentsPageState extends State<StudentsPage>
           .delete();
       if (mounted) _mostrarSnack('Convite cancelado.');
     } catch (e) {
-      if (mounted) _mostrarSnack('Erro: $e', isError: true);
+      _mostrarErroDeAcao(e, action: 'cancelar este convite');
     }
   }
 
@@ -265,14 +310,14 @@ class _StudentsPageState extends State<StudentsPage>
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.surface,
         title: const Text(
-          "Convidar Aluno",
+          'Convidar Aluno',
           style: TextStyle(color: Colors.white),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-              "O aluno receberá uma notificação para aceitar.",
+              'O aluno receberá uma notificação para aceitar.',
               style: TextStyle(color: Colors.white70),
             ),
             const SizedBox(height: 10),
@@ -281,7 +326,7 @@ class _StudentsPageState extends State<StudentsPage>
               style: const TextStyle(color: Colors.white),
               keyboardType: TextInputType.emailAddress,
               decoration: const InputDecoration(
-                labelText: "E-mail do Aluno",
+                labelText: 'E-mail do Aluno',
                 labelStyle: TextStyle(color: Colors.white54),
                 enabledBorder: OutlineInputBorder(
                   borderSide: BorderSide(color: Colors.white24),
@@ -297,7 +342,7 @@ class _StudentsPageState extends State<StudentsPage>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Cancelar", style: TextStyle(color: Colors.grey)),
+            child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             onPressed: _isLoading ? null : _enviarConvite,
@@ -312,7 +357,7 @@ class _StudentsPageState extends State<StudentsPage>
                     ),
                   )
                 : const Text(
-                    "Enviar",
+                    'Enviar',
                     style: TextStyle(
                       color: Colors.black,
                       fontWeight: FontWeight.bold,
@@ -330,22 +375,22 @@ class _StudentsPageState extends State<StudentsPage>
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.surface,
         title: const Text(
-          "Desvincular Aluno?",
+          'Desvincular Aluno?',
           style: TextStyle(color: Colors.white),
         ),
         content: Text(
-          "Tem certeza que deseja remover $nome?",
+          'Tem certeza que deseja remover $nome?',
           style: const TextStyle(color: Colors.white70),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Cancelar", style: TextStyle(color: Colors.grey)),
+            child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
           ),
           TextButton(
             onPressed: () => _removerAluno(alunoId, email),
             child: const Text(
-              "Desvincular",
+              'Desvincular',
               style: TextStyle(
                 color: AppColors.error,
                 fontWeight: FontWeight.bold,
@@ -376,7 +421,7 @@ class _StudentsPageState extends State<StudentsPage>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("OK", style: TextStyle(color: AppColors.primary)),
+            child: const Text('Entendi', style: TextStyle(color: AppColors.primary)),
           ),
         ],
       ),
@@ -389,7 +434,7 @@ class _StudentsPageState extends State<StudentsPage>
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text(
-          "Meus Alunos",
+          'Meus Alunos',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         backgroundColor: Colors.transparent,
@@ -403,8 +448,8 @@ class _StudentsPageState extends State<StudentsPage>
           labelColor: AppColors.primary,
           unselectedLabelColor: Colors.white54,
           tabs: const [
-            Tab(text: "Ativos"),
-            Tab(text: "Convites Pendentes"),
+            Tab(text: 'Ativos'),
+            Tab(text: 'Convites Pendentes'),
           ],
         ),
       ),
@@ -416,7 +461,7 @@ class _StudentsPageState extends State<StudentsPage>
         backgroundColor: AppColors.secondary,
         icon: const Icon(Icons.person_add, color: Colors.white),
         label: const Text(
-          "Convidar",
+          'Convidar',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         onPressed: _mostrarDialogoAdicionar,
@@ -463,7 +508,7 @@ class _StudentsPageState extends State<StudentsPage>
                     ),
                     const SizedBox(height: 16),
                     const Text(
-                      "Nenhum aluno ativo.",
+                      'Nenhum aluno ativo.',
                       style: TextStyle(color: Colors.white54),
                     ),
                   ],
@@ -492,7 +537,7 @@ class _StudentsPageState extends State<StudentsPage>
                     borderRadius: BorderRadius.circular(12),
                     side: BorderSide(
                       color: isBloqueado
-                          ? Colors.redAccent.withOpacity(0.3)
+                          ? Colors.amber.withOpacity(0.35)
                           : Colors.white.withOpacity(0.05),
                     ),
                   ),
@@ -504,7 +549,7 @@ class _StudentsPageState extends State<StudentsPage>
                     leading: isBloqueado
                         ? const CircleAvatar(
                             backgroundColor: Colors.black45,
-                            child: Icon(Icons.lock, color: Colors.redAccent),
+                            child: Icon(Icons.lock_outline, color: Colors.amber),
                           )
                         : UserAvatar(
                             photoUrl: dados['photoUrl'],
@@ -515,20 +560,23 @@ class _StudentsPageState extends State<StudentsPage>
                       nome,
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: isBloqueado ? Colors.white38 : Colors.white,
+                        color: isBloqueado ? Colors.white54 : Colors.white,
                       ),
                     ),
                     subtitle: Text(
                       email,
                       style: TextStyle(
-                        color: isBloqueado ? Colors.white24 : Colors.white70,
+                        color: isBloqueado ? Colors.white38 : Colors.white70,
                       ),
                     ),
                     onTap: () {
                       if (isBloqueado) {
                         _mostrarAlerta(
-                          "Aluno Bloqueado 🔒",
-                          "O seu plano Gratuito expirou ou atingiu o limite de 3 alunos. Assine o plano Premium para desbloquear o acesso a $nome e gerir todos os seus alunos!",
+                          'Acesso limitado pelo Plano Base',
+                          'Este aluno continua vinculado à sua conta e nenhum '
+                              'dado foi perdido. O Plano Base permite gerenciar '
+                              'até 3 alunos por vez. Para acessar todos os '
+                              'vínculos novamente, reative o Premium.',
                         );
                       } else {
                         Navigator.push(
@@ -546,7 +594,7 @@ class _StudentsPageState extends State<StudentsPage>
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (!isBloqueado) // Esconde o botão de chat se estiver bloqueado
+                        if (!isBloqueado)
                           IconButton(
                             icon: const Icon(
                               Icons.chat_bubble_outline,
@@ -565,7 +613,7 @@ class _StudentsPageState extends State<StudentsPage>
                             },
                           ),
                         IconButton(
-                          // O botão de excluir FICA DISPONÍVEL, para ele poder excluir os extras e voltar a ter menos de 3
+                          // Mantém disponível para o professor reduzir vínculos extras.
                           icon: const Icon(
                             Icons.delete_outline,
                             color: AppColors.error,
@@ -597,7 +645,7 @@ class _StudentsPageState extends State<StudentsPage>
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return const Center(
             child: Text(
-              "Nenhum convite pendente.",
+              'Nenhum convite pendente.',
               style: TextStyle(color: Colors.white30),
             ),
           );
@@ -619,17 +667,17 @@ class _StudentsPageState extends State<StudentsPage>
                   color: AppColors.secondary,
                 ),
                 title: Text(
-                  data['toStudentEmail'] ?? "Email desconhecido",
+                  data['toStudentEmail'] ?? 'Email desconhecido',
                   style: const TextStyle(color: Colors.white70),
                 ),
                 subtitle: const Text(
-                  "Aguardando aceitação...",
+                  'Aguardando aceitação...',
                   style: TextStyle(color: AppColors.secondary, fontSize: 12),
                 ),
                 trailing: IconButton(
                   icon: const Icon(Icons.close, color: AppColors.error),
                   onPressed: () => _cancelarConvite(doc.id),
-                  tooltip: "Cancelar Convite",
+                  tooltip: 'Cancelar Convite',
                 ),
               ),
             );
