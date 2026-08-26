@@ -14,6 +14,7 @@ void main() {
         'name': 'Usuário Teste',
         'email': 'teste@example.com',
         'role': 'professor',
+        'memberType': 'professor',
         'photoUrl': 'https://example.com/photo.jpg',
         'academyId': 'academy-1',
         'professorId': null,
@@ -26,10 +27,12 @@ void main() {
       expect(user.name, 'Usuário Teste');
       expect(user.email, 'teste@example.com');
       expect(user.role, UserRoles.professor);
+      expect(user.memberType, UserMemberTypes.professor);
       expect(user.academyId, 'academy-1');
       expect(user.createdAt, createdAt);
       expect(user.updatedAt, updatedAt);
       expect(user.isV2, isTrue);
+      expect(user.isProfessorMember, isTrue);
     });
 
     test('reads legacy Portuguese field names', () {
@@ -48,6 +51,7 @@ void main() {
       expect(user.schemaVersion, 1);
       expect(user.name, 'Usuário Legado');
       expect(user.role, UserRoles.professor);
+      expect(user.memberType, UserMemberTypes.professor);
       expect(user.academyId, 'academy-old');
       expect(user.professorId, 'personal-old');
       expect(user.createdAt, createdAt);
@@ -61,6 +65,47 @@ void main() {
       }, 'admin-1');
 
       expect(user.role, UserRoles.superAdmin);
+      expect(user.memberType, UserMemberTypes.aluno);
+      expect(user.isAlunoMember, isTrue);
+      expect(user.isTrainingProfessional, isFalse);
+    });
+
+    test('super admin can also be professor member', () {
+      final user = UserModel.fromMap({
+        'schemaVersion': 2,
+        'email': 'admin@example.com',
+        'role': 'super_admin',
+        'memberType': 'professor',
+        'tipo': 'aluno',
+      }, 'admin-professor');
+
+      expect(user.role, UserRoles.superAdmin);
+      expect(user.memberType, UserMemberTypes.professor);
+      expect(user.isSuperAdmin, isTrue);
+      expect(user.isProfessorMember, isTrue);
+      expect(user.isTrainingProfessional, isTrue);
+    });
+
+    test('canonical memberType wins over conflicting tipo', () {
+      final user = UserModel.fromMap({
+        'role': 'super_admin',
+        'memberType': 'professor',
+        'tipo': 'aluno',
+      }, 'admin-1');
+
+      expect(user.memberType, UserMemberTypes.professor);
+    });
+
+    test('gym admin without mobile persona remains null', () {
+      final user = UserModel.fromMap({
+        'schemaVersion': 2,
+        'email': 'gym@example.com',
+        'role': 'gym_admin',
+      }, 'gym-1');
+
+      expect(user.role, UserRoles.gymAdmin);
+      expect(user.memberType, isNull);
+      expect(user.hasMobilePersona, isFalse);
     });
 
     test('legacy personal role becomes professor', () {
@@ -70,6 +115,7 @@ void main() {
       }, 'personal-1');
 
       expect(user.role, UserRoles.professor);
+      expect(user.memberType, UserMemberTypes.professor);
     });
 
     test('student markers safely resolve missing role as aluno', () {
@@ -80,6 +126,7 @@ void main() {
       }, 'student-1');
 
       expect(user.role, UserRoles.aluno);
+      expect(user.memberType, UserMemberTypes.aluno);
     });
 
     test('document id is source of truth for uid', () {
@@ -99,7 +146,8 @@ void main() {
         schemaVersion: 1,
         name: 'Usuário',
         email: 'teste@example.com',
-        role: UserRoles.professor,
+        role: UserRoles.superAdmin,
+        memberType: UserMemberTypes.professor,
         academyId: 'academy-1',
         professorId: null,
         createdAt: DateTime.utc(2026, 1, 1),
@@ -110,7 +158,8 @@ void main() {
 
       expect(map['schemaVersion'], 2);
       expect(map['uid'], 'user-1');
-      expect(map['role'], 'professor');
+      expect(map['role'], 'super_admin');
+      expect(map['memberType'], 'professor');
       expect(map['academyId'], 'academy-1');
 
       expect(map.containsKey('tipo'), isFalse);
@@ -121,16 +170,19 @@ void main() {
       expect(map.containsKey('weight'), isFalse);
       expect(map.containsKey('objectives'), isFalse);
     });
+
     test('unknown user without markers remains unresolved', () {
       final user = UserModel.fromMap({
         'email': 'unknown@example.com',
       }, 'unknown-1');
 
       expect(user.role, UserRoles.unresolved);
+      expect(user.memberType, isNull);
       expect(user.isAluno, isFalse);
       expect(user.isProfessor, isFalse);
       expect(user.isGymAdmin, isFalse);
       expect(user.isSuperAdmin, isFalse);
+      expect(user.hasMobilePersona, isFalse);
     });
 
     test('v2 canonical user is a canonical identity', () {
@@ -139,6 +191,7 @@ void main() {
         'name': 'Professor',
         'email': 'professor@example.com',
         'role': 'professor',
+        'memberType': 'professor',
       }, 'professor-1');
 
       expect(user.isCanonicalIdentity, isTrue);
@@ -153,11 +206,13 @@ void main() {
       }, 'legacy-1');
 
       expect(user.role, UserRoles.professor);
+      expect(user.memberType, UserMemberTypes.professor);
       expect(user.isProfessor, isTrue);
+      expect(user.isProfessorMember, isTrue);
       expect(user.isCanonicalIdentity, isFalse);
     });
 
-    test('super admin can manage training without becoming professor', () {
+    test('super admin without memberType is not training professional', () {
       final user = UserModel.fromMap({
         'schemaVersion': 2,
         'name': 'Admin',
@@ -167,7 +222,8 @@ void main() {
 
       expect(user.isProfessor, isFalse);
       expect(user.isSuperAdmin, isTrue);
-      expect(user.isTrainingProfessional, isTrue);
+      expect(user.memberType, isNull);
+      expect(user.isTrainingProfessional, isFalse);
     });
   });
 }
