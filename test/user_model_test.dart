@@ -132,5 +132,42 @@ void main() {
       expect(user.isGymAdmin, isFalse);
       expect(user.isSuperAdmin, isFalse);
     });
+
+    test('v2 canonical user is a canonical identity', () {
+      final user = UserModel.fromMap({
+        'schemaVersion': 2,
+        'name': 'Professor',
+        'email': 'professor@example.com',
+        'role': 'professor',
+      }, 'professor-1');
+
+      expect(user.isCanonicalIdentity, isTrue);
+      expect(user.isTrainingProfessional, isTrue);
+    });
+
+    test('legacy compatible user is not a canonical identity', () {
+      final user = UserModel.fromMap({
+        'name': 'Personal legado',
+        'email': 'legacy@example.com',
+        'tipo': 'personal',
+      }, 'legacy-1');
+
+      expect(user.role, UserRoles.professor);
+      expect(user.isProfessor, isTrue);
+      expect(user.isCanonicalIdentity, isFalse);
+    });
+
+    test('super admin can manage training without becoming professor', () {
+      final user = UserModel.fromMap({
+        'schemaVersion': 2,
+        'name': 'Admin',
+        'email': 'admin@example.com',
+        'role': 'super_admin',
+      }, 'admin-1');
+
+      expect(user.isProfessor, isFalse);
+      expect(user.isSuperAdmin, isTrue);
+      expect(user.isTrainingProfessional, isTrue);
+    });
   });
 }

@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/foundation.dart'; // Para kIsWeb
+import '../../features/auth/data/models/user_model.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -33,40 +34,62 @@ class AuthService {
     required String nome,
     required String email,
     required String password,
-    required String tipo, // 'personal' ou 'aluno'
+    required String role,
     required DateTime? dataNascimento,
   }) async {
     try {
-      // 1. Cria o usuário no Auth
-      UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      if (role != UserRoles.aluno && role != UserRoles.professor) {
+        return 'Perfil de usuário inválido.';
+      }
 
-      // 2. Salva os dados no Firestore
-      await _firestore.collection('users').doc(userCredential.user!.uid).set({
-        'uid': userCredential.user!.uid,
-        'name': nome, // Padronizei para 'name' (igual ao Google)
-        'email': email,
-        'tipo': tipo,
-        'birthDate': dataNascimento, // Salva como Timestamp
+      final normalizedEmail = email.trim().toLowerCase();
+
+      // 1. Cria o usuário no Firebase Auth
+      final UserCredential userCredential = await _auth
+          .createUserWithEmailAndPassword(
+            email: normalizedEmail,
+            password: password,
+          );
+
+      final user = userCredential.user!;
+
+      // 2. Cria o User v2 no Firestore.
+      //
+      // Os campos de fitness continuam temporariamente
+      // na raiz para compatibilidade com telas legadas.
+      await _firestore.collection('users').doc(user.uid).set({
+        'schemaVersion': UserModel.currentSchemaVersion,
+        'uid': user.uid,
+        'name': nome.trim(),
+        'email': normalizedEmail,
+        'role': role,
+        'photoUrl': null,
+        'academyId': null,
+        'professorId': null,
+        'birthDate': dataNascimento,
         'createdAt': FieldValue.serverTimestamp(),
-        // Campos padrão para evitar erros no perfil
-        if (tipo == 'aluno') ...{
-           'peso': '--',
-           'altura': '--',
-           'objetivo': 'Definir',
-           'freq_semanal': '3x',
-        }
+        'updatedAt': FieldValue.serverTimestamp(),
+
+        if (role == UserRoles.aluno) ...{
+          'peso': '--',
+          'altura': '--',
+          'objetivo': 'Definir',
+          'freq_semanal': '3x',
+        },
       });
 
-      // Atualiza o nome no Auth
-      await userCredential.user!.updateDisplayName(nome);
+      await user.updateDisplayName(nome.trim());
 
-      return null; // Sucesso
+      return null;
     } on FirebaseAuthException catch (e) {
-      if (e.code == 'weak-password') return 'A senha é muito fraca.';
-      if (e.code == 'email-already-in-use') return 'Este e-mail já está em uso.';
+      if (e.code == 'weak-password') {
+        return 'A senha é muito fraca.';
+      }
+
+      if (e.code == 'email-already-in-use') {
+        return 'Este e-mail já está em uso.';
+      }
+
       return 'Erro no Firebase: ${e.message}';
     } catch (e) {
       return 'Erro desconhecido: $e';
@@ -101,7 +124,8 @@ class AuthService {
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser == null) return "Login cancelado pelo usuário.";
 
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
 
       // 2. Credenciais para o Firebase
       final AuthCredential credential = GoogleAuthProvider.credential(
@@ -110,24 +134,35 @@ class AuthService {
       );
 
       // 3. Loga no Firebase
-      UserCredential userCredential = await _auth.signInWithCredential(credential);
+      UserCredential userCredential = await _auth.signInWithCredential(
+        credential,
+      );
       User? user = userCredential.user;
 
       if (user != null) {
         // 4. Verifica se o usuário já existe no Firestore
-        final docSnapshot = await _firestore.collection('users').doc(user.uid).get();
+        final docSnapshot = await _firestore
+            .collection('users')
+            .doc(user.uid)
+            .get();
 
         if (!docSnapshot.exists) {
-          // SE É NOVO USUÁRIO: Cria o doc básico (SEM DATA DE NASCIMENTO)
-          // O ProfilePage vai detectar que 'birthDate' é null e pedir para preencher.
+          final normalizedEmail = user.email?.trim().toLowerCase();
+
           await _firestore.collection('users').doc(user.uid).set({
+            'schemaVersion': UserModel.currentSchemaVersion,
             'uid': user.uid,
             'name': user.displayName ?? "Usuário Google",
-            'email': user.email,
+            'email': normalizedEmail,
+            'role': UserRoles.aluno,
             'photoUrl': user.photoURL,
-            'tipo': 'aluno', // Padrão inicial
-            'birthDate': null, // <--- VEM VAZIO DO GOOGLE
+            'academyId': null,
+            'professorId': null,
+            'birthDate': null,
             'createdAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+
+            // Compatibilidade temporária.
             'peso': '--',
             'altura': '--',
             'objetivo': 'Definir',

@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../../../../core/widgets/user_avatar.dart'; 
-import '../../../../core/theme/app_colors.dart'; 
+import '../../../../core/widgets/user_avatar.dart';
+import '../../../../core/theme/app_colors.dart';
 import 'student_detail_page.dart';
 import 'chat_page.dart';
+import '../../data/models/user_model.dart';
 
 class StudentsPage extends StatefulWidget {
   const StudentsPage({super.key});
@@ -13,7 +14,8 @@ class StudentsPage extends StatefulWidget {
   State<StudentsPage> createState() => _StudentsPageState();
 }
 
-class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderStateMixin {
+class _StudentsPageState extends State<StudentsPage>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _emailController = TextEditingController();
   bool _isLoading = false;
   late TabController _tabController;
@@ -44,7 +46,10 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
       // =========================================================
       // 1. TRAVA DE NEGÓCIO CORRIGIDA (PLANO BASE vs PREMIUM)
       // =========================================================
-      final personalDoc = await FirebaseFirestore.instance.collection('users').doc(user!.uid).get();
+      final personalDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user!.uid)
+          .get();
       final isPremium = personalDoc.data()?['isPremium'] == true;
 
       // SÓ aplica o bloqueio se o professor NÃO for premium
@@ -54,7 +59,7 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
             .collection('users')
             .where('personalId', isEqualTo: user.uid)
             .get();
-        
+
         // Conta convites que estão pendentes
         final pendentesSnap = await FirebaseFirestore.instance
             .collection('invites')
@@ -69,8 +74,8 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
           if (mounted) {
             Navigator.pop(context); // Fecha a modal do convite
             _mostrarAlerta(
-              "Limite Atingido ⚠️", 
-              "O seu Plano Base permite até 3 alunos (ativos ou pendentes). Vá ao seu Perfil e torne-se Mestre Sankofa para ter alunos ilimitados e faturar mais!"
+              "Limite Atingido ⚠️",
+              "O seu Plano Base permite até 3 alunos (ativos ou pendentes). Vá ao seu Perfil e torne-se Mestre Sankofa para ter alunos ilimitados e faturar mais!",
             );
           }
           setState(() => _isLoading = false);
@@ -83,28 +88,53 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
       final querySnapshot = await FirebaseFirestore.instance
           .collection('users')
           .where('email', isEqualTo: emailInput)
-          .where('tipo', isEqualTo: 'aluno') // Garante que não convida outro professor
-          .limit(1)
           .get();
 
-      if (querySnapshot.docs.isEmpty) {
-        if (mounted) _mostrarAlerta("Não encontrado", "Não achamos nenhum aluno com o e-mail '$emailInput'.");
+      final alunosCanonicos = querySnapshot.docs
+          .map(UserModel.fromDocument)
+          .where(
+            (candidate) => candidate.isCanonicalIdentity && candidate.isAluno,
+          )
+          .toList();
+
+      if (alunosCanonicos.isEmpty) {
+        if (mounted)
+          _mostrarAlerta(
+            "Não encontrado",
+            "Não achamos nenhum aluno com o e-mail '$emailInput'.",
+          );
         setState(() => _isLoading = false);
         return;
       }
 
-      final alunoDoc = querySnapshot.docs.first;
-      final dadosAluno = alunoDoc.data();
+      if (alunosCanonicos.length > 1) {
+        if (mounted) {
+          _mostrarAlerta(
+            "Cadastro ambíguo",
+            "Existe mais de uma identidade canônica para esse e-mail. "
+                "O convite foi bloqueado por segurança.",
+          );
+        }
+
+        setState(() => _isLoading = false);
+
+        return;
+      }
+
+      final aluno = alunosCanonicos.single;
 
       // 3. Validações adicionais
-      if (alunoDoc.id == user!.uid) {
+      if (aluno.id == user!.uid) {
         _mostrarSnack('Você não pode convidar a si mesmo.', isError: true);
         setState(() => _isLoading = false);
         return;
       }
 
-      if (dadosAluno['personalId'] == user.uid) {
-        _mostrarSnack('Este aluno já está na sua lista de ativos.', isError: true);
+      if (aluno.professorId == user.uid) {
+        _mostrarSnack(
+          'Este aluno já está na sua lista de ativos.',
+          isError: true,
+        );
         setState(() => _isLoading = false);
         return;
       }
@@ -117,18 +147,22 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
           .get();
 
       if (convitesExistentes.docs.isNotEmpty) {
-        _mostrarSnack('Já existe um convite pendente para este aluno.', isError: true);
+        _mostrarSnack(
+          'Já existe um convite pendente para este aluno.',
+          isError: true,
+        );
         setState(() => _isLoading = false);
         return;
       }
 
       // 5. Cria o convite na coleção 'invites'
       await FirebaseFirestore.instance.collection('invites').add({
-        'fromPersonalId': user.uid, 
-        'personalId': user.uid, 
-        'personalName': user.displayName ?? personalDoc.data()?['name'] ?? 'Personal',
+        'fromPersonalId': user.uid,
+        'personalId': user.uid,
+        'personalName':
+            user.displayName ?? personalDoc.data()?['name'] ?? 'Personal',
         'toStudentEmail': emailInput,
-        'studentUid': alunoDoc.id,
+        'studentUid': aluno.id,
         'status': 'pending',
         'sentAt': FieldValue.serverTimestamp(),
       });
@@ -136,18 +170,19 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
       // 6. Cria notificação para o aluno (para acender a bolinha)
       await FirebaseFirestore.instance
           .collection('users')
-          .doc(alunoDoc.id)
+          .doc(aluno.id)
           .collection('notifications')
           .add({
             'type': 'invite',
             'title': 'Novo Convite de Treino',
-            'body': '${user.displayName ?? personalDoc.data()?['name'] ?? "Um personal"} quer treinar você!',
+            'body':
+                '${user.displayName ?? personalDoc.data()?['name'] ?? "Um personal"} quer treinar você!',
             'isRead': false,
             'timestamp': FieldValue.serverTimestamp(),
-      });
+          });
 
       if (mounted) {
-        _mostrarSnack('Convite enviado para ${dadosAluno['name']}! 🚀', isError: false);
+        _mostrarSnack('Convite enviado para ${aluno.name}! 🚀', isError: false);
         Navigator.pop(context); // Fecha a modal
         _emailController.clear();
       }
@@ -191,10 +226,13 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
   // --- LÓGICA DE CANCELAR CONVITE (Aba Pendentes) ---
   Future<void> _cancelarConvite(String inviteId) async {
     try {
-      await FirebaseFirestore.instance.collection('invites').doc(inviteId).delete();
-      if(mounted) _mostrarSnack('Convite cancelado.');
+      await FirebaseFirestore.instance
+          .collection('invites')
+          .doc(inviteId)
+          .delete();
+      if (mounted) _mostrarSnack('Convite cancelado.');
     } catch (e) {
-      if(mounted) _mostrarSnack('Erro: $e', isError: true);
+      if (mounted) _mostrarSnack('Erro: $e', isError: true);
     }
   }
 
@@ -205,11 +243,17 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.surface,
-        title: const Text("Convidar Aluno", style: TextStyle(color: Colors.white)),
+        title: const Text(
+          "Convidar Aluno",
+          style: TextStyle(color: Colors.white),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text("O aluno receberá uma notificação para aceitar.", style: TextStyle(color: Colors.white70)),
+            const Text(
+              "O aluno receberá uma notificação para aceitar.",
+              style: TextStyle(color: Colors.white70),
+            ),
             const SizedBox(height: 10),
             TextField(
               controller: _emailController,
@@ -218,8 +262,12 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
               decoration: const InputDecoration(
                 labelText: "E-mail do Aluno",
                 labelStyle: TextStyle(color: Colors.white54),
-                enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-                focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.secondary)),
+                enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: Colors.white24),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: AppColors.secondary),
+                ),
                 prefixIcon: Icon(Icons.email, color: AppColors.secondary),
               ),
             ),
@@ -227,15 +275,28 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context), 
-            child: const Text("Cancelar", style: TextStyle(color: Colors.grey))
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancelar", style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             onPressed: _isLoading ? null : _enviarConvite,
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-            child: _isLoading 
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2)) 
-              : const Text("Enviar", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+            child: _isLoading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      color: Colors.black,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : const Text(
+                    "Enviar",
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
           ),
         ],
       ),
@@ -247,13 +308,28 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.surface,
-        title: const Text("Desvincular Aluno?", style: TextStyle(color: Colors.white)),
-        content: Text("Tem certeza que deseja remover $nome?", style: const TextStyle(color: Colors.white70)),
+        title: const Text(
+          "Desvincular Aluno?",
+          style: TextStyle(color: Colors.white),
+        ),
+        content: Text(
+          "Tem certeza que deseja remover $nome?",
+          style: const TextStyle(color: Colors.white70),
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar", style: TextStyle(color: Colors.grey))),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancelar", style: TextStyle(color: Colors.grey)),
+          ),
           TextButton(
             onPressed: () => _removerAluno(alunoId, email),
-            child: const Text("Desvincular", style: TextStyle(color: AppColors.error, fontWeight: FontWeight.bold)),
+            child: const Text(
+              "Desvincular",
+              style: TextStyle(
+                color: AppColors.error,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
@@ -261,10 +337,12 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
   }
 
   void _mostrarSnack(String msg, {bool isError = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: isError ? AppColors.error : AppColors.success,
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: isError ? AppColors.error : AppColors.success,
+      ),
+    );
   }
 
   void _mostrarAlerta(String titulo, String msg) {
@@ -274,7 +352,12 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
         backgroundColor: AppColors.surface,
         title: Text(titulo, style: const TextStyle(color: Colors.white)),
         content: Text(msg, style: const TextStyle(color: Colors.white70)),
-        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("OK", style: TextStyle(color: AppColors.primary)))],
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("OK", style: TextStyle(color: AppColors.primary)),
+          ),
+        ],
       ),
     );
   }
@@ -284,7 +367,10 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text("Meus Alunos", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text(
+          "Meus Alunos",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
         foregroundColor: Colors.white,
@@ -292,7 +378,7 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
         // --- ABAS ---
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: AppColors.primary, 
+          indicatorColor: AppColors.primary,
           labelColor: AppColors.primary,
           unselectedLabelColor: Colors.white54,
           tabs: const [
@@ -303,15 +389,15 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [
-          _buildActiveStudentsList(),
-          _buildPendingInvitesList(),
-        ],
+        children: [_buildActiveStudentsList(), _buildPendingInvitesList()],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AppColors.secondary, 
+        backgroundColor: AppColors.secondary,
         icon: const Icon(Icons.person_add, color: Colors.white),
-        label: const Text("Convidar", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        label: const Text(
+          "Convidar",
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         onPressed: _mostrarDialogoAdicionar,
       ),
     );
@@ -321,14 +407,21 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
   Widget _buildActiveStudentsList() {
     return StreamBuilder<DocumentSnapshot>(
       // 1º Stream: Fica a ouvir o status Premium do Personal
-      stream: FirebaseFirestore.instance.collection('users').doc(_personalId).snapshots(),
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(_personalId)
+          .snapshots(),
       builder: (context, personalSnapshot) {
         if (personalSnapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator(color: AppColors.secondary));
+          return const Center(
+            child: CircularProgressIndicator(color: AppColors.secondary),
+          );
         }
 
-        final bool isPremium = personalSnapshot.data?.data() != null 
-            ? (personalSnapshot.data!.data() as Map<String, dynamic>)['isPremium'] == true 
+        final bool isPremium = personalSnapshot.data?.data() != null
+            ? (personalSnapshot.data!.data()
+                      as Map<String, dynamic>)['isPremium'] ==
+                  true
             : false;
 
         return StreamBuilder<QuerySnapshot>(
@@ -339,21 +432,30 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
               .snapshots(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator(color: AppColors.secondary));
+              return const Center(
+                child: CircularProgressIndicator(color: AppColors.secondary),
+              );
             }
             if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
               return Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.people_outline, size: 80, color: Colors.white.withOpacity(0.2)),
+                    Icon(
+                      Icons.people_outline,
+                      size: 80,
+                      color: Colors.white.withOpacity(0.2),
+                    ),
                     const SizedBox(height: 16),
-                    const Text("Nenhum aluno ativo.", style: TextStyle(color: Colors.white54)),
+                    const Text(
+                      "Nenhum aluno ativo.",
+                      style: TextStyle(color: Colors.white54),
+                    ),
                   ],
                 ),
               );
             }
-            
+
             final alunos = snapshot.data!.docs;
 
             return ListView.builder(
@@ -364,7 +466,7 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
                 final dados = doc.data() as Map<String, dynamic>;
                 final String nome = dados['name'] ?? 'Aluno';
                 final String email = dados['email'] ?? '';
-                
+
                 // REGRA DE DOWNGRADE: Se não for premium, bloqueia do 4º aluno em diante (índice > 2)
                 final bool isBloqueado = !isPremium && index > 2;
 
@@ -372,26 +474,58 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
                   color: isBloqueado ? AppColors.background : AppColors.surface,
                   margin: const EdgeInsets.only(bottom: 12),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12), 
-                    side: BorderSide(color: isBloqueado ? Colors.redAccent.withOpacity(0.3) : Colors.white.withOpacity(0.05))
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(
+                      color: isBloqueado
+                          ? Colors.redAccent.withOpacity(0.3)
+                          : Colors.white.withOpacity(0.05),
+                    ),
                   ),
                   child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    leading: isBloqueado 
-                        ? const CircleAvatar(backgroundColor: Colors.black45, child: Icon(Icons.lock, color: Colors.redAccent))
-                        : UserAvatar(photoUrl: dados['photoUrl'], name: nome, radius: 25),
-                    title: Text(nome, style: TextStyle(fontWeight: FontWeight.bold, color: isBloqueado ? Colors.white38 : Colors.white)),
-                    subtitle: Text(email, style: TextStyle(color: isBloqueado ? Colors.white24 : Colors.white70)),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    leading: isBloqueado
+                        ? const CircleAvatar(
+                            backgroundColor: Colors.black45,
+                            child: Icon(Icons.lock, color: Colors.redAccent),
+                          )
+                        : UserAvatar(
+                            photoUrl: dados['photoUrl'],
+                            name: nome,
+                            radius: 25,
+                          ),
+                    title: Text(
+                      nome,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: isBloqueado ? Colors.white38 : Colors.white,
+                      ),
+                    ),
+                    subtitle: Text(
+                      email,
+                      style: TextStyle(
+                        color: isBloqueado ? Colors.white24 : Colors.white70,
+                      ),
+                    ),
                     onTap: () {
                       if (isBloqueado) {
                         _mostrarAlerta(
-                          "Aluno Bloqueado 🔒", 
-                          "O seu plano Gratuito expirou ou atingiu o limite de 3 alunos. Assine o plano Premium para desbloquear o acesso a $nome e gerir todos os seus alunos!"
+                          "Aluno Bloqueado 🔒",
+                          "O seu plano Gratuito expirou ou atingiu o limite de 3 alunos. Assine o plano Premium para desbloquear o acesso a $nome e gerir todos os seus alunos!",
                         );
                       } else {
-                        Navigator.push(context, MaterialPageRoute(
-                          builder: (context) => StudentDetailPage(studentId: doc.id, studentName: nome, studentEmail: email),
-                        ));
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => StudentDetailPage(
+                              studentId: doc.id,
+                              studentName: nome,
+                              studentEmail: email,
+                            ),
+                          ),
+                        );
                       }
                     },
                     trailing: Row(
@@ -399,15 +533,30 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
                       children: [
                         if (!isBloqueado) // Esconde o botão de chat se estiver bloqueado
                           IconButton(
-                            icon: const Icon(Icons.chat_bubble_outline, color: AppColors.primary),
+                            icon: const Icon(
+                              Icons.chat_bubble_outline,
+                              color: AppColors.primary,
+                            ),
                             onPressed: () {
-                              Navigator.push(context, MaterialPageRoute(builder: (context) => ChatPage(otherUserId: doc.id, otherUserName: nome)));
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => ChatPage(
+                                    otherUserId: doc.id,
+                                    otherUserName: nome,
+                                  ),
+                                ),
+                              );
                             },
                           ),
                         IconButton(
                           // O botão de excluir FICA DISPONÍVEL, para ele poder excluir os extras e voltar a ter menos de 3
-                          icon: const Icon(Icons.delete_outline, color: AppColors.error),
-                          onPressed: () => _confirmarRemocao(doc.id, email, nome),
+                          icon: const Icon(
+                            Icons.delete_outline,
+                            color: AppColors.error,
+                          ),
+                          onPressed: () =>
+                              _confirmarRemocao(doc.id, email, nome),
                         ),
                       ],
                     ),
@@ -431,7 +580,12 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
           .snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(child: Text("Nenhum convite pendente.", style: TextStyle(color: Colors.white30)));
+          return const Center(
+            child: Text(
+              "Nenhum convite pendente.",
+              style: TextStyle(color: Colors.white30),
+            ),
+          );
         }
 
         return ListView.builder(
@@ -440,14 +594,23 @@ class _StudentsPageState extends State<StudentsPage> with SingleTickerProviderSt
           itemBuilder: (context, index) {
             final doc = snapshot.data!.docs[index];
             final data = doc.data() as Map<String, dynamic>;
-            
+
             return Card(
               color: AppColors.surface.withOpacity(0.5),
               margin: const EdgeInsets.only(bottom: 12),
               child: ListTile(
-                leading: const Icon(Icons.mark_email_unread_outlined, color: AppColors.secondary),
-                title: Text(data['toStudentEmail'] ?? "Email desconhecido", style: const TextStyle(color: Colors.white70)),
-                subtitle: const Text("Aguardando aceitação...", style: TextStyle(color: AppColors.secondary, fontSize: 12)),
+                leading: const Icon(
+                  Icons.mark_email_unread_outlined,
+                  color: AppColors.secondary,
+                ),
+                title: Text(
+                  data['toStudentEmail'] ?? "Email desconhecido",
+                  style: const TextStyle(color: Colors.white70),
+                ),
+                subtitle: const Text(
+                  "Aguardando aceitação...",
+                  style: TextStyle(color: AppColors.secondary, fontSize: 12),
+                ),
                 trailing: IconButton(
                   icon: const Icon(Icons.close, color: AppColors.error),
                   onPressed: () => _cancelarConvite(doc.id),

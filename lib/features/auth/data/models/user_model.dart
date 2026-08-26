@@ -64,6 +64,17 @@ class UserModel {
 
   bool get isSuperAdmin => role == UserRoles.superAdmin;
 
+  /// Identidade já convertida para o contrato User v2.
+  ///
+  /// Registros legados preservados por segurança não devem
+  /// participar de novas buscas de usuários.
+  bool get isCanonicalIdentity => isV2 && UserRoles.canonical.contains(role);
+
+  /// Usuários autorizados a atuar na gestão de treinos.
+  ///
+  /// Super admin já possuía essa capacidade nas telas legadas.
+  bool get isTrainingProfessional => isProfessor || isSuperAdmin;
+
   /// Converte documento Firestore/Map para UserModel.
   ///
   /// Compatibilidades suportadas:

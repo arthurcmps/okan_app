@@ -16,6 +16,7 @@ import 'personal_data_page.dart';
 import 'super_admin_page.dart';
 import 'professor_subscription_page.dart';
 import 'package:intl/intl.dart';
+import '../../data/models/user_model.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -255,17 +256,30 @@ class _ProfilePageState extends State<ProfilePage>
           return const Center(child: CircularProgressIndicator());
 
         final data = snapshot.data!.data() as Map<String, dynamic>;
-        final String nome = data['name'] ?? data['nome'] ?? "Usuário";
-        final String email = data['email'] ?? "";
-        final String tipo = data['tipo'] ?? "aluno";
-        final String? photoUrl = data['photoUrl'];
+
+        final profile = UserModel.fromMap(data, snapshot.data!.id);
+
+        final String nome = profile.name.isNotEmpty ? profile.name : "Usuário";
+
+        final String email = profile.email;
+        final String? photoUrl = profile.photoUrl;
 
         final dynamic birthDateRaw =
             data['birthDate'] ?? data['dataNascimento'];
         final String idade = _calcularIdade(birthDateRaw);
         final bool precisaData = (birthDateRaw == null);
 
-        final bool isPersonal = tipo == 'personal';
+        final bool isProfessor = profile.isProfessor;
+
+        String roleLabel = "ALUNO";
+
+        if (profile.isProfessor) {
+          roleLabel = "PERSONAL TRAINER";
+        } else if (profile.isSuperAdmin) {
+          roleLabel = "SUPER ADMIN";
+        } else if (profile.isGymAdmin) {
+          roleLabel = "GESTOR";
+        }
 
         return SingleChildScrollView(
           padding: const EdgeInsets.all(20),
@@ -315,10 +329,7 @@ class _ProfilePageState extends State<ProfilePage>
                               _adminTapCount = 0;
 
                               // SUBSTITUA COM SEU EMAIL DE ADMIN
-                              if (user?.email ==
-                                      'arthur.felipe1993@gmail.com' ||
-                                  user?.email ==
-                                      'heitor.felipe2001@gmail.com') {
+                              if (profile.isSuperAdmin) {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
@@ -413,7 +424,7 @@ class _ProfilePageState extends State<ProfilePage>
                         ],
                       ),
                       child: Text(
-                        isPersonal ? "PERSONAL TRAINER" : "ALUNO",
+                        roleLabel,
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 12,
@@ -473,7 +484,7 @@ class _ProfilePageState extends State<ProfilePage>
               ),
 
               // NOVOS BOTÕES PARA QUEM É PERSONAL TRAINER
-              if (isPersonal) ...[
+              if (isProfessor) ...[
                 _buildMenuOption(
                   icon: Icons.workspace_premium,
                   color: AppColors.primary,
