@@ -28,7 +28,6 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    // Garante que o token do dispositivo seja vinculado a este usuário logado
     PushNotificationService().salvarTokenAtual();
   }
 
@@ -50,7 +49,6 @@ class _HomePageState extends State<HomePage> {
     return DateFormat('EEEE', 'pt_BR').format(DateTime.now());
   }
 
-  // --- O BANNER DA VITRINE PREMIUM ---
   Widget _buildBannerDescobrirTreinos(BuildContext context) {
     return GestureDetector(
       onTap: () {
@@ -63,7 +61,6 @@ class _HomePageState extends State<HomePage> {
         margin: const EdgeInsets.symmetric(vertical: 12),
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          // Gradiente chamativo usando as cores Cyber-Sankofa
           gradient: LinearGradient(
             colors: [AppColors.secondary, AppColors.primary.withOpacity(0.8)],
             begin: Alignment.topLeft,
@@ -126,15 +123,15 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    if (user == null)
+    if (user == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        // --- TÍTULO (Saudação Inteligente) ---
         title: StreamBuilder<DocumentSnapshot>(
           stream: FirebaseFirestore.instance
               .collection('users')
@@ -174,8 +171,6 @@ class _HomePageState extends State<HomePage> {
             );
           },
         ),
-
-        // --- AÇÕES DA BARRA SUPERIOR ---
         actions: [
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
@@ -192,13 +187,13 @@ class _HomePageState extends State<HomePage> {
                     .where('isRead', isEqualTo: false)
                     .snapshots(),
                 builder: (context, snapshotNotifs) {
-                  bool temConvite =
+                  final temConvite =
                       snapshotInvites.hasData &&
                       snapshotInvites.data!.docs.isNotEmpty;
-                  bool temNotificacaoNova =
+                  final temNotificacaoNova =
                       snapshotNotifs.hasData &&
                       snapshotNotifs.data!.docs.isNotEmpty;
-                  bool mostrarAlerta = temConvite || temNotificacaoNova;
+                  final mostrarAlerta = temConvite || temNotificacaoNova;
 
                   return Stack(
                     alignment: Alignment.center,
@@ -237,7 +232,6 @@ class _HomePageState extends State<HomePage> {
               );
             },
           ),
-
           StreamBuilder<DocumentSnapshot>(
             stream: FirebaseFirestore.instance
                 .collection('users')
@@ -269,14 +263,11 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
-
-      // --- CORPO DA PÁGINA ---
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // SEÇÃO: TREINO DE HOJE
             const Text(
               "TREINO DE HOJE",
               style: TextStyle(
@@ -286,7 +277,6 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
             const SizedBox(height: 10),
-
             StreamBuilder<DocumentSnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('workout_plans')
@@ -451,10 +441,7 @@ class _HomePageState extends State<HomePage> {
                 );
               },
             ),
-
             const SizedBox(height: 30),
-
-            // SEÇÃO: MENU RÁPIDO
             const Text(
               "MENU RÁPIDO",
               style: TextStyle(
@@ -464,7 +451,6 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
             const SizedBox(height: 10),
-
             Row(
               children: [
                 Expanded(
@@ -501,10 +487,7 @@ class _HomePageState extends State<HomePage> {
                 ),
               ],
             ),
-
             const SizedBox(height: 16),
-
-            // CARDS ESPECÍFICOS (Personal ou Aluno) E BANNER DA LOJA
             StreamBuilder<DocumentSnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('users')
@@ -515,18 +498,18 @@ class _HomePageState extends State<HomePage> {
                   final data = snapshot.data!.data() as Map<String, dynamic>;
                   final profile = UserModel.fromMap(data, snapshot.data!.id);
 
-                  final isProfessor = profile.isProfessor;
-                  final temPersonal = profile.professorId != null;
+                  final isProfessor = profile.isProfessorMember;
+                  final isAluno = profile.isAlunoMember;
+                  final professorId = profile.professorId;
+                  final temProfessor = professorId != null;
 
-                  List<Widget> cardsSecao = [];
+                  final cardsSecao = <Widget>[];
 
-                  // SE FOR ALUNO E NÃO TIVER PERSONAL, MOSTRA A LOJA!
-                  if (!isProfessor && !temPersonal) {
+                  if (isAluno && !temProfessor) {
                     cardsSecao.add(_buildBannerDescobrirTreinos(context));
                     cardsSecao.add(const SizedBox(height: 16));
                   }
 
-                  // Se for PERSONAL
                   if (isProfessor) {
                     cardsSecao.add(
                       _buildMenuCard(
@@ -544,10 +527,8 @@ class _HomePageState extends State<HomePage> {
                     );
                   }
 
-                  // Se for ALUNO
-                  if (!isProfessor) {
-                    // Card do Personal (só exibe se tiver personalId)
-                    if (temPersonal) {
+                  if (isAluno) {
+                    if (temProfessor) {
                       cardsSecao.add(
                         _buildMenuCard(
                           icon: Icons.support_agent,
@@ -560,7 +541,7 @@ class _HomePageState extends State<HomePage> {
                               context,
                               MaterialPageRoute(
                                 builder: (context) => ChatPage(
-                                  otherUserId: data['personalId'],
+                                  otherUserId: professorId,
                                   otherUserName:
                                       data['personalName'] ?? 'Treinador',
                                 ),
@@ -572,7 +553,6 @@ class _HomePageState extends State<HomePage> {
                       cardsSecao.add(const SizedBox(height: 16));
                     }
 
-                    // --- ARENA OKAN ---
                     cardsSecao.add(
                       _buildMenuCard(
                         icon: Icons.sports_martial_arts,
@@ -597,10 +577,7 @@ class _HomePageState extends State<HomePage> {
                 return const SizedBox.shrink();
               },
             ),
-
             const SizedBox(height: 30),
-
-            // --- SEÇÃO BETA FEEDBACK ---
             const Text(
               "FASE DE TESTES",
               style: TextStyle(
@@ -617,15 +594,12 @@ class _HomePageState extends State<HomePage> {
               subtitle: "Ajude a melhorar o Okan!",
               onTap: () => mostrarFormularioFeedbackBeta(context),
             ),
-
             const SizedBox(height: 40),
           ],
         ),
       ),
     );
   }
-
-  // --- WIDGETS AUXILIARES ---
 
   Widget _buildMenuCard({
     required IconData icon,
@@ -702,15 +676,12 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // =========================================================================
-  // LÓGICA DO FORMULÁRIO DE FEEDBACK BETA
-  // =========================================================================
   void mostrarFormularioFeedbackBeta(BuildContext context) {
     if (user == null) return;
 
-    final TextEditingController confusoCtrl = TextEditingController();
-    final TextEditingController bugCtrl = TextEditingController();
-    final TextEditingController gostouCtrl = TextEditingController();
+    final confusoCtrl = TextEditingController();
+    final bugCtrl = TextEditingController();
+    final gostouCtrl = TextEditingController();
     double notaGeral = 5.0;
     bool enviando = false;
 
@@ -767,7 +738,6 @@ class _HomePageState extends State<HomePage> {
                     style: TextStyle(color: Colors.white54, fontSize: 14),
                   ),
                   const SizedBox(height: 20),
-
                   Expanded(
                     child: ListView(
                       children: [
@@ -796,7 +766,6 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ),
                         const SizedBox(height: 20),
-
                         const Text(
                           "2. O que achou mais confuso ou difícil de usar?",
                           style: TextStyle(
@@ -810,7 +779,6 @@ class _HomePageState extends State<HomePage> {
                           "Ex: Não entendi como adicionar a carga...",
                         ),
                         const SizedBox(height: 20),
-
                         const Text(
                           "3. Encontrou algum erro (bug)? Onde?",
                           style: TextStyle(
@@ -824,7 +792,6 @@ class _HomePageState extends State<HomePage> {
                           "Ex: O botão X travou a tela...",
                         ),
                         const SizedBox(height: 20),
-
                         const Text(
                           "4. O que você mais gostou?",
                           style: TextStyle(
@@ -841,7 +808,6 @@ class _HomePageState extends State<HomePage> {
                       ],
                     ),
                   ),
-
                   SizedBox(
                     width: double.infinity,
                     height: 50,
@@ -882,10 +848,11 @@ class _HomePageState extends State<HomePage> {
                                   );
                                 }
                               } catch (e) {
-                                if (context.mounted)
+                                if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(content: Text("Erro: $e")),
                                   );
+                                }
                                 setStateModal(() => enviando = false);
                               }
                             },
