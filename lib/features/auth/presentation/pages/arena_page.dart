@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/user_avatar.dart';
+import '../../data/models/user_model.dart';
 
 // Helper global para nomear as métricas
 String getNomeMetricaGlobal(String metric) {
@@ -78,7 +79,10 @@ class _ArenaPageState extends State<ArenaPage>
 
   Future<void> _buscarAmigo() async {
     final email = _searchCtrl.text.trim().toLowerCase();
-    if (email.isEmpty || email == user?.email) return;
+
+    if (email.isEmpty || email == user?.email) {
+      return;
+    }
 
     setState(() {
       _buscando = true;
@@ -86,29 +90,69 @@ class _ArenaPageState extends State<ArenaPage>
     });
 
     try {
+      /*
+     * Não filtramos mais por `tipo`.
+     *
+     * Primeiro buscamos pelo e-mail e depois aceitamos
+     * exclusivamente uma identidade User v2 canônica
+     * cujo papel seja aluno.
+     *
+     * Isso impede que os quatro registros legados
+     * bloqueados na migração sejam selecionados.
+     */
       final query = await FirebaseFirestore.instance
           .collection('users')
           .where('email', isEqualTo: email)
-          .where('tipo', isEqualTo: 'aluno')
-          .limit(1)
           .get();
-      if (query.docs.isNotEmpty) {
+
+      final candidatos = query.docs
+          .map(UserModel.fromDocument)
+          .where(
+            (candidate) => candidate.isCanonicalIdentity && candidate.isAluno,
+          )
+          .toList();
+
+      if (candidatos.length == 1) {
+        final found = candidatos.single;
+
         setState(() {
-          _usuarioEncontrado = query.docs.first.data();
-          _usuarioEncontrado!['uid'] = query.docs.first.id;
+          _usuarioEncontrado = {
+            'uid': found.uid,
+            'name': found.name,
+            'email': found.email,
+            'photoUrl': found.photoUrl,
+          };
         });
-      } else {
-        if (mounted)
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Nenhum atleta encontrado com esse e-mail."),
-            ),
-          );
+
+        return;
       }
+
+      if (!mounted) return;
+
+      if (candidatos.length > 1) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              "Encontramos mais de uma identidade válida para esse e-mail. "
+              "A operação foi bloqueada por segurança.",
+            ),
+          ),
+        );
+
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Nenhum atleta ativo encontrado com esse e-mail."),
+        ),
+      );
     } catch (e) {
       debugPrint("Erro na busca: $e");
     } finally {
-      setState(() => _buscando = false);
+      if (mounted) {
+        setState(() => _buscando = false);
+      }
     }
   }
 

@@ -1,0 +1,229 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:okan_app/features/auth/data/models/user_model.dart';
+
+void main() {
+  group('UserModel', () {
+    test('reads canonical User v2', () {
+      final createdAt = DateTime.utc(2026, 1, 10);
+      final updatedAt = DateTime.utc(2026, 2, 10);
+
+      final user = UserModel.fromMap({
+        'schemaVersion': 2,
+        'uid': 'user-1',
+        'name': 'Usuário Teste',
+        'email': 'teste@example.com',
+        'role': 'professor',
+        'memberType': 'professor',
+        'photoUrl': 'https://example.com/photo.jpg',
+        'academyId': 'academy-1',
+        'professorId': null,
+        'createdAt': Timestamp.fromDate(createdAt),
+        'updatedAt': Timestamp.fromDate(updatedAt),
+      }, 'user-1');
+
+      expect(user.uid, 'user-1');
+      expect(user.schemaVersion, 2);
+      expect(user.name, 'Usuário Teste');
+      expect(user.email, 'teste@example.com');
+      expect(user.role, UserRoles.professor);
+      expect(user.memberType, UserMemberTypes.professor);
+      expect(user.academyId, 'academy-1');
+      expect(user.createdAt, createdAt);
+      expect(user.updatedAt, updatedAt);
+      expect(user.isV2, isTrue);
+      expect(user.isProfessorMember, isTrue);
+    });
+
+    test('reads legacy Portuguese field names', () {
+      final createdAt = DateTime.utc(2025, 5, 1);
+
+      final user = UserModel.fromMap({
+        'nome': 'Usuário Legado',
+        'email': 'legado@example.com',
+        'tipo': 'personal',
+        'academiaId': 'academy-old',
+        'personalId': 'personal-old',
+        'criadoEm': Timestamp.fromDate(createdAt),
+      }, 'legacy-1');
+
+      expect(user.uid, 'legacy-1');
+      expect(user.schemaVersion, 1);
+      expect(user.name, 'Usuário Legado');
+      expect(user.role, UserRoles.professor);
+      expect(user.memberType, UserMemberTypes.professor);
+      expect(user.academyId, 'academy-old');
+      expect(user.professorId, 'personal-old');
+      expect(user.createdAt, createdAt);
+    });
+
+    test('canonical role wins over conflicting tipo', () {
+      final user = UserModel.fromMap({
+        'email': 'admin@example.com',
+        'role': 'super_admin',
+        'tipo': 'aluno',
+      }, 'admin-1');
+
+      expect(user.role, UserRoles.superAdmin);
+      expect(user.memberType, UserMemberTypes.aluno);
+      expect(user.isAlunoMember, isTrue);
+      expect(user.isTrainingProfessional, isFalse);
+    });
+
+    test('super admin can also be professor member', () {
+      final user = UserModel.fromMap({
+        'schemaVersion': 2,
+        'email': 'admin@example.com',
+        'role': 'super_admin',
+        'memberType': 'professor',
+        'tipo': 'aluno',
+      }, 'admin-professor');
+
+      expect(user.role, UserRoles.superAdmin);
+      expect(user.memberType, UserMemberTypes.professor);
+      expect(user.isSuperAdmin, isTrue);
+      expect(user.isProfessorMember, isTrue);
+      expect(user.isTrainingProfessional, isTrue);
+    });
+
+    test('canonical memberType wins over conflicting tipo', () {
+      final user = UserModel.fromMap({
+        'role': 'super_admin',
+        'memberType': 'professor',
+        'tipo': 'aluno',
+      }, 'admin-1');
+
+      expect(user.memberType, UserMemberTypes.professor);
+    });
+
+    test('gym admin without mobile persona remains null', () {
+      final user = UserModel.fromMap({
+        'schemaVersion': 2,
+        'email': 'gym@example.com',
+        'role': 'gym_admin',
+      }, 'gym-1');
+
+      expect(user.role, UserRoles.gymAdmin);
+      expect(user.memberType, isNull);
+      expect(user.hasMobilePersona, isFalse);
+    });
+
+    test('legacy personal role becomes professor', () {
+      final user = UserModel.fromMap({
+        'email': 'personal@example.com',
+        'role': 'personal',
+      }, 'personal-1');
+
+      expect(user.role, UserRoles.professor);
+      expect(user.memberType, UserMemberTypes.professor);
+    });
+
+    test('student markers safely resolve missing role as aluno', () {
+      final user = UserModel.fromMap({
+        'email': 'aluno@example.com',
+        'weight': 80,
+        'personalId': 'professor-1',
+      }, 'student-1');
+
+      expect(user.role, UserRoles.aluno);
+      expect(user.memberType, UserMemberTypes.aluno);
+    });
+
+    test('document id is source of truth for uid', () {
+      final user = UserModel.fromMap({
+        'uid': 'wrong-uid',
+        'email': 'teste@example.com',
+        'role': 'aluno',
+      }, 'correct-document-id');
+
+      expect(user.uid, 'correct-document-id');
+    });
+
+    test('toMap writes only canonical User v2 fields', () {
+      final user = UserModel(
+        id: 'user-1',
+        uid: 'user-1',
+        schemaVersion: 1,
+        name: 'Usuário',
+        email: 'teste@example.com',
+        role: UserRoles.superAdmin,
+        memberType: UserMemberTypes.professor,
+        academyId: 'academy-1',
+        professorId: null,
+        createdAt: DateTime.utc(2026, 1, 1),
+        updatedAt: DateTime.utc(2026, 1, 2),
+      );
+
+      final map = user.toMap();
+
+      expect(map['schemaVersion'], 2);
+      expect(map['uid'], 'user-1');
+      expect(map['role'], 'super_admin');
+      expect(map['memberType'], 'professor');
+      expect(map['academyId'], 'academy-1');
+
+      expect(map.containsKey('tipo'), isFalse);
+      expect(map.containsKey('nome'), isFalse);
+      expect(map.containsKey('academiaId'), isFalse);
+      expect(map.containsKey('personalId'), isFalse);
+      expect(map.containsKey('age'), isFalse);
+      expect(map.containsKey('weight'), isFalse);
+      expect(map.containsKey('objectives'), isFalse);
+    });
+
+    test('unknown user without markers remains unresolved', () {
+      final user = UserModel.fromMap({
+        'email': 'unknown@example.com',
+      }, 'unknown-1');
+
+      expect(user.role, UserRoles.unresolved);
+      expect(user.memberType, isNull);
+      expect(user.isAluno, isFalse);
+      expect(user.isProfessor, isFalse);
+      expect(user.isGymAdmin, isFalse);
+      expect(user.isSuperAdmin, isFalse);
+      expect(user.hasMobilePersona, isFalse);
+    });
+
+    test('v2 canonical user is a canonical identity', () {
+      final user = UserModel.fromMap({
+        'schemaVersion': 2,
+        'name': 'Professor',
+        'email': 'professor@example.com',
+        'role': 'professor',
+        'memberType': 'professor',
+      }, 'professor-1');
+
+      expect(user.isCanonicalIdentity, isTrue);
+      expect(user.isTrainingProfessional, isTrue);
+    });
+
+    test('legacy compatible user is not a canonical identity', () {
+      final user = UserModel.fromMap({
+        'name': 'Personal legado',
+        'email': 'legacy@example.com',
+        'tipo': 'personal',
+      }, 'legacy-1');
+
+      expect(user.role, UserRoles.professor);
+      expect(user.memberType, UserMemberTypes.professor);
+      expect(user.isProfessor, isTrue);
+      expect(user.isProfessorMember, isTrue);
+      expect(user.isCanonicalIdentity, isFalse);
+    });
+
+    test('super admin without memberType is not training professional', () {
+      final user = UserModel.fromMap({
+        'schemaVersion': 2,
+        'name': 'Admin',
+        'email': 'admin@example.com',
+        'role': 'super_admin',
+      }, 'admin-1');
+
+      expect(user.isProfessor, isFalse);
+      expect(user.isSuperAdmin, isTrue);
+      expect(user.memberType, isNull);
+      expect(user.isTrainingProfessional, isFalse);
+    });
+  });
+}

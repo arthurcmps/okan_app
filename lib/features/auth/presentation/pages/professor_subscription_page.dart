@@ -7,6 +7,16 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:http/http.dart' as http;
 import '../../../../core/theme/app_colors.dart';
 
+bool _premiumValue(dynamic value) {
+  if (value == true) return true;
+
+  if (value is String) {
+    return value.trim().toLowerCase() == 'true';
+  }
+
+  return false;
+}
+
 class ProfessorSubscriptionPage extends StatefulWidget {
   const ProfessorSubscriptionPage({super.key});
 
@@ -153,7 +163,7 @@ class _ProfessorSubscriptionPageState extends State<ProfessorSubscriptionPage> {
             );
 
           final userData = snapshot.data?.data() as Map<String, dynamic>? ?? {};
-          final isPremium = userData['isPremium'] == true;
+          final isPremium = _premiumValue(userData['isPremium']);
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(24),
@@ -491,7 +501,6 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
       final anoRaw = dataValidade.substring(2);
       final ano = anoRaw.length == 2 ? "20$anoRaw" : anoRaw;
 
-      // Bandeira dinâmica
       String metodoPagamentoStr = 'master';
       if (numCartao.startsWith('4'))
         metodoPagamentoStr = 'visa';

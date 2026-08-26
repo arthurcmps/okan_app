@@ -16,6 +16,7 @@ import 'personal_data_page.dart';
 import 'super_admin_page.dart';
 import 'professor_subscription_page.dart';
 import 'package:intl/intl.dart';
+import '../../data/models/user_model.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -94,7 +95,7 @@ class _ProfilePageState extends State<ProfilePage>
       initialDate: DateTime(2000),
       firstDate: DateTime(1940),
       lastDate: DateTime.now(),
-      locale: const Locale('pt', 'BR'), // <-- FORÇA O CALENDÁRIO EM PT-BR
+      locale: const Locale('pt', 'BR'),
       builder: (context, child) {
         return Theme(
           data: ThemeData.dark().copyWith(
@@ -205,8 +206,9 @@ class _ProfilePageState extends State<ProfilePage>
 
   @override
   Widget build(BuildContext context) {
-    if (user == null)
+    if (user == null) {
       return const Scaffold(body: Center(child: Text("Usuário não logado.")));
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -251,21 +253,36 @@ class _ProfilePageState extends State<ProfilePage>
           .doc(user!.uid)
           .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData || !snapshot.data!.exists)
+        if (!snapshot.hasData || !snapshot.data!.exists) {
           return const Center(child: CircularProgressIndicator());
+        }
 
         final data = snapshot.data!.data() as Map<String, dynamic>;
-        final String nome = data['name'] ?? data['nome'] ?? "Usuário";
-        final String email = data['email'] ?? "";
-        final String tipo = data['tipo'] ?? "aluno";
-        final String? photoUrl = data['photoUrl'];
+
+        final profile = UserModel.fromMap(data, snapshot.data!.id);
+
+        final String nome = profile.name.isNotEmpty ? profile.name : "Usuário";
+
+        final String email = profile.email;
+        final String? photoUrl = profile.photoUrl;
 
         final dynamic birthDateRaw =
             data['birthDate'] ?? data['dataNascimento'];
         final String idade = _calcularIdade(birthDateRaw);
         final bool precisaData = (birthDateRaw == null);
 
-        final bool isPersonal = tipo == 'personal';
+        // Persona funcional do app, não RBAC.
+        final bool isProfessor = profile.isProfessorMember;
+
+        String roleLabel = "ALUNO";
+
+        if (profile.isProfessor) {
+          roleLabel = "PERSONAL TRAINER";
+        } else if (profile.isSuperAdmin) {
+          roleLabel = "SUPER ADMIN";
+        } else if (profile.isGymAdmin) {
+          roleLabel = "GESTOR";
+        }
 
         return SingleChildScrollView(
           padding: const EdgeInsets.all(20),
@@ -314,11 +331,7 @@ class _ProfilePageState extends State<ProfilePage>
                             if (_adminTapCount >= 7) {
                               _adminTapCount = 0;
 
-                              // SUBSTITUA COM SEU EMAIL DE ADMIN
-                              if (user?.email ==
-                                      'arthur.felipe1993@gmail.com' ||
-                                  user?.email ==
-                                      'heitor.felipe2001@gmail.com') {
+                              if (profile.isSuperAdmin) {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
@@ -413,7 +426,7 @@ class _ProfilePageState extends State<ProfilePage>
                         ],
                       ),
                       child: Text(
-                        isPersonal ? "PERSONAL TRAINER" : "ALUNO",
+                        roleLabel,
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 12,
@@ -472,8 +485,8 @@ class _ProfilePageState extends State<ProfilePage>
                 ),
               ),
 
-              // NOVOS BOTÕES PARA QUEM É PERSONAL TRAINER
-              if (isPersonal) ...[
+              // Recursos exclusivos da persona professor no mobile.
+              if (isProfessor) ...[
                 _buildMenuOption(
                   icon: Icons.workspace_premium,
                   color: AppColors.primary,
@@ -505,7 +518,7 @@ class _ProfilePageState extends State<ProfilePage>
                 isDestructive: true,
                 onTap: () async {
                   await _authService.deslogar();
-                  if (mounted)
+                  if (mounted) {
                     Navigator.pushAndRemoveUntil(
                       context,
                       MaterialPageRoute(
@@ -513,6 +526,7 @@ class _ProfilePageState extends State<ProfilePage>
                       ),
                       (route) => false,
                     );
+                  }
                 },
               ),
             ],
