@@ -34,6 +34,25 @@ class _StudentsPageState extends State<StudentsPage>
     super.dispose();
   }
 
+  bool _isPremiumValue(dynamic value) {
+    if (value == true) return true;
+
+    if (value is String) {
+      return value.trim().toLowerCase() == 'true';
+    }
+
+    return false;
+  }
+
+  Query<Map<String, dynamic>> _activeStudentsQuery() {
+    return FirebaseFirestore.instance.collection('users').where(
+      Filter.or(
+        Filter('professorId', isEqualTo: _personalId),
+        Filter('personalId', isEqualTo: _personalId),
+      ),
+    );
+  }
+
   // --- LÓGICA DE ENVIAR CONVITE E TRAVA DE PLANO ---
   Future<void> _enviarConvite() async {
     final emailInput = _emailController.text.trim().toLowerCase();
@@ -50,17 +69,14 @@ class _StudentsPageState extends State<StudentsPage>
           .collection('users')
           .doc(user!.uid)
           .get();
-      final isPremium = personalDoc.data()?['isPremium'] == true;
+      final isPremium = _isPremiumValue(personalDoc.data()?['isPremium']);
 
       // SÓ aplica o bloqueio se o professor NÃO for premium
       if (!isPremium) {
-        // Conta alunos já ativos
-        final ativosSnap = await FirebaseFirestore.instance
-            .collection('users')
-            .where('personalId', isEqualTo: user.uid)
-            .get();
+        // Conta alunos já ativos usando a relação canônica e o fallback legado.
+        final ativosSnap = await _activeStudentsQuery().get();
 
-        // Conta convites que estão pendentes
+        // `personalId` em invites faz parte do schema da coleção de convites.
         final pendentesSnap = await FirebaseFirestore.instance
             .collection('invites')
             .where('personalId', isEqualTo: user.uid)
@@ -93,16 +109,18 @@ class _StudentsPageState extends State<StudentsPage>
       final alunosCanonicos = querySnapshot.docs
           .map(UserModel.fromDocument)
           .where(
-            (candidate) => candidate.isCanonicalIdentity && candidate.isAluno,
+            (candidate) =>
+                candidate.isCanonicalIdentity && candidate.isAlunoMember,
           )
           .toList();
 
       if (alunosCanonicos.isEmpty) {
-        if (mounted)
+        if (mounted) {
           _mostrarAlerta(
             "Não encontrado",
             "Não achamos nenhum aluno com o e-mail '$emailInput'.",
           );
+        }
         setState(() => _isLoading = false);
         return;
       }
@@ -124,7 +142,7 @@ class _StudentsPageState extends State<StudentsPage>
       final aluno = alunosCanonicos.single;
 
       // 3. Validações adicionais
-      if (aluno.id == user!.uid) {
+      if (aluno.id == user.uid) {
         _mostrarSnack('Você não pode convidar a si mesmo.', isError: true);
         setState(() => _isLoading = false);
         return;
@@ -155,7 +173,8 @@ class _StudentsPageState extends State<StudentsPage>
         return;
       }
 
-      // 5. Cria o convite na coleção 'invites'
+      // 5. Cria o convite na coleção 'invites'.
+      // `personalId` aqui é campo de domínio da coleção e permanece durante a Fase 4.
       await FirebaseFirestore.instance.collection('invites').add({
         'fromPersonalId': user.uid,
         'personalId': user.uid,
@@ -196,11 +215,13 @@ class _StudentsPageState extends State<StudentsPage>
   // --- LÓGICA DE REMOVER ALUNO ---
   Future<void> _removerAluno(String alunoId, String emailAluno) async {
     try {
-      // 1. Remove vínculo do usuário
+      // 1. Remove vínculo canônico e campos legados de compatibilidade.
       await FirebaseFirestore.instance.collection('users').doc(alunoId).update({
+        'professorId': FieldValue.delete(),
         'personalId': FieldValue.delete(),
         'personalName': FieldValue.delete(),
         'inviteFromPersonalId': FieldValue.delete(),
+        'updatedAt': FieldValue.serverTimestamp(),
       });
 
       // 2. Remove convites antigos
@@ -418,18 +439,12 @@ class _StudentsPageState extends State<StudentsPage>
           );
         }
 
-        final bool isPremium = personalSnapshot.data?.data() != null
-            ? (personalSnapshot.data!.data()
-                      as Map<String, dynamic>)['isPremium'] ==
-                  true
-            : false;
+        final personalData = personalSnapshot.data?.data() as Map<String, dynamic>?;
+        final isPremium = _isPremiumValue(personalData?['isPremium']);
 
-        return StreamBuilder<QuerySnapshot>(
-          // 2º Stream: Fica a ouvir a lista de alunos
-          stream: FirebaseFirestore.instance
-              .collection('users')
-              .where('personalId', isEqualTo: _personalId)
-              .snapshots(),
+        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          // 2º Stream: relação canônica professorId + fallback personalId.
+          stream: _activeStudentsQuery().snapshots(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(
@@ -463,7 +478,7 @@ class _StudentsPageState extends State<StudentsPage>
               padding: const EdgeInsets.all(16),
               itemBuilder: (context, index) {
                 final doc = alunos[index];
-                final dados = doc.data() as Map<String, dynamic>;
+                final dados = doc.data();
                 final String nome = dados['name'] ?? 'Aluno';
                 final String email = dados['email'] ?? '';
 
