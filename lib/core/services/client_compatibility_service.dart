@@ -22,18 +22,33 @@ class ClientCompatibilityService {
     final user = _auth.currentUser;
     if (user == null) return;
 
-    await _firestore
+    final ref = _firestore
         .collection('users')
         .doc(user.uid)
         .collection('client_state')
-        .doc('current')
-        .set({
-          'schemaVersion': ClientCompatibilityInfo.schemaVersion,
-          'appVersion': ClientCompatibilityInfo.appVersion,
-          'buildNumber': ClientCompatibilityInfo.buildNumber,
-          'platform': _platformName(),
-          'lastSeenAt': FieldValue.serverTimestamp(),
-        });
+        .doc('current');
+
+    await _firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(ref);
+
+      final currentState = {
+        'schemaVersion': ClientCompatibilityInfo.schemaVersion,
+        'appVersion': ClientCompatibilityInfo.appVersion,
+        'buildNumber': ClientCompatibilityInfo.buildNumber,
+        'platform': _platformName(),
+        'lastSeenAt': FieldValue.serverTimestamp(),
+      };
+
+      if (snapshot.exists) {
+        transaction.update(ref, currentState);
+        return;
+      }
+
+      transaction.set(ref, {
+        ...currentState,
+        'firstSeenAt': FieldValue.serverTimestamp(),
+      });
+    });
   }
 
   String _platformName() {
