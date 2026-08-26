@@ -4,9 +4,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../../features/auth/presentation/pages/notifications_page.dart';
+import 'client_compatibility_service.dart';
 
 class PushNotificationService {
   final FirebaseMessaging _fcm = FirebaseMessaging.instance;
+  final ClientCompatibilityService _clientCompatibilityService =
+      ClientCompatibilityService();
   
   // Instância do plugin de notificações locais declarada aqui para evitar erros
   final FlutterLocalNotificationsPlugin _localNotificationsPlugin =
@@ -15,6 +18,12 @@ class PushNotificationService {
   GlobalKey<NavigatorState>? _navigatorKey;
 
   Future<void> initialize() async {
+    try {
+      await _clientCompatibilityService.markCurrentClient();
+    } catch (e) {
+      debugPrint('Não foi possível registrar client_state no startup: $e');
+    }
+
     NotificationSettings settings = await _fcm.requestPermission(
       alert: true,
       announcement: false,
