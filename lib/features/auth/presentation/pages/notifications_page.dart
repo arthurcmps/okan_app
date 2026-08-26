@@ -6,7 +6,6 @@ import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
 import 'chat_page.dart';
 import 'weekly_plan_page.dart';
-import 'assessments_tab.dart';
 import 'student_detail_page.dart';
 import '../../data/models/user_model.dart';
 
@@ -45,7 +44,6 @@ class NotificationsPage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // --- SEÇÃO 1: CONVITES (Alta Prioridade) ---
             const Padding(
               padding: EdgeInsets.only(left: 4, bottom: 10),
               child: Text(
@@ -59,10 +57,7 @@ class NotificationsPage extends StatelessWidget {
               ),
             ),
             _buildInvitesStream(user),
-
             const SizedBox(height: 24),
-
-            // --- SEÇÃO 2: ATIVIDADES RECENTES (Mensagens, Treinos, etc) ---
             const Padding(
               padding: EdgeInsets.only(left: 4, bottom: 10),
               child: Text(
@@ -82,7 +77,6 @@ class NotificationsPage extends StatelessWidget {
     );
   }
 
-  // --- STREAM DE CONVITES ---
   Widget _buildInvitesStream(User user) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
@@ -179,7 +173,6 @@ class NotificationsPage extends StatelessWidget {
     );
   }
 
-  // --- STREAM DE NOTIFICAÇÕES GERAIS ---
   Widget _buildGeneralNotificationsStream(BuildContext context, User user) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
@@ -304,13 +297,11 @@ class NotificationsPage extends StatelessWidget {
     );
   }
 
-  // --- LÓGICA DE NAVEGAÇÃO E AÇÃO ---
   void _handleNotificationTap(
     BuildContext context,
     DocumentSnapshot doc,
     Map<String, dynamic> data,
   ) async {
-    // 1. Marca como lida
     if (data['isRead'] == false) {
       await doc.reference.update({'isRead': true});
     }
@@ -348,7 +339,6 @@ class NotificationsPage extends StatelessWidget {
 
       case 'workout':
       case 'workout_update':
-        // 1. Lemos o perfil de quem está clicando no app agora
         final myDoc = await FirebaseFirestore.instance
             .collection('users')
             .doc(currentUser.uid)
@@ -357,7 +347,6 @@ class NotificationsPage extends StatelessWidget {
         final profile = UserModel.fromMap(myData, myDoc.id);
         final bool isProfessor = profile.isTrainingProfessional;
 
-        // 2. SE FOR O ALUNO CLICANDO: Vai SEMPRE direto para a tela do treino dele!
         if (!isProfessor) {
           if (context.mounted) {
             Navigator.push(
@@ -373,7 +362,6 @@ class NotificationsPage extends StatelessWidget {
           break;
         }
 
-        // 3. SE FOR O PERSONAL CLICANDO: Abre a ficha do aluno (actionId = ID do aluno)
         final studentId = data['actionId'] ?? data['studentId'];
         if (studentId != null &&
             studentId.toString().isNotEmpty &&
@@ -397,23 +385,19 @@ class NotificationsPage extends StatelessWidget {
               ),
             );
           }
-        } else {
-          // Fallback de segurança se o ID não vier na notificação
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  "Abra a aba 'Meus Alunos' para conferir o treino.",
-                ),
+        } else if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                "Abra a aba 'Meus Alunos' para conferir o treino.",
               ),
-            );
-          }
+            ),
+          );
         }
         break;
     }
   }
 
-  // --- POP-UP DE CONVITE DIRETO DA LISTA ---
   Future<void> _mostrarDialogoConvite(
     BuildContext context,
     String inviteId,
@@ -493,19 +477,16 @@ class NotificationsPage extends StatelessWidget {
     }
   }
 
-  // --- HELPERS VISUAIS DINÂMICOS (CORES E ÍCONES) ---
   Color _getColorByData(Map<String, dynamic> data) {
     final title = (data['title'] ?? '').toString().toLowerCase();
     final type = data['type'];
 
-    // Lógica inteligente baseada no título (Para alertas automáticos)
     if (title.contains('vencido')) return Colors.redAccent;
     if (title.contains('vencendo') || title.contains('alteração')) {
       return Colors.amber;
     }
     if (title.contains('feedback')) return Colors.blueAccent;
 
-    // Lógica padrão baseada no tipo
     switch (type) {
       case 'message':
         return Colors.blueAccent;
@@ -528,7 +509,6 @@ class NotificationsPage extends StatelessWidget {
     final title = (data['title'] ?? '').toString().toLowerCase();
     final type = data['type'];
 
-    // Ícones personalizados para os alertas automáticos
     if (title.contains('vencido')) {
       icon = Icons.warning_amber_rounded;
     } else if (title.contains('vencendo')) {
@@ -538,7 +518,6 @@ class NotificationsPage extends StatelessWidget {
     } else if (title.contains('feedback')) {
       icon = Icons.feedback_outlined;
     } else {
-      // Ícones padrão
       switch (type) {
         case 'message':
           icon = Icons.chat_bubble;
@@ -596,7 +575,6 @@ class NotificationsPage extends StatelessWidget {
     );
   }
 
-  // --- LÓGICA DE RESPOSTA DO CONVITE ---
   Future<void> _responderConvite(
     BuildContext context,
     String inviteId,
@@ -623,10 +601,7 @@ class NotificationsPage extends StatelessWidget {
             .collection('users')
             .doc(studentId)
             .update({
-              // Canônico User v2.
               'professorId': personalId,
-
-              // Compatibilidade temporária com versões antigas do app.
               'personalId': personalId,
               'personalName': personalName,
               'inviteFromPersonalId': inviteId,
