@@ -122,16 +122,17 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage>
           .collection('users')
           .doc(widget.studentId)
           .get();
-      final personalId = docAluno.data()?['personalId'];
+      final alunoProfile = UserModel.fromMap(
+        docAluno.data() ?? <String, dynamic>{},
+        docAluno.id,
+      );
+      final professorId = alunoProfile.professorId;
 
-      if (personalId == null ||
-          personalId.toString().isEmpty ||
-          personalId == 'SYSTEM_ADMIN')
-        return;
+      if (professorId == null || professorId == 'SYSTEM_ADMIN') return;
 
       await FirebaseFirestore.instance
           .collection('users')
-          .doc(personalId)
+          .doc(professorId)
           .collection('notifications')
           .add({
             'type': 'workout',
