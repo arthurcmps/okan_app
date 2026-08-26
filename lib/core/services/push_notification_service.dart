@@ -59,7 +59,7 @@ class PushNotificationService {
       String? token = await _fcm.getToken();
       if (token != null) {
         await _saveTokenToDatabase(token);
-        debugPrint('FCM Token gerado e salvo: $token');
+        debugPrint('FCM Token atualizado com sucesso.');
       }
     } catch (e) {
       debugPrint('Erro ao obter token do FCM: $e');
