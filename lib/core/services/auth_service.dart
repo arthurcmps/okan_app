@@ -3,11 +3,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/foundation.dart'; // Para kIsWeb
 import '../../features/auth/data/models/user_model.dart';
+import 'client_compatibility_service.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
+  final ClientCompatibilityService _clientCompatibilityService =
+      ClientCompatibilityService();
 
   // Construtor para forçar a persistência local
   AuthService() {
@@ -26,6 +29,14 @@ class AuthService {
       }
     } catch (e) {
       debugPrint("Erro ao configurar persistência: $e");
+    }
+  }
+
+  Future<void> _marcarClienteV2SemBloquear() async {
+    try {
+      await _clientCompatibilityService.markCurrentClient();
+    } catch (e) {
+      debugPrint('Não foi possível registrar client_state: $e');
     }
   }
 
@@ -83,6 +94,7 @@ class AuthService {
       });
 
       await user.updateDisplayName(nome.trim());
+      await _marcarClienteV2SemBloquear();
 
       return null;
     } on FirebaseAuthException catch (e) {
@@ -108,6 +120,7 @@ class AuthService {
     try {
       await _configurarPersistencia(); // Reforça a persistência antes de logar
       await _auth.signInWithEmailAndPassword(email: email, password: password);
+      await _marcarClienteV2SemBloquear();
       return null;
     } on FirebaseAuthException catch (e) {
       if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
@@ -174,6 +187,8 @@ class AuthService {
             'freq_semanal': '3x',
           });
         }
+
+        await _marcarClienteV2SemBloquear();
       }
       return null; // Sucesso
     } catch (e) {
