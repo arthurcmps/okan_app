@@ -44,6 +44,7 @@ class _ProfessorNotesWidgetState extends State<ProfessorNotesWidget> {
 
     try {
       await ref.set({
+        // Campo de domínio da nota privada; não é o vínculo User v2.
         'personalId': uid,
         'text': _controller.text.trim(),
         'updatedAt': FieldValue.serverTimestamp(),
@@ -91,7 +92,7 @@ class _ProfessorNotesWidgetState extends State<ProfessorNotesWidget> {
 
     /*
      * Primeiro confirmamos no vínculo do aluno se o usuário
-     * atual é realmente o personal responsável.
+     * atual é realmente o professor responsável.
      */
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance
@@ -105,9 +106,11 @@ class _ProfessorNotesWidgetState extends State<ProfessorNotesWidget> {
 
         final studentData = studentSnapshot.data!.data() ?? {};
 
-        final linkedPersonalId = studentData['personalId']?.toString();
+        final linkedProfessorId =
+            studentData['professorId']?.toString() ??
+            studentData['personalId']?.toString();
 
-        if (linkedPersonalId != uid) {
+        if (linkedProfessorId != uid) {
           return const SizedBox.shrink();
         }
 
