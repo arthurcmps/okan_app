@@ -18,6 +18,27 @@ void main() {
     expect(source, isNot(contains('app-academia-2914d')));
   });
 
+  test('dev replaces Android native DEFAULT app before demo initialization', () async {
+    final source = await File(
+      'lib/core/services/firebase_environment_service.dart',
+    ).readAsString();
+
+    expect(source, contains("_defaultFirebaseAppName = '[DEFAULT]'"));
+    expect(source, contains('_replaceNativeDefaultAppForDevelopment'));
+    expect(source, contains('Firebase.apps'));
+    expect(source, contains('app.name == _defaultFirebaseAppName'));
+    expect(source, contains('await app.delete()'));
+
+    expect(
+      source.indexOf('await app.delete()'),
+      lessThan(
+        source.lastIndexOf(
+          'Firebase.initializeApp(\n      options: _developmentOptionsForCurrentPlatform',
+        ),
+      ),
+    );
+  });
+
   test('main disables App Check and push through environment contract', () async {
     final source = await File('lib/main.dart').readAsString();
 
