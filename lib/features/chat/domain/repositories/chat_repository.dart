@@ -1,6 +1,8 @@
 import '../entities/chat_message.dart';
 
 abstract interface class ChatRepository {
+  String? get currentUserId;
+
   Future<String> loadUserDisplayName(String userId);
 
   Stream<String?> watchUserPhotoUrl(String userId);
