@@ -5,6 +5,7 @@ import '../../../auth/data/services/professional_relationships_service.dart';
 import '../../domain/entities/pending_student_invite.dart';
 import '../../domain/entities/student_invite_creation_result.dart';
 import '../../domain/entities/student_profile.dart';
+import '../../domain/entities/student_relationship_exception.dart';
 import '../../domain/entities/student_summary.dart';
 import '../../domain/repositories/students_repository.dart';
 
@@ -66,7 +67,8 @@ class FirebaseStudentsRepository implements StudentsRepository {
 
         return StudentProfile(
           photoUrl: _nullableString(data['photoUrl']),
-          birthDate: _dateFrom(data['birthDate']) ?? _dateFrom(data['dataNascimento']),
+          birthDate:
+              _dateFrom(data['birthDate']) ?? _dateFrom(data['dataNascimento']),
           gender: _stringOrFallback(data['gender'], 'Não informado'),
         );
       },
@@ -124,21 +126,42 @@ class FirebaseStudentsRepository implements StudentsRepository {
   Future<StudentInviteCreationResult> createStudentInvite({
     required String studentId,
   }) async {
-    final result = await _relationships.createStudentInvite(
-      studentId: studentId,
-    );
+    try {
+      final result = await _relationships.createStudentInvite(
+        studentId: studentId,
+      );
 
-    return StudentInviteCreationResult.fromMap(result);
+      return StudentInviteCreationResult.fromMap(result);
+    } catch (error) {
+      throw _relationshipFailure(error);
+    }
   }
 
   @override
   Future<void> unlinkStudent({required String studentId}) async {
-    await _relationships.unlinkStudent(studentId: studentId);
+    try {
+      await _relationships.unlinkStudent(studentId: studentId);
+    } catch (error) {
+      throw _relationshipFailure(error);
+    }
   }
 
   @override
   Future<void> cancelStudentInvite({required String inviteId}) async {
-    await _relationships.cancelStudentInvite(inviteId: inviteId);
+    try {
+      await _relationships.cancelStudentInvite(inviteId: inviteId);
+    } catch (error) {
+      throw _relationshipFailure(error);
+    }
+  }
+
+  static StudentRelationshipException _relationshipFailure(Object error) {
+    return StudentRelationshipException(
+      code: isProfessionalRelationshipPlanLimit(error)
+          ? 'resource-exhausted'
+          : 'relationship-error',
+      message: professionalRelationshipErrorMessage(error),
+    );
   }
 
   static StudentSummary _toStudentSummary(UserModel user) {
