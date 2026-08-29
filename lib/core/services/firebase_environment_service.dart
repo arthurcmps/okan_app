@@ -17,19 +17,24 @@ class FirebaseEnvironmentService {
   static const int storagePort = 9199;
 
   static const String developmentProjectId = 'demo-okan-dev';
-  static const String _defaultFirebaseAppName = '[DEFAULT]';
 
   static Future<void> initialize(OkanEnvironmentConfig environment) async {
-    if (environment.isDevelopment) {
-      await _replaceNativeDefaultAppForDevelopment();
-    } else {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
-    }
+    await Firebase.initializeApp(
+      options: environment.isDevelopment
+          ? _developmentOptionsForCurrentPlatform
+          : DefaultFirebaseOptions.currentPlatform,
+    );
 
     if (!environment.usesFirebaseEmulators) {
       return;
+    }
+
+    final defaultProjectId = Firebase.app().options.projectId;
+    if (defaultProjectId != developmentProjectId) {
+      throw StateError(
+        'OKAN_ENV=dev iniciou Firebase no projeto inesperado '
+        '$defaultProjectId. Esperado: $developmentProjectId.',
+      );
     }
 
     final host = environment.emulatorHost!;
@@ -45,20 +50,6 @@ class FirebaseEnvironmentService {
     FirebaseFunctions.instanceFor(
       region: 'southamerica-east1',
     ).useFunctionsEmulator(host, functionsPort);
-  }
-
-  static Future<void> _replaceNativeDefaultAppForDevelopment() async {
-    final existingDefaultApps = Firebase.apps
-        .where((app) => app.name == _defaultFirebaseAppName)
-        .toList(growable: false);
-
-    for (final app in existingDefaultApps) {
-      await app.delete();
-    }
-
-    await Firebase.initializeApp(
-      options: _developmentOptionsForCurrentPlatform,
-    );
   }
 
   static FirebaseOptions get _developmentOptionsForCurrentPlatform {
