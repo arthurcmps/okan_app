@@ -61,6 +61,7 @@ void main() {
     for (final member in <String>[
       'watchWeeklyPlan',
       'saveWorkoutDay',
+      'appendWorkoutDays',
       'saveWorkoutFeedback',
       'setWorkoutValidity',
       'watchWorkoutTemplates',
@@ -68,5 +69,21 @@ void main() {
     ]) {
       expect(contract, contains(member));
     }
+  });
+
+  test('mixed pages delegate workout persistence to WorkoutsRepository', () {
+    final discover = File(
+      'lib/features/auth/presentation/pages/discover_workouts_page.dart',
+    ).readAsStringSync();
+    expect(discover, contains('WorkoutsRepository'));
+    expect(discover, contains('appendWorkoutDays'));
+    expect(discover, isNot(contains("collection('workout_plans')")));
+
+    final evolution = File(
+      'lib/features/auth/presentation/pages/evolution_charts_page.dart',
+    ).readAsStringSync();
+    expect(evolution, contains('WorkoutsRepository'));
+    expect(evolution, contains('watchWorkoutHistory'));
+    expect(evolution, isNot(contains("collection('workout_history')")));
   });
 }
