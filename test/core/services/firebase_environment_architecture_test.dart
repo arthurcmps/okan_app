@@ -21,6 +21,21 @@ void main() {
     expect(source, isNot(contains('await app.delete()')));
   });
 
+  test('dev preserves the explicitly supplied emulator host', () async {
+    final source = await File(
+      'lib/core/services/firebase_environment_service.dart',
+    ).readAsString();
+
+    expect(
+      RegExp('automaticHostMapping: false').allMatches(source).length,
+      5,
+    );
+    expect(
+      source,
+      contains('Android Emulator callers already pass 10.0.2.2'),
+    );
+  });
+
   test('Android debug disables native production Firebase DEFAULT auto-init', () async {
     final debugManifest = await File(
       'android/app/src/debug/AndroidManifest.xml',
