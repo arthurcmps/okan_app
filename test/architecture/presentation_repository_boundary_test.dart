@@ -22,7 +22,6 @@ const _legacyInfrastructureExceptions = <String, String>{
   'lib/features/auth/presentation/pages/register_page.dart': 'Auth follow-up',
   'lib/features/auth/presentation/pages/student_detail_page.dart': 'OKAN-032',
   'lib/features/auth/presentation/pages/super_admin_page.dart': 'OKAN-034',
-  'lib/features/auth/presentation/pages/weekly_plan_page.dart': 'OKAN-031',
 };
 
 void main() {
@@ -94,6 +93,8 @@ void main() {
       'lib/features/workouts/presentation/pages/manage_workouts_page.dart':
           'WorkoutsRepository',
       'lib/features/workouts/presentation/pages/train_page.dart':
+          'WorkoutsRepository',
+      'lib/features/workouts/presentation/pages/weekly_plan_page.dart':
           'WorkoutsRepository',
       'lib/features/workouts/presentation/pages/workout_history_page.dart':
           'WorkoutsRepository',
