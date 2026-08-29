@@ -1,15 +1,26 @@
-import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../../../../core/widgets/user_avatar.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/material.dart';
+
 import '../../../../core/theme/app_colors.dart';
-import 'student_detail_page.dart';
-import 'chat_page.dart';
-import '../../data/models/user_model.dart';
+import '../../../../core/widgets/user_avatar.dart';
+import '../../../students/data/repositories/firebase_students_repository.dart';
+import '../../../students/domain/entities/pending_student_invite.dart';
+import '../../../students/domain/entities/student_summary.dart';
+import '../../../students/domain/repositories/students_repository.dart';
 import '../../data/services/professional_relationships_service.dart';
+import 'chat_page.dart';
+import 'student_detail_page.dart';
 
 class StudentsPage extends StatefulWidget {
-  const StudentsPage({super.key});
+  const StudentsPage({
+    super.key,
+    this.repository,
+    this.professionalId,
+  });
+
+  final StudentsRepository? repository;
+  final String? professionalId;
 
   @override
   State<StudentsPage> createState() => _StudentsPageState();
@@ -18,15 +29,28 @@ class StudentsPage extends StatefulWidget {
 class _StudentsPageState extends State<StudentsPage>
     with SingleTickerProviderStateMixin {
   final TextEditingController _emailController = TextEditingController();
-  final ProfessionalRelationshipsService _relationships =
-      ProfessionalRelationshipsService();
+
+  late final StudentsRepository _studentsRepository;
+  late final String _personalId;
+  late final TabController _tabController;
+
   bool _isLoading = false;
-  late TabController _tabController;
-  final String _personalId = FirebaseAuth.instance.currentUser!.uid;
 
   @override
   void initState() {
     super.initState();
+
+    final currentProfessionalId =
+        widget.professionalId ?? FirebaseAuth.instance.currentUser?.uid;
+
+    if (currentProfessionalId == null) {
+      throw StateError(
+        'StudentsPage requer um professor autenticado.',
+      );
+    }
+
+    _personalId = currentProfessionalId;
+    _studentsRepository = widget.repository ?? FirebaseStudentsRepository();
     _tabController = TabController(length: 2, vsync: this);
   }
 
@@ -35,16 +59,6 @@ class _StudentsPageState extends State<StudentsPage>
     _tabController.dispose();
     _emailController.dispose();
     super.dispose();
-  }
-
-  bool _isPremiumValue(dynamic value) {
-    if (value == true) return true;
-
-    if (value is String) {
-      return value.trim().toLowerCase() == 'true';
-    }
-
-    return false;
   }
 
   bool _isPermissionDenied(Object error) {
@@ -112,44 +126,15 @@ class _StudentsPageState extends State<StudentsPage>
     );
   }
 
-  Query<Map<String, dynamic>> _activeStudentsQuery() {
-    return FirebaseFirestore.instance
-        .collection('users')
-        .where(
-          Filter.or(
-            Filter('professorId', isEqualTo: _personalId),
-            Filter('personalId', isEqualTo: _personalId),
-          ),
-        );
-  }
-
-  // O cliente localiza o aluno para UX. O backend valida limite, identidade,
-  // duplicidade e persiste convite/notificação de forma transacional.
   Future<void> _enviarConvite() async {
     final emailInput = _emailController.text.trim().toLowerCase();
     if (emailInput.isEmpty) return;
 
     setState(() => _isLoading = true);
-    final user = FirebaseAuth.instance.currentUser;
-
-    if (user == null) {
-      if (mounted) setState(() => _isLoading = false);
-      return;
-    }
 
     try {
-      final querySnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .where('email', isEqualTo: emailInput)
-          .get();
-
-      final alunosCanonicos = querySnapshot.docs
-          .map(UserModel.fromDocument)
-          .where(
-            (candidate) =>
-                candidate.isCanonicalIdentity && candidate.isAlunoMember,
-          )
-          .toList();
+      final alunosCanonicos = await _studentsRepository
+          .findCanonicalStudentsByEmail(emailInput);
 
       if (alunosCanonicos.isEmpty) {
         if (mounted) {
@@ -174,12 +159,12 @@ class _StudentsPageState extends State<StudentsPage>
 
       final aluno = alunosCanonicos.single;
 
-      if (aluno.id == user.uid) {
+      if (aluno.id == _personalId) {
         _mostrarSnack('Você não pode convidar a si mesmo.', isError: true);
         return;
       }
 
-      if (aluno.professorId == user.uid) {
+      if (aluno.professorId == _personalId) {
         _mostrarSnack(
           'Este aluno já está na sua lista de ativos.',
           isError: true,
@@ -187,11 +172,11 @@ class _StudentsPageState extends State<StudentsPage>
         return;
       }
 
-      final result = await _relationships.createStudentInvite(
+      final result = await _studentsRepository.createStudentInvite(
         studentId: aluno.id,
       );
 
-      if (result['alreadyPending'] == true) {
+      if (result.alreadyPending) {
         _mostrarSnack(
           'Já existe um convite pendente para este aluno.',
           isError: true,
@@ -200,13 +185,16 @@ class _StudentsPageState extends State<StudentsPage>
       }
 
       if (mounted) {
-        _mostrarSnack('Convite enviado para ${aluno.name}! 🚀', isError: false);
+        _mostrarSnack(
+          'Convite enviado para ${_studentName(aluno)}! 🚀',
+          isError: false,
+        );
         Navigator.pop(context);
         _emailController.clear();
       }
-    } catch (e) {
+    } catch (error) {
       _mostrarErroDeAcao(
-        e,
+        error,
         action: 'enviar o convite',
         fecharDialogoAtual: true,
       );
@@ -217,15 +205,15 @@ class _StudentsPageState extends State<StudentsPage>
 
   Future<void> _removerAluno(String alunoId) async {
     try {
-      await _relationships.unlinkStudent(studentId: alunoId);
+      await _studentsRepository.unlinkStudent(studentId: alunoId);
 
       if (mounted) {
         Navigator.pop(context);
         _mostrarSnack('Aluno desvinculado.', isError: false);
       }
-    } catch (e) {
+    } catch (error) {
       _mostrarErroDeAcao(
-        e,
+        error,
         action: 'desvincular este aluno',
         fecharDialogoAtual: true,
       );
@@ -234,16 +222,16 @@ class _StudentsPageState extends State<StudentsPage>
 
   Future<void> _cancelarConvite(String inviteId) async {
     try {
-      await _relationships.cancelStudentInvite(inviteId: inviteId);
+      await _studentsRepository.cancelStudentInvite(inviteId: inviteId);
       if (mounted) _mostrarSnack('Convite cancelado.');
-    } catch (e) {
-      _mostrarErroDeAcao(e, action: 'cancelar este convite');
+    } catch (error) {
+      _mostrarErroDeAcao(error, action: 'cancelar este convite');
     }
   }
 
-  // --- UI HELPER: DIÁLOGO DE ADICIONAR ---
   void _mostrarDialogoAdicionar() {
     _emailController.clear();
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -281,11 +269,16 @@ class _StudentsPageState extends State<StudentsPage>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
+            child: const Text(
+              'Cancelar',
+              style: TextStyle(color: Colors.grey),
+            ),
           ),
           ElevatedButton(
             onPressed: _isLoading ? null : _enviarConvite,
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+            ),
             child: _isLoading
                 ? const SizedBox(
                     width: 20,
@@ -324,7 +317,10 @@ class _StudentsPageState extends State<StudentsPage>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
+            child: const Text(
+              'Cancelar',
+              style: TextStyle(color: Colors.grey),
+            ),
           ),
           TextButton(
             onPressed: () => _removerAluno(alunoId),
@@ -355,8 +351,14 @@ class _StudentsPageState extends State<StudentsPage>
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.surface,
-        title: Text(titulo, style: const TextStyle(color: Colors.white)),
-        content: Text(msg, style: const TextStyle(color: Colors.white70)),
+        title: Text(
+          titulo,
+          style: const TextStyle(color: Colors.white),
+        ),
+        content: Text(
+          msg,
+          style: const TextStyle(color: Colors.white70),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -368,6 +370,10 @@ class _StudentsPageState extends State<StudentsPage>
         ],
       ),
     );
+  }
+
+  String _studentName(StudentSummary student) {
+    return student.name.isEmpty ? 'Aluno' : student.name;
   }
 
   @override
@@ -383,7 +389,6 @@ class _StudentsPageState extends State<StudentsPage>
         elevation: 0,
         foregroundColor: Colors.white,
         centerTitle: true,
-        // --- ABAS ---
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: AppColors.primary,
@@ -397,28 +402,29 @@ class _StudentsPageState extends State<StudentsPage>
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [_buildActiveStudentsList(), _buildPendingInvitesList()],
+        children: [
+          _buildActiveStudentsList(),
+          _buildPendingInvitesList(),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: AppColors.secondary,
         icon: const Icon(Icons.person_add, color: Colors.white),
         label: const Text(
           'Convidar',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         onPressed: _mostrarDialogoAdicionar,
       ),
     );
   }
 
-  // --- LISTA 1: ALUNOS ATIVOS (COM TRAVA DE DOWNGRADE CORRIGIDA) ---
   Widget _buildActiveStudentsList() {
-    return StreamBuilder<DocumentSnapshot>(
-      // 1º Stream: Fica a ouvir o status Premium do Personal
-      stream: FirebaseFirestore.instance
-          .collection('users')
-          .doc(_personalId)
-          .snapshots(),
+    return StreamBuilder<bool>(
+      stream: _studentsRepository.watchProfessionalPremium(_personalId),
       builder: (context, personalSnapshot) {
         if (personalSnapshot.connectionState == ConnectionState.waiting) {
           return const Center(
@@ -426,20 +432,18 @@ class _StudentsPageState extends State<StudentsPage>
           );
         }
 
-        final personalData =
-            personalSnapshot.data?.data() as Map<String, dynamic>?;
-        final isPremium = _isPremiumValue(personalData?['isPremium']);
+        final isPremium = personalSnapshot.data ?? false;
 
-        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          // 2º Stream: relação canônica professorId + fallback personalId.
-          stream: _activeStudentsQuery().snapshots(),
+        return StreamBuilder<List<StudentSummary>>(
+          stream: _studentsRepository.watchActiveStudents(_personalId),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(
                 child: CircularProgressIndicator(color: AppColors.secondary),
               );
             }
-            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+
+            if (!snapshot.hasData || snapshot.data!.isEmpty) {
               return Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -459,22 +463,21 @@ class _StudentsPageState extends State<StudentsPage>
               );
             }
 
-            final alunos = snapshot.data!.docs;
+            final alunos = snapshot.data!;
 
             return ListView.builder(
               itemCount: alunos.length,
               padding: const EdgeInsets.all(16),
               itemBuilder: (context, index) {
-                final doc = alunos[index];
-                final dados = doc.data();
-                final String nome = dados['name'] ?? 'Aluno';
-                final String email = dados['email'] ?? '';
-
-                // REGRA DE DOWNGRADE: Se não for premium, bloqueia do 4º aluno em diante (índice > 2)
-                final bool isBloqueado = !isPremium && index > 2;
+                final aluno = alunos[index];
+                final nome = _studentName(aluno);
+                final email = aluno.email;
+                final isBloqueado = !isPremium && index > 2;
 
                 return Card(
-                  color: isBloqueado ? AppColors.background : AppColors.surface,
+                  color: isBloqueado
+                      ? AppColors.background
+                      : AppColors.surface,
                   margin: const EdgeInsets.only(bottom: 12),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -498,7 +501,7 @@ class _StudentsPageState extends State<StudentsPage>
                             ),
                           )
                         : UserAvatar(
-                            photoUrl: dados['photoUrl'],
+                            photoUrl: aluno.photoUrl,
                             name: nome,
                             radius: 25,
                           ),
@@ -506,13 +509,17 @@ class _StudentsPageState extends State<StudentsPage>
                       nome,
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: isBloqueado ? Colors.white54 : Colors.white,
+                        color: isBloqueado
+                            ? Colors.white54
+                            : Colors.white,
                       ),
                     ),
                     subtitle: Text(
                       email,
                       style: TextStyle(
-                        color: isBloqueado ? Colors.white38 : Colors.white70,
+                        color: isBloqueado
+                            ? Colors.white38
+                            : Colors.white70,
                       ),
                     ),
                     onTap: () {
@@ -524,18 +531,19 @@ class _StudentsPageState extends State<StudentsPage>
                               'até 3 alunos por vez. Para acessar todos os '
                               'vínculos novamente, reative o Premium.',
                         );
-                      } else {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => StudentDetailPage(
-                              studentId: doc.id,
-                              studentName: nome,
-                              studentEmail: email,
-                            ),
-                          ),
-                        );
+                        return;
                       }
+
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => StudentDetailPage(
+                            studentId: aluno.id,
+                            studentName: nome,
+                            studentEmail: email,
+                          ),
+                        ),
+                      );
                     },
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -551,7 +559,7 @@ class _StudentsPageState extends State<StudentsPage>
                                 context,
                                 MaterialPageRoute(
                                   builder: (context) => ChatPage(
-                                    otherUserId: doc.id,
+                                    otherUserId: aluno.id,
                                     otherUserName: nome,
                                   ),
                                 ),
@@ -559,12 +567,12 @@ class _StudentsPageState extends State<StudentsPage>
                             },
                           ),
                         IconButton(
-                          // Mantém disponível para o professor reduzir vínculos extras.
                           icon: const Icon(
                             Icons.delete_outline,
                             color: AppColors.error,
                           ),
-                          onPressed: () => _confirmarRemocao(doc.id, nome),
+                          onPressed: () =>
+                              _confirmarRemocao(aluno.id, nome),
                         ),
                       ],
                     ),
@@ -578,16 +586,11 @@ class _StudentsPageState extends State<StudentsPage>
     );
   }
 
-  // --- LISTA 2: PENDENTES ---
   Widget _buildPendingInvitesList() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('invites')
-          .where('personalId', isEqualTo: _personalId)
-          .where('status', isEqualTo: 'pending')
-          .snapshots(),
+    return StreamBuilder<List<PendingStudentInvite>>(
+      stream: _studentsRepository.watchPendingInvites(_personalId),
       builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return const Center(
             child: Text(
               'Nenhum convite pendente.',
@@ -596,12 +599,13 @@ class _StudentsPageState extends State<StudentsPage>
           );
         }
 
+        final invites = snapshot.data!;
+
         return ListView.builder(
           padding: const EdgeInsets.all(16),
-          itemCount: snapshot.data!.docs.length,
+          itemCount: invites.length,
           itemBuilder: (context, index) {
-            final doc = snapshot.data!.docs[index];
-            final data = doc.data() as Map<String, dynamic>;
+            final invite = invites[index];
 
             return Card(
               color: AppColors.surface.withOpacity(0.5),
@@ -612,16 +616,22 @@ class _StudentsPageState extends State<StudentsPage>
                   color: AppColors.secondary,
                 ),
                 title: Text(
-                  data['toStudentEmail'] ?? 'Email desconhecido',
+                  invite.studentEmail,
                   style: const TextStyle(color: Colors.white70),
                 ),
                 subtitle: const Text(
                   'Aguardando aceitação...',
-                  style: TextStyle(color: AppColors.secondary, fontSize: 12),
+                  style: TextStyle(
+                    color: AppColors.secondary,
+                    fontSize: 12,
+                  ),
                 ),
                 trailing: IconButton(
-                  icon: const Icon(Icons.close, color: AppColors.error),
-                  onPressed: () => _cancelarConvite(doc.id),
+                  icon: const Icon(
+                    Icons.close,
+                    color: AppColors.error,
+                  ),
+                  onPressed: () => _cancelarConvite(invite.id),
                   tooltip: 'Cancelar Convite',
                 ),
               ),
