@@ -22,7 +22,7 @@ class OkanEnvironmentConfig {
   final OkanEnvironment environment;
   final String? emulatorHost;
 
-  static OkanEnvironmentConfig get current => fromValues(
+  static OkanEnvironmentConfig get current => OkanEnvironmentConfig.fromValues(
         environment: _environmentValue,
         emulatorHost: _emulatorHostValue,
       );
