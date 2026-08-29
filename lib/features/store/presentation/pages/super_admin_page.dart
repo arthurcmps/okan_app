@@ -512,7 +512,7 @@ class _SystemTemplateBuilderScreenState
                       final active = letter == _activeSheet;
                       return Padding(
                         padding: const EdgeInsets.only(left: 8),
-                        child: ChoiceChip(
+                        child: InputChip(
                           label: Text('Ficha $letter'),
                           selected: active,
                           onSelected: (_) => setState(() => _activeSheet = letter),
