@@ -18,7 +18,7 @@ Isso permitia que uma alteração futura fosse enviada ao GitHub sem que o próp
 
 O CI não altera comportamento do aplicativo, schema, Firebase, Functions, Rules ou dependências.
 
-Ele automatiza exatamente a validação Flutter já usada localmente:
+Ele automatiza a validação Flutter já usada localmente:
 
 ```bash
 flutter pub get
@@ -62,26 +62,30 @@ Timeout:
 
 ## 5. Toolchain reproduzível
 
-A `.metadata` do projeto aponta para a revisão Flutter:
+A primeira versão do OKAN-035 usou Flutter 3.38.9 porque a `.metadata` contém a revisão `67323de285b00232883f53b84095eb72be97d35c`, que corresponde a esse release.
 
-```text
-67323de285b00232883f53b84095eb72be97d35c
-```
+A primeira execução real da CI mostrou que essa interpretação estava incorreta para o estado atual do projeto: `.metadata` registra a revisão histórica do projeto/migração e não necessariamente o SDK usado para gerar o lockfile atual.
 
-Essa revisão corresponde ao release:
+Com Flutter 3.38.9 / Dart 3.10.8, `flutter pub get` tentou rebaixar sete dependências transitivas e alterou o `pubspec.lock`. O check de drift bloqueou corretamente o pipeline antes do analyzer e dos testes.
 
-```text
-Flutter 3.38.9
-```
+O lockfile atual é compatível com a família Flutter 3.47 e possui pins que coincidem com Flutter 3.47.0, incluindo:
+
+- `characters 1.4.1`;
+- `intl 0.20.3`;
+- `matcher 0.12.20`;
+- `material_color_utilities 0.13.0`;
+- `test_api 0.7.12`;
+- `vector_math 2.4.2`;
+- SDK Dart `>=3.11.0-0`.
 
 Por isso o workflow fixa explicitamente:
 
 ```yaml
-flutter-version: '3.38.9'
+flutter-version: '3.47.0'
 channel: stable
 ```
 
-Nenhum upgrade de Flutter ou dependência é realizado pelo OKAN-035.
+O OKAN-035 não modifica o `pubspec.lock` para acomodar a CI; a CI é que deve reproduzir o contrato já versionado pelo projeto.
 
 ## 6. Actions fixadas por SHA
 
@@ -101,6 +105,8 @@ git diff --exit-code -- pubspec.lock
 ```
 
 Se a resolução de dependências modificar o lockfile, o job falha. Isso obriga qualquer mudança de resolução a ser versionada explicitamente em vez de acontecer apenas dentro da CI.
+
+A primeira execução do OKAN-035 comprovou que esse gate é útil: ele detectou imediatamente a incompatibilidade entre Flutter 3.38.9 e o lockfile atual.
 
 ## 8. Analyzer
 
@@ -163,7 +169,7 @@ Baixo.
 
 O ticket adiciona apenas infraestrutura de validação do repositório. Não altera binário, runtime ou persistência do app.
 
-O principal risco é uma configuração de CI incompatível com a toolchain real; por isso Flutter é fixado em 3.38.9 e o primeiro PR deve ser validado pelo próprio workflow antes do merge.
+O principal risco era escolher uma toolchain diferente daquela que gerou o lockfile. A primeira execução detectou esse problema antes do merge e o workflow foi alinhado ao Flutter 3.47.0 sem modificar dependências.
 
 ## 15. Rollback
 
@@ -177,7 +183,8 @@ Não existe rollback de dados.
 - [x] PRs para `main` disparam CI;
 - [x] pushes em `main` disparam CI;
 - [x] execução manual disponível;
-- [x] Flutter fixado em 3.38.9;
+- [x] toolchain fixada explicitamente;
+- [x] Flutter alinhado ao lockfile atual em 3.47.0;
 - [x] actions externas fixadas por SHA;
 - [x] permissões mínimas `contents: read`;
 - [x] lockfile verificado contra drift;
@@ -186,7 +193,8 @@ Não existe rollback de dados.
 - [x] nenhum secret necessário;
 - [x] nenhuma dependência atualizada;
 - [x] nenhuma mudança de Rules/Functions/schema;
-- [ ] primeira execução do workflow em PR verde;
+- [x] primeira execução provou que o gate de lockfile bloqueia incompatibilidade de SDK;
+- [ ] execução corrigida do workflow em PR verde;
 - [ ] working tree local limpa e sincronizada após validação.
 
 ## 17. Próximo ticket
@@ -197,6 +205,8 @@ Depois do OKAN-035:
 
 ## 18. Status
 
-Implementação do workflow concluída na branch `quality/okan-035-ci-flutter`.
+Workflow criado na branch `quality/okan-035-ci-flutter`.
 
-Pendente validar a primeira execução real do GitHub Actions antes do merge.
+A primeira execução falhou de forma esperada no gate de lockfile por usar Flutter 3.38.9. O workflow foi corrigido para Flutter 3.47.0 sem alteração do lockfile.
+
+Pendente confirmar a execução corrigida do GitHub Actions antes do merge.
