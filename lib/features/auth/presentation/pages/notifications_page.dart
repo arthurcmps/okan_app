@@ -389,9 +389,7 @@ class NotificationsPage extends StatelessWidget {
         } else if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text(
-                "Abra a aba 'Meus Alunos' para conferir o treino.",
-              ),
+              content: Text("Abra a aba 'Meus Alunos' para conferir o treino."),
             ),
           );
         }

@@ -113,12 +113,14 @@ class _StudentsPageState extends State<StudentsPage>
   }
 
   Query<Map<String, dynamic>> _activeStudentsQuery() {
-    return FirebaseFirestore.instance.collection('users').where(
-      Filter.or(
-        Filter('professorId', isEqualTo: _personalId),
-        Filter('personalId', isEqualTo: _personalId),
-      ),
-    );
+    return FirebaseFirestore.instance
+        .collection('users')
+        .where(
+          Filter.or(
+            Filter('professorId', isEqualTo: _personalId),
+            Filter('personalId', isEqualTo: _personalId),
+          ),
+        );
   }
 
   // O cliente localiza o aluno para UX. O backend valida limite, identidade,
@@ -358,7 +360,10 @@ class _StudentsPageState extends State<StudentsPage>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Entendi', style: TextStyle(color: AppColors.primary)),
+            child: const Text(
+              'Entendi',
+              style: TextStyle(color: AppColors.primary),
+            ),
           ),
         ],
       ),
@@ -421,7 +426,8 @@ class _StudentsPageState extends State<StudentsPage>
           );
         }
 
-        final personalData = personalSnapshot.data?.data() as Map<String, dynamic>?;
+        final personalData =
+            personalSnapshot.data?.data() as Map<String, dynamic>?;
         final isPremium = _isPremiumValue(personalData?['isPremium']);
 
         return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -486,7 +492,10 @@ class _StudentsPageState extends State<StudentsPage>
                     leading: isBloqueado
                         ? const CircleAvatar(
                             backgroundColor: Colors.black45,
-                            child: Icon(Icons.lock_outline, color: Colors.amber),
+                            child: Icon(
+                              Icons.lock_outline,
+                              color: Colors.amber,
+                            ),
                           )
                         : UserAvatar(
                             photoUrl: dados['photoUrl'],

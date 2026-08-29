@@ -4,49 +4,40 @@ const professionalRelationshipsRegion = 'southamerica-east1';
 
 class ProfessionalRelationshipsService {
   ProfessionalRelationshipsService({FirebaseFunctions? functions})
-      : _functions =
-            functions ?? FirebaseFunctions.instanceFor(region: professionalRelationshipsRegion);
+    : _functions =
+          functions ??
+          FirebaseFunctions.instanceFor(
+            region: professionalRelationshipsRegion,
+          );
 
   final FirebaseFunctions _functions;
 
   Future<Map<String, dynamic>> createStudentInvite({
     required String studentId,
   }) {
-    return _call(
-      'createStudentInvite',
-      <String, dynamic>{'studentId': studentId},
-    );
+    return _call('createStudentInvite', <String, dynamic>{
+      'studentId': studentId,
+    });
   }
 
   Future<Map<String, dynamic>> respondStudentInvite({
     required String inviteId,
     required bool accept,
   }) {
-    return _call(
-      'respondStudentInvite',
-      <String, dynamic>{
-        'inviteId': inviteId,
-        'response': accept ? 'accepted' : 'rejected',
-      },
-    );
+    return _call('respondStudentInvite', <String, dynamic>{
+      'inviteId': inviteId,
+      'response': accept ? 'accepted' : 'rejected',
+    });
   }
 
-  Future<Map<String, dynamic>> cancelStudentInvite({
-    required String inviteId,
-  }) {
-    return _call(
-      'cancelStudentInvite',
-      <String, dynamic>{'inviteId': inviteId},
-    );
+  Future<Map<String, dynamic>> cancelStudentInvite({required String inviteId}) {
+    return _call('cancelStudentInvite', <String, dynamic>{
+      'inviteId': inviteId,
+    });
   }
 
-  Future<Map<String, dynamic>> unlinkStudent({
-    required String studentId,
-  }) {
-    return _call(
-      'unlinkStudent',
-      <String, dynamic>{'studentId': studentId},
-    );
+  Future<Map<String, dynamic>> unlinkStudent({required String studentId}) {
+    return _call('unlinkStudent', <String, dynamic>{'studentId': studentId});
   }
 
   Future<Map<String, dynamic>> _call(
@@ -66,7 +57,8 @@ class ProfessionalRelationshipsService {
 }
 
 bool isProfessionalRelationshipPlanLimit(Object error) {
-  return error is FirebaseFunctionsException && error.code == 'resource-exhausted';
+  return error is FirebaseFunctionsException &&
+      error.code == 'resource-exhausted';
 }
 
 String professionalRelationshipMessageForCode(
