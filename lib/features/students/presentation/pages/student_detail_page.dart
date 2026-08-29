@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/user_avatar.dart';
-import '../../../auth/data/services/professional_relationships_service.dart';
 import '../../../auth/presentation/pages/anamnese_tab.dart';
 import '../../../auth/presentation/pages/assessments_tab.dart';
 import '../../../auth/presentation/pages/chat_page.dart';
@@ -10,6 +9,7 @@ import '../../../workouts/presentation/pages/weekly_plan_page.dart';
 import '../../../workouts/presentation/pages/workout_history_page.dart';
 import '../../data/repositories/firebase_students_repository.dart';
 import '../../domain/entities/student_profile.dart';
+import '../../domain/entities/student_relationship_exception.dart';
 import '../../domain/repositories/students_repository.dart';
 
 class StudentDetailPage extends StatefulWidget {
@@ -406,7 +406,9 @@ class _StudentDetailPageState extends State<StudentDetailPage>
               } catch (error) {
                 if (!mounted) return;
 
-                final message = professionalRelationshipErrorMessage(error);
+                final message = error is StudentRelationshipException
+                    ? error.message
+                    : 'Não foi possível desvincular este aluno agora.';
                 messenger.showSnackBar(
                   SnackBar(
                     content: Text(message),
