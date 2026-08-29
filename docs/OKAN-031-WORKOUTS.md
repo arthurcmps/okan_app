@@ -156,7 +156,9 @@ O OKAN-031 remove apenas a responsabilidade de histórico de treino:
 
 O teste de Workouts agora bloqueia regressões que reintroduzam `collection('workout_plans')` em Discover ou `collection('workout_history')` em Evolution Charts.
 
-## 9. Testes finais
+## 9. Validação final
+
+Executado localmente após o Checkpoint C:
 
 ```bash
 flutter analyze --no-fatal-infos --no-fatal-warnings
@@ -166,7 +168,16 @@ flutter test \
 flutter test
 ```
 
-A suíte completa é obrigatória porque existem exports de compatibilidade e telas grandes de composição.
+Resultado:
+
+- analyzer sem erro fatal;
+- 153 issues legadas não bloqueantes;
+- gate final Workouts + arquitetura: `+8`, todos passaram;
+- suíte Flutter completa: `+48`, todos passaram;
+- branch sincronizada com `origin`;
+- working tree limpa.
+
+As issues do analyzer permanecem como dívida técnica independente. Dependências e CI não são alterados no OKAN-031.
 
 ## 10. Firebase Emulator
 
@@ -178,7 +189,7 @@ O Emulator não é necessário para validar a separação estrutural. Testes de 
 
 Moderado.
 
-Os principais riscos são:
+Os principais riscos tratados são:
 
 - compilação/import após realocação física;
 - regressão em operações da ficha semanal;
@@ -195,8 +206,6 @@ Reverter o merge do OKAN-031.
 Não existe rollback de banco porque não há migração de dados.
 
 ## 13. Critérios de aceite
-
-### Concluídos
 
 - [x] Existe `features/workouts` com `domain`, `data` e `presentation`.
 - [x] `WorkoutExercise` está no domínio sem Firebase.
@@ -217,11 +226,10 @@ Não existe rollback de banco porque não há migração de dados.
 - [x] Evolution Charts deixa de consultar diretamente `workout_history`.
 - [x] Baseline de Discover pertence somente ao OKAN-034.
 - [x] Baseline de Evolution Charts pertence somente ao OKAN-033.
+- [x] Validação final após Checkpoint C: analyzer sem erro fatal, gate `+8`, suíte `+48`, tree limpa.
 
-### Pendente para concluir OKAN-031
+## 14. Status
 
-- [ ] Validação local final após o Checkpoint C: analyzer sem erro fatal, gate verde e suíte completa verde.
+**OKAN-031 concluído e apto para merge.**
 
-## 14. Documentação
-
-Este arquivo registra problema, risco, comportamento preservado, migração, testes, rollback e critérios de aceite. O ticket só será concluído após a validação final do Checkpoint C.
+A separação de Students continua no OKAN-032; Assessments/Anamnese no OKAN-033; Chat/Arena/Store no OKAN-034; CI Flutter no OKAN-035.
