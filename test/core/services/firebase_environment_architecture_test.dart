@@ -15,28 +15,32 @@ void main() {
     expect(source, contains('useFunctionsEmulator'));
     expect(source, contains("region: 'us-central1'"));
     expect(source, contains("region: 'southamerica-east1'"));
+    expect(source, contains('Firebase.app().options.projectId'));
+    expect(source, contains('defaultProjectId != developmentProjectId'));
     expect(source, isNot(contains('app-academia-2914d')));
+    expect(source, isNot(contains('await app.delete()')));
   });
 
-  test('dev replaces Android native DEFAULT app before demo initialization', () async {
-    final source = await File(
-      'lib/core/services/firebase_environment_service.dart',
+  test('Android debug disables native production Firebase DEFAULT auto-init', () async {
+    final debugManifest = await File(
+      'android/app/src/debug/AndroidManifest.xml',
+    ).readAsString();
+    final releaseManifest = await File(
+      'android/app/src/main/AndroidManifest.xml',
     ).readAsString();
 
-    expect(source, contains("_defaultFirebaseAppName = '[DEFAULT]'"));
-    expect(source, contains('_replaceNativeDefaultAppForDevelopment'));
-    expect(source, contains('Firebase.apps'));
-    expect(source, contains('app.name == _defaultFirebaseAppName'));
-    expect(source, contains('await app.delete()'));
+    expect(
+      debugManifest,
+      contains('com.google.firebase.provider.FirebaseInitProvider'),
+    );
+    expect(debugManifest, contains('tools:node="remove"'));
+    expect(debugManifest, contains('android:usesCleartextTraffic="true"'));
 
     expect(
-      source.indexOf('await app.delete()'),
-      lessThan(
-        source.lastIndexOf(
-          'Firebase.initializeApp(\n      options: _developmentOptionsForCurrentPlatform',
-        ),
-      ),
+      releaseManifest,
+      isNot(contains('com.google.firebase.provider.FirebaseInitProvider')),
     );
+    expect(releaseManifest, isNot(contains('android:usesCleartextTraffic="true"')));
   });
 
   test('main disables App Check and push through environment contract', () async {
@@ -64,17 +68,5 @@ void main() {
         lessThan(source.indexOf('https://api.mercadopago.com')),
       );
     }
-  });
-
-  test('Android cleartext is enabled only in debug manifest', () async {
-    final debugManifest = await File(
-      'android/app/src/debug/AndroidManifest.xml',
-    ).readAsString();
-    final releaseManifest = await File(
-      'android/app/src/main/AndroidManifest.xml',
-    ).readAsString();
-
-    expect(debugManifest, contains('android:usesCleartextTraffic="true"'));
-    expect(releaseManifest, isNot(contains('android:usesCleartextTraffic="true"')));
   });
 }
