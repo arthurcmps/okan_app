@@ -171,6 +171,8 @@ Não existe rollback de banco porque não há migração de dados.
 - [x] Caminhos antigos migrados permanecem como exports de compatibilidade.
 - [x] Gate arquitetural protege as páginas migradas.
 - [x] Nenhuma migração de dados é necessária.
+- [x] Analyzer do checkpoint A não apresentou erro fatal.
+- [x] Testes focados do checkpoint A passaram (`+6`).
 
 ### Pendentes para concluir OKAN-031
 
