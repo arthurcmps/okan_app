@@ -8,7 +8,7 @@ void main() {
       'lib/core/services/firebase_environment_service.dart',
     ).readAsString();
 
-    expect(source, contains("developmentProjectId = 'demo-okan-dev'"));
+    expect(source, contains('developmentFirebaseProjectId'));
     expect(source, contains('useAuthEmulator'));
     expect(source, contains('useFirestoreEmulator'));
     expect(source, contains('useStorageEmulator'));
@@ -16,8 +16,7 @@ void main() {
     expect(source, contains("region: 'us-central1'"));
     expect(source, contains("region: 'southamerica-east1'"));
     expect(source, contains('Firebase.app().options.projectId'));
-    expect(source, contains('defaultProjectId != developmentProjectId'));
-    expect(source, isNot(contains('app-academia-2914d')));
+    expect(source, contains('_expectedProjectId(environment)'));
     expect(source, isNot(contains('await app.delete()')));
   });
 
@@ -33,6 +32,32 @@ void main() {
     expect(
       source,
       contains('Android Emulator callers already pass 10.0.2.2'),
+    );
+  });
+
+  test('staging uses explicit cloud Firebase options and never emulators', () async {
+    final configSource = await File(
+      'lib/core/config/app_environment.dart',
+    ).readAsString();
+    final serviceSource = await File(
+      'lib/core/services/firebase_environment_service.dart',
+    ).readAsString();
+
+    expect(configSource, contains('OKAN_STAGING_FIREBASE_PROJECT_ID'));
+    expect(configSource, contains('OKAN_STAGING_FIREBASE_ANDROID_APP_ID'));
+    expect(configSource, contains('OKAN_STAGING_FIREBASE_WEB_APP_ID'));
+    expect(configSource, contains('OKAN_STAGING_FIREBASE_IOS_APP_ID'));
+    expect(configSource, contains('productionFirebaseProjectId'));
+    expect(configSource, contains('developmentFirebaseProjectId'));
+    expect(configSource, contains("startsWith('demo-')"));
+    expect(configSource, contains('enableExternalPayments => isProduction'));
+
+    expect(serviceSource, contains('_stagingOptionsForCurrentPlatform'));
+    expect(serviceSource, contains('environment.firebaseConfig!'));
+    expect(serviceSource, contains('DefaultFirebaseOptions.currentPlatform'));
+    expect(
+      serviceSource.indexOf('if (!environment.usesFirebaseEmulators)'),
+      lessThan(serviceSource.indexOf('useAuthEmulator')),
     );
   });
 
@@ -58,16 +83,18 @@ void main() {
     expect(releaseManifest, isNot(contains('android:usesCleartextTraffic="true"')));
   });
 
-  test('main disables App Check and push through environment contract', () async {
+  test('foreground and background bootstrap use the same environment contract', () async {
     final source = await File('lib/main.dart').readAsString();
 
+    expect(source, contains('OkanEnvironmentConfig.current'));
     expect(source, contains('FirebaseEnvironmentService.initialize(environment)'));
     expect(source, contains('environment.enableAppCheck'));
     expect(source, contains('environment.enablePushNotifications'));
-    expect(source, contains('environment.isDevelopment'));
+    expect(source, contains('environment.showEnvironmentBanner'));
+    expect(source, isNot(contains('DefaultFirebaseOptions.currentPlatform')));
   });
 
-  test('dev guards every remaining direct Mercado Pago client path', () async {
+  test('non-production guards every remaining direct Mercado Pago client path', () async {
     final storeSource = await File(
       'lib/features/store/data/repositories/firebase_store_repository.dart',
     ).readAsString();
