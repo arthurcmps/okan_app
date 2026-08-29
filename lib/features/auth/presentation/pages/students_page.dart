@@ -6,6 +6,7 @@ import '../../../../core/theme/app_colors.dart';
 import 'student_detail_page.dart';
 import 'chat_page.dart';
 import '../../data/models/user_model.dart';
+import '../../data/services/professional_relationships_service.dart';
 
 class StudentsPage extends StatefulWidget {
   const StudentsPage({super.key});
@@ -17,6 +18,8 @@ class StudentsPage extends StatefulWidget {
 class _StudentsPageState extends State<StudentsPage>
     with SingleTickerProviderStateMixin {
   final TextEditingController _emailController = TextEditingController();
+  final ProfessionalRelationshipsService _relationships =
+      ProfessionalRelationshipsService();
   bool _isLoading = false;
   late TabController _tabController;
   final String _personalId = FirebaseAuth.instance.currentUser!.uid;
@@ -57,6 +60,32 @@ class _StudentsPageState extends State<StudentsPage>
 
     if (!mounted) return;
 
+    if (isProfessionalRelationshipPlanLimit(error)) {
+      if (fecharDialogoAtual && Navigator.of(context).canPop()) {
+        Navigator.pop(context);
+      }
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+
+        _mostrarAlerta(
+          'Limite do Plano Base',
+          'Seu Plano Base permite até 3 alunos entre ativos e convites '
+              'pendentes. Seus vínculos atuais permanecem seguros. '
+              'Para adicionar novos alunos, reative o Premium.',
+        );
+      });
+
+      return;
+    }
+
+    final callableMessage = professionalRelationshipErrorMessage(error);
+    if (callableMessage !=
+        'Não foi possível concluir esta ação agora. Tente novamente em instantes.') {
+      _mostrarSnack(callableMessage, isError: true);
+      return;
+    }
+
     if (_isPermissionDenied(error)) {
       if (fecharDialogoAtual && Navigator.of(context).canPop()) {
         Navigator.pop(context);
@@ -92,7 +121,8 @@ class _StudentsPageState extends State<StudentsPage>
     );
   }
 
-  // --- LÓGICA DE ENVIAR CONVITE E TRAVA DE PLANO ---
+  // O cliente localiza o aluno para UX. O backend valida limite, identidade,
+  // duplicidade e persiste convite/notificação de forma transacional.
   Future<void> _enviarConvite() async {
     final emailInput = _emailController.text.trim().toLowerCase();
     if (emailInput.isEmpty) return;
@@ -100,48 +130,12 @@ class _StudentsPageState extends State<StudentsPage>
     setState(() => _isLoading = true);
     final user = FirebaseAuth.instance.currentUser;
 
+    if (user == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+
     try {
-      // =========================================================
-      // 1. TRAVA DE NEGÓCIO CORRIGIDA (PLANO BASE vs PREMIUM)
-      // =========================================================
-      final personalDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user!.uid)
-          .get();
-      final isPremium = _isPremiumValue(personalDoc.data()?['isPremium']);
-
-      // SÓ aplica o bloqueio se o professor NÃO for premium
-      if (!isPremium) {
-        // Conta alunos já ativos usando a relação canônica e o fallback legado.
-        final ativosSnap = await _activeStudentsQuery().get();
-
-        // `personalId` em invites faz parte do schema da coleção de convites.
-        final pendentesSnap = await FirebaseFirestore.instance
-            .collection('invites')
-            .where('personalId', isEqualTo: user.uid)
-            .where('status', isEqualTo: 'pending')
-            .get();
-
-        final totalAlunos = ativosSnap.docs.length + pendentesSnap.docs.length;
-
-        // Limite do Plano Gratuito é 3 alunos (entre ativos e pendentes)
-        if (totalAlunos >= 3) {
-          if (mounted) {
-            Navigator.pop(context); // Fecha a modal do convite
-            _mostrarAlerta(
-              'Limite do Plano Base',
-              'Seu Plano Base permite até 3 alunos entre ativos e convites '
-                  'pendentes. Seus vínculos atuais permanecem seguros. '
-                  'Para adicionar novos alunos, reative o Premium.',
-            );
-          }
-          setState(() => _isLoading = false);
-          return; // Para a execução aqui
-        }
-      }
-      // =========================================================
-
-      // 2. Busca o aluno pelo e-mail
       final querySnapshot = await FirebaseFirestore.instance
           .collection('users')
           .where('email', isEqualTo: emailInput)
@@ -162,7 +156,6 @@ class _StudentsPageState extends State<StudentsPage>
             "Não achamos nenhum aluno com o e-mail '$emailInput'.",
           );
         }
-        setState(() => _isLoading = false);
         return;
       }
 
@@ -174,18 +167,13 @@ class _StudentsPageState extends State<StudentsPage>
                 'O convite foi bloqueado por segurança.',
           );
         }
-
-        setState(() => _isLoading = false);
-
         return;
       }
 
       final aluno = alunosCanonicos.single;
 
-      // 3. Validações adicionais
       if (aluno.id == user.uid) {
         _mostrarSnack('Você não pode convidar a si mesmo.', isError: true);
-        setState(() => _isLoading = false);
         return;
       }
 
@@ -194,87 +182,40 @@ class _StudentsPageState extends State<StudentsPage>
           'Este aluno já está na sua lista de ativos.',
           isError: true,
         );
-        setState(() => _isLoading = false);
         return;
       }
 
-      // 4. Verifica se já existe convite pendente
-      final convitesExistentes = await FirebaseFirestore.instance
-          .collection('invites')
-          .where('toStudentEmail', isEqualTo: emailInput)
-          .where('personalId', isEqualTo: user.uid)
-          .get();
+      final result = await _relationships.createStudentInvite(
+        studentId: aluno.id,
+      );
 
-      if (convitesExistentes.docs.isNotEmpty) {
+      if (result['alreadyPending'] == true) {
         _mostrarSnack(
           'Já existe um convite pendente para este aluno.',
           isError: true,
         );
-        setState(() => _isLoading = false);
         return;
       }
 
-      // 5. Cria o convite na coleção 'invites'.
-      // `personalId` aqui é campo de domínio da coleção e permanece durante a Fase 4.
-      await FirebaseFirestore.instance.collection('invites').add({
-        'fromPersonalId': user.uid,
-        'personalId': user.uid,
-        'personalName':
-            user.displayName ?? personalDoc.data()?['name'] ?? 'Personal',
-        'toStudentEmail': emailInput,
-        'studentUid': aluno.id,
-        'status': 'pending',
-        'sentAt': FieldValue.serverTimestamp(),
-      });
-
-      // 6. Cria notificação para o aluno (para acender a bolinha)
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(aluno.id)
-          .collection('notifications')
-          .add({
-            'type': 'invite',
-            'title': 'Novo Convite de Treino',
-            'body':
-                '${user.displayName ?? personalDoc.data()?['name'] ?? "Um personal"} quer treinar você!',
-            'isRead': false,
-            'timestamp': FieldValue.serverTimestamp(),
-          });
-
       if (mounted) {
         _mostrarSnack('Convite enviado para ${aluno.name}! 🚀', isError: false);
-        Navigator.pop(context); // Fecha a modal
+        Navigator.pop(context);
         _emailController.clear();
       }
     } catch (e) {
-      _mostrarErroDeAcao(e, action: 'enviar o convite');
+      _mostrarErroDeAcao(
+        e,
+        action: 'enviar o convite',
+        fecharDialogoAtual: true,
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  // --- LÓGICA DE REMOVER ALUNO ---
-  Future<void> _removerAluno(String alunoId, String emailAluno) async {
+  Future<void> _removerAluno(String alunoId) async {
     try {
-      // 1. Remove vínculo canônico e campos legados de compatibilidade.
-      await FirebaseFirestore.instance.collection('users').doc(alunoId).update({
-        'professorId': FieldValue.delete(),
-        'personalId': FieldValue.delete(),
-        'personalName': FieldValue.delete(),
-        'inviteFromPersonalId': FieldValue.delete(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      // 2. Remove convites antigos
-      final convites = await FirebaseFirestore.instance
-          .collection('invites')
-          .where('toStudentEmail', isEqualTo: emailAluno)
-          .where('personalId', isEqualTo: _personalId)
-          .get();
-
-      for (var doc in convites.docs) {
-        await doc.reference.delete();
-      }
+      await _relationships.unlinkStudent(studentId: alunoId);
 
       if (mounted) {
         Navigator.pop(context);
@@ -289,13 +230,9 @@ class _StudentsPageState extends State<StudentsPage>
     }
   }
 
-  // --- LÓGICA DE CANCELAR CONVITE (Aba Pendentes) ---
   Future<void> _cancelarConvite(String inviteId) async {
     try {
-      await FirebaseFirestore.instance
-          .collection('invites')
-          .doc(inviteId)
-          .delete();
+      await _relationships.cancelStudentInvite(inviteId: inviteId);
       if (mounted) _mostrarSnack('Convite cancelado.');
     } catch (e) {
       _mostrarErroDeAcao(e, action: 'cancelar este convite');
@@ -369,7 +306,7 @@ class _StudentsPageState extends State<StudentsPage>
     );
   }
 
-  void _confirmarRemocao(String alunoId, String email, String nome) {
+  void _confirmarRemocao(String alunoId, String nome) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -388,7 +325,7 @@ class _StudentsPageState extends State<StudentsPage>
             child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
           ),
           TextButton(
-            onPressed: () => _removerAluno(alunoId, email),
+            onPressed: () => _removerAluno(alunoId),
             child: const Text(
               'Desvincular',
               style: TextStyle(
@@ -618,8 +555,7 @@ class _StudentsPageState extends State<StudentsPage>
                             Icons.delete_outline,
                             color: AppColors.error,
                           ),
-                          onPressed: () =>
-                              _confirmarRemocao(doc.id, email, nome),
+                          onPressed: () => _confirmarRemocao(doc.id, nome),
                         ),
                       ],
                     ),
