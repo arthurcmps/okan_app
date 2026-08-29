@@ -1,15 +1,24 @@
 import 'dart:convert';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:http/http.dart' as http;
+
 import '../../../../core/theme/app_colors.dart';
-import '../../data/models/workout_plans_model.dart';
+import '../../../workouts/data/repositories/firebase_workouts_repository.dart';
+import '../../../workouts/domain/entities/workout_exercise.dart';
+import '../../../workouts/domain/repositories/workouts_repository.dart';
 
 class DiscoverWorkoutsPage extends StatefulWidget {
-  const DiscoverWorkoutsPage({super.key});
+  const DiscoverWorkoutsPage({
+    super.key,
+    this.workoutsRepository,
+  });
+
+  final WorkoutsRepository? workoutsRepository;
 
   @override
   State<DiscoverWorkoutsPage> createState() => _DiscoverWorkoutsPageState();
@@ -17,15 +26,17 @@ class DiscoverWorkoutsPage extends StatefulWidget {
 
 class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
   final String currentUserId = FirebaseAuth.instance.currentUser!.uid;
+  late final WorkoutsRepository _workoutsRepository;
   List<String> _userTags = [];
 
-  // Chave Pública do Mercado Pago
   final String _mercadoPagoPublicKey =
-      "TEST-13b66d79-52ea-410d-9efb-57db088806b4";
+      'TEST-13b66d79-52ea-410d-9efb-57db088806b4';
 
   @override
   void initState() {
     super.initState();
+    _workoutsRepository =
+        widget.workoutsRepository ?? FirebaseWorkoutsRepository();
     _analisarPerfilAluno();
   }
 
@@ -37,7 +48,7 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
           .get();
       if (doc.exists) {
         final data = doc.data() as Map<String, dynamic>;
-        List<String> tags = [];
+        final tags = <String>[];
 
         if (data['check_hipertrofia'] == true) tags.add('Hipertrofia');
         if (data['check_emagrecimento'] == true) tags.add('Emagrecimento');
@@ -48,63 +59,65 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
         if (data['check_casa'] == true) tags.add('Casa');
         if (data['check_academia'] == true) tags.add('Academia');
 
-        setState(() {
-          _userTags = tags;
-        });
+        if (!mounted) return;
+        setState(() => _userTags = tags);
       }
     } catch (e) {
-      debugPrint("Erro ao ler anamnese: $e");
+      debugPrint('Erro ao ler anamnese: $e');
     }
   }
 
   int _calcularScoreDeMatch(List<dynamic> templateTags) {
-    int score = 0;
-    for (var tag in templateTags) {
+    var score = 0;
+    for (final tag in templateTags) {
       if (_userTags.contains(tag.toString())) score += 10;
     }
     return score;
   }
 
-  void _processarAquisicao(String templateId, Map<String, dynamic> treinoData) {
-    final double preco = (treinoData['preco'] ?? 0.0).toDouble();
+  void _processarAquisicao(
+    String templateId,
+    Map<String, dynamic> treinoData,
+  ) {
+    final preco = (treinoData['preco'] ?? 0.0).toDouble();
 
     if (preco <= 0) {
       _adquirirTemplateGratuito(templateId);
-    } else {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
-
-      showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: AppColors.background,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        builder: (ctx) => Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(ctx).viewInsets.bottom,
-          ),
-          child: TemplateCheckoutSheet(
-            templateId: templateId,
-            templateNome: treinoData['nome'] ?? 'Treino Premium',
-            preco: preco,
-            publicKey: _mercadoPagoPublicKey,
-            usuarioAtual: user,
-            onSuccess: () {
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("Pagamento aprovado. Treino liberado! 🎉"),
-                    backgroundColor: AppColors.success,
-                  ),
-                );
-              }
-            },
-          ),
-        ),
-      );
+      return;
     }
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.background,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(ctx).viewInsets.bottom,
+        ),
+        child: TemplateCheckoutSheet(
+          templateId: templateId,
+          templateNome: treinoData['nome'] ?? 'Treino Premium',
+          preco: preco,
+          publicKey: _mercadoPagoPublicKey,
+          usuarioAtual: user,
+          onSuccess: () {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Pagamento aprovado. Treino liberado! 🎉'),
+                backgroundColor: AppColors.success,
+              ),
+            );
+          },
+        ),
+      ),
+    );
   }
 
   Future<void> _adquirirTemplateGratuito(String templateId) async {
@@ -117,36 +130,31 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
 
       await callable.call({'productId': 'workout_template:$templateId'});
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Treino adicionado à sua Biblioteca! 🎉"),
-            backgroundColor: AppColors.success,
-          ),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Treino adicionado à sua Biblioteca! 🎉'),
+          backgroundColor: AppColors.success,
+        ),
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Erro ao adquirir treino: $e"),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro ao adquirir treino: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
     }
   }
 
-  // --- NOVA LÓGICA DE DISTRIBUIÇÃO DAS FICHAS NA SEMANA ---
   void _escolherDiasParaOTreino(Map<String, dynamic> treinoData) {
-    // Conversão inteligente para formato de Dicionário (Suporta treinos novos e antigos)
-    Map<String, dynamic> fichasMap = treinoData['fichas'] != null
+    final fichasMap = treinoData['fichas'] != null
         ? Map<String, dynamic>.from(treinoData['fichas'])
-        : {'A': treinoData['exercicios'] ?? []};
+        : <String, dynamic>{'A': treinoData['exercicios'] ?? []};
 
-    List<String> letrasDisponiveis = fichasMap.keys.toList()..sort();
-
-    final List<String> diasSemana = [
+    final letrasDisponiveis = fichasMap.keys.toList()..sort();
+    const diasSemana = <String>[
       'segunda',
       'terca',
       'quarta',
@@ -155,7 +163,7 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
       'sabado',
       'domingo',
     ];
-    final List<String> diasNomes = [
+    const diasNomes = <String>[
       'Segunda',
       'Terça',
       'Quarta',
@@ -165,133 +173,120 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
       'Domingo',
     ];
 
-    // Mapeia qual letra da ficha vai para qual dia da semana
-    Map<String, String?> mapeamentoDias = {
-      'segunda': null,
-      'terca': null,
-      'quarta': null,
-      'quinta': null,
-      'sexta': null,
-      'sabado': null,
-      'domingo': null,
+    final mapeamentoDias = <String, String?>{
+      for (final dia in diasSemana) dia: null,
     };
 
-    showDialog(
+    showDialog<void>(
       context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              backgroundColor: AppColors.surface,
-              title: const Text(
-                "Distribuir na Semana",
-                style: TextStyle(color: Colors.white),
-              ),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "Selecione qual ficha deseja treinar em cada dia:",
-                      style: TextStyle(color: Colors.white70, fontSize: 13),
-                    ),
-                    const SizedBox(height: 16),
-                    ...List.generate(diasSemana.length, (index) {
-                      final diaKey = diasSemana[index];
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              diasNomes[index],
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text(
+            'Distribuir na Semana',
+            style: TextStyle(color: Colors.white),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Selecione qual ficha deseja treinar em cada dia:',
+                  style: TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+                const SizedBox(height: 16),
+                ...List.generate(diasSemana.length, (index) {
+                  final diaKey = diasSemana[index];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          diasNomes[index],
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        DropdownButton<String?>(
+                          value: mapeamentoDias[diaKey],
+                          dropdownColor: AppColors.background,
+                          hint: const Text(
+                            'Descanso',
+                            style: TextStyle(color: Colors.white30),
+                          ),
+                          style: const TextStyle(
+                            color: AppColors.secondary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          underline: Container(),
+                          items: [
+                            const DropdownMenuItem<String?>(
+                              value: null,
+                              child: Text(
+                                'Descanso',
+                                style: TextStyle(color: Colors.white54),
                               ),
                             ),
-                            DropdownButton<String?>(
-                              value: mapeamentoDias[diaKey],
-                              dropdownColor: AppColors.background,
-                              hint: const Text(
-                                "Descanso",
-                                style: TextStyle(color: Colors.white30),
+                            ...letrasDisponiveis.map(
+                              (letra) => DropdownMenuItem<String?>(
+                                value: letra,
+                                child: Text('Ficha $letra'),
                               ),
-                              style: const TextStyle(
-                                color: AppColors.secondary,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              underline: Container(),
-                              items: [
-                                const DropdownMenuItem<String?>(
-                                  value: null,
-                                  child: Text(
-                                    "Descanso",
-                                    style: TextStyle(color: Colors.white54),
-                                  ),
-                                ),
-                                ...letrasDisponiveis.map(
-                                  (letra) => DropdownMenuItem<String?>(
-                                    value: letra,
-                                    child: Text("Ficha $letra"),
-                                  ),
-                                ),
-                              ],
-                              onChanged: (val) {
-                                setDialogState(() {
-                                  mapeamentoDias[diaKey] = val;
-                                });
-                              },
                             ),
                           ],
+                          onChanged: (value) {
+                            setDialogState(
+                              () => mapeamentoDias[diaKey] = value,
+                            );
+                          },
                         ),
-                      );
-                    }),
-                  ],
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Cancelar',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.success,
+              ),
+              onPressed: mapeamentoDias.values.every((value) => value == null)
+                  ? null
+                  : () {
+                      Navigator.pop(context);
+                      _inserirTreinoNaFicha(fichasMap, mapeamentoDias);
+                    },
+              child: const Text(
+                'Aplicar Treino',
+                style: TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text(
-                    "Cancelar",
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.success,
-                  ),
-                  // Bloqueia o botão se o aluno não escolheu nenhum dia
-                  onPressed: mapeamentoDias.values.every((v) => v == null)
-                      ? null
-                      : () {
-                          Navigator.pop(context);
-                          _inserirTreinoNaFicha(fichasMap, mapeamentoDias);
-                        },
-                  child: const Text(
-                    "Aplicar Treino",
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
+            ),
+          ],
+        ),
+      ),
     );
   }
 
-  // Insere os exercícios mapeados no banco de dados do usuário
   Future<void> _inserirTreinoNaFicha(
     Map<String, dynamic> fichasMap,
     Map<String, String?> mapeamentoDias,
   ) async {
-    showDialog(
+    showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (_) => const Center(
@@ -300,50 +295,49 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
     );
 
     try {
-      final docRef = FirebaseFirestore.instance
-          .collection('workout_plans')
-          .doc(currentUserId);
-      final docSnap = await docRef.get();
-      Map<String, dynamic> planoAtual = docSnap.exists ? docSnap.data()! : {};
+      final exercisesByDay = <String, List<WorkoutExercise>>{};
 
-      mapeamentoDias.forEach((diaDaSemana, letraFicha) {
-        if (letraFicha != null && fichasMap.containsKey(letraFicha)) {
-          List exerciciosRaw = fichasMap[letraFicha] ?? [];
-          List<Map<String, dynamic>> exerciciosMapeados = exerciciosRaw.map((
-            e,
-          ) {
-            final ex = WorkoutExercise.fromMap(e as Map<String, dynamic>);
-            ex.id =
-                DateTime.now().microsecondsSinceEpoch.toString() +
-                ex.nome.hashCode.toString();
-            ex.concluido = false;
-            return ex.toMap();
-          }).toList();
-
-          List<dynamic> exerciciosDoDia = planoAtual[diaDaSemana] ?? [];
-          exerciciosDoDia.addAll(exerciciosMapeados);
-          planoAtual[diaDaSemana] = exerciciosDoDia;
+      for (final entry in mapeamentoDias.entries) {
+        final letraFicha = entry.value;
+        if (letraFicha == null || !fichasMap.containsKey(letraFicha)) {
+          continue;
         }
-      });
 
-      await docRef.set(planoAtual, SetOptions(merge: true));
+        final rawExercises = fichasMap[letraFicha] as List<dynamic>? ?? const [];
+        final exercises = rawExercises.whereType<Map>().map((raw) {
+          final exercise = WorkoutExercise.fromMap(
+            Map<String, dynamic>.from(raw),
+          );
+          exercise.id =
+              '${DateTime.now().microsecondsSinceEpoch}${exercise.nome.hashCode}';
+          exercise.concluido = false;
+          return exercise;
+        }).toList(growable: false);
 
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Treino aplicado com sucesso à sua semana! 💪"),
-            backgroundColor: AppColors.primary,
-          ),
-        );
+        if (exercises.isNotEmpty) {
+          exercisesByDay[entry.key] = exercises;
+        }
       }
+
+      await _workoutsRepository.appendWorkoutDays(
+        studentId: currentUserId,
+        exercisesByDay: exercisesByDay,
+      );
+
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Treino aplicado com sucesso à sua semana! 💪'),
+          backgroundColor: AppColors.primary,
+        ),
+      );
     } catch (e) {
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Erro ao aplicar: $e")));
-      }
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao aplicar: $e')),
+      );
     }
   }
 
@@ -353,13 +347,12 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
     int matchScore,
     bool jaAdquirido,
   ) {
-    Map<String, dynamic> fichasMap = treinoData['fichas'] != null
+    final fichasMap = treinoData['fichas'] != null
         ? Map<String, dynamic>.from(treinoData['fichas'])
-        : {'A': treinoData['exercicios'] ?? []};
+        : <String, dynamic>{'A': treinoData['exercicios'] ?? []};
+    final letrasFichas = fichasMap.keys.toList()..sort();
 
-    List<String> letrasFichas = fichasMap.keys.toList()..sort();
-
-    showModalBottomSheet(
+    showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppColors.surface,
       isScrollControlled: true,
@@ -392,7 +385,6 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
               ),
             ),
             const SizedBox(height: 8),
-
             if (matchScore > 0 && !jaAdquirido)
               Container(
                 padding: const EdgeInsets.symmetric(
@@ -405,7 +397,7 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
                   border: Border.all(color: AppColors.primary),
                 ),
                 child: Text(
-                  "🔥 ${matchScore >= 20 ? 'Combinação Perfeita' : 'Recomendado para você'}",
+                  '🔥 ${matchScore >= 20 ? 'Combinação Perfeita' : 'Recomendado para você'}',
                   style: const TextStyle(
                     color: AppColors.primary,
                     fontWeight: FontWeight.bold,
@@ -413,28 +405,26 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
                   ),
                 ),
               ),
-
             const SizedBox(height: 24),
             Text(
-              "Estrutura do Treino (${letrasFichas.length} Fichas):",
+              'Estrutura do Treino (${letrasFichas.length} Fichas):',
               style: const TextStyle(color: Colors.white70, fontSize: 16),
             ),
             const SizedBox(height: 12),
-
             Expanded(
               child: ListView.builder(
                 itemCount: letrasFichas.length,
                 itemBuilder: (context, index) {
-                  String letra = letrasFichas[index];
-                  List exercicios = fichasMap[letra] ?? [];
+                  final letra = letrasFichas[index];
+                  final exercicios = fichasMap[letra] as List<dynamic>? ?? [];
 
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 12.0),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
                         child: Text(
-                          "Ficha $letra",
+                          'Ficha $letra',
                           style: const TextStyle(
                             color: AppColors.secondary,
                             fontWeight: FontWeight.bold,
@@ -442,8 +432,9 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
                           ),
                         ),
                       ),
-                      ...exercicios.map(
-                        (ex) => ListTile(
+                      ...exercicios.whereType<Map>().map((raw) {
+                        final ex = Map<String, dynamic>.from(raw);
+                        return ListTile(
                           contentPadding: EdgeInsets.zero,
                           leading: const Icon(
                             Icons.check_circle,
@@ -451,37 +442,35 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
                             size: 20,
                           ),
                           title: Text(
-                            ex['nome'],
+                            ex['nome']?.toString() ?? '',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 14,
                             ),
                           ),
                           subtitle: Text(
-                            "${ex['series']}x ${ex['repeticoes']}",
+                            '${ex['series']}x ${ex['repeticoes']}',
                             style: const TextStyle(
                               color: Colors.white54,
                               fontSize: 12,
                             ),
                           ),
-                        ),
-                      ),
+                        );
+                      }),
                       const Divider(color: Colors.white10),
                     ],
                   );
                 },
               ),
             ),
-
             const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
               height: 56,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: jaAdquirido
-                      ? AppColors.secondary
-                      : AppColors.primary,
+                  backgroundColor:
+                      jaAdquirido ? AppColors.secondary : AppColors.primary,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
@@ -496,10 +485,10 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
                 },
                 child: Text(
                   jaAdquirido
-                      ? "DISTRIBUIR NA MINHA SEMANA"
+                      ? 'DISTRIBUIR NA MINHA SEMANA'
                       : ((treinoData['preco'] ?? 0) > 0
-                            ? "COMPRAR POR R\$ ${treinoData['preco'].toStringAsFixed(2)}"
-                            : "ADICIONAR GRÁTIS"),
+                            ? 'COMPRAR POR R\$ ${treinoData['preco'].toStringAsFixed(2)}'
+                            : 'ADICIONAR GRÁTIS'),
                   style: TextStyle(
                     color: jaAdquirido ? Colors.white : Colors.black,
                     fontWeight: FontWeight.bold,
@@ -524,7 +513,7 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
           backgroundColor: Colors.transparent,
           elevation: 0,
           title: const Text(
-            "Loja de Treinos",
+            'Loja de Treinos',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
           ),
           bottom: const TabBar(
@@ -533,8 +522,8 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
             unselectedLabelColor: Colors.white54,
             indicatorWeight: 3,
             tabs: [
-              Tab(text: "Explorar Loja", icon: Icon(Icons.storefront)),
-              Tab(text: "Meus Treinos", icon: Icon(Icons.inventory_2_outlined)),
+              Tab(text: 'Explorar Loja', icon: Icon(Icons.storefront)),
+              Tab(text: 'Meus Treinos', icon: Icon(Icons.inventory_2_outlined)),
             ],
           ),
         ),
@@ -544,12 +533,13 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
               .doc(currentUserId)
               .snapshots(),
           builder: (context, userSnapshot) {
-            if (userSnapshot.connectionState == ConnectionState.waiting)
+            if (userSnapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
+            }
 
             final userData =
                 userSnapshot.data?.data() as Map<String, dynamic>? ?? {};
-            final List<String> meusTreinosIds = List<String>.from(
+            final meusTreinosIds = List<String>.from(
               userData['purchased_templates'] ?? [],
             );
 
@@ -560,8 +550,9 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
                   .snapshots(),
               builder: (context, templatesSnapshot) {
                 if (templatesSnapshot.connectionState ==
-                    ConnectionState.waiting)
+                    ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
+                }
 
                 final allTemplates = templatesSnapshot.data?.docs ?? [];
                 final lojaTemplates = allTemplates
@@ -590,23 +581,30 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
       return Center(
         child: Text(
           isLoja
-              ? "Nenhum treino novo disponível no momento."
-              : "Sua biblioteca está vazia.\nAdquira treinos na loja!",
+              ? 'Nenhum treino novo disponível no momento.'
+              : 'Sua biblioteca está vazia.\nAdquira treinos na loja!',
           textAlign: TextAlign.center,
           style: const TextStyle(color: Colors.white54, fontSize: 16),
         ),
       );
     }
 
-    var treinos = docs.map((doc) {
+    final treinos = docs.map((doc) {
       final data = doc.data() as Map<String, dynamic>;
       final tagsDoTreino = data['tags'] as List<dynamic>? ?? [];
       final score = isLoja ? _calcularScoreDeMatch(tagsDoTreino) : 0;
-      return {'docId': doc.id, 'data': data, 'score': score};
+      return <String, dynamic>{
+        'docId': doc.id,
+        'data': data,
+        'score': score,
+      };
     }).toList();
 
-    if (isLoja)
-      treinos.sort((a, b) => (b['score'] as int).compareTo(a['score'] as int));
+    if (isLoja) {
+      treinos.sort(
+        (a, b) => (b['score'] as int).compareTo(a['score'] as int),
+      );
+    }
 
     return ListView.builder(
       padding: const EdgeInsets.all(16),
@@ -617,23 +615,22 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
         final data = treino['data'] as Map<String, dynamic>;
         final score = treino['score'] as int;
         final preco = data['preco'] ?? 0.0;
-
         final fichasMap = data['fichas'] as Map<String, dynamic>?;
         final exerciciosAntigos = data['exercicios'] as List<dynamic>? ?? [];
 
-        int qtdFichas = 0;
+        var qtdFichas = 0;
         if (fichasMap != null) {
           qtdFichas = fichasMap.keys.length;
         } else if (exerciciosAntigos.isNotEmpty) {
           qtdFichas = 1;
         }
 
-        String subtitulo = qtdFichas > 0
-            ? "$qtdFichas Ficha(s)"
-            : "Sem exercícios";
+        final subtitulo =
+            qtdFichas > 0 ? '$qtdFichas Ficha(s)' : 'Sem exercícios';
 
         return GestureDetector(
-          onTap: () => _abrirDetalhesDoTreino(templateId, data, score, !isLoja),
+          onTap: () =>
+              _abrirDetalhesDoTreino(templateId, data, score, !isLoja),
           child: Container(
             margin: const EdgeInsets.only(bottom: 16),
             padding: const EdgeInsets.all(20),
@@ -673,7 +670,7 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: const Text(
-                          "MATCH ALTO",
+                          'MATCH ALTO',
                           style: TextStyle(
                             color: Colors.black,
                             fontWeight: FontWeight.bold,
@@ -693,7 +690,7 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
                           border: Border.all(color: AppColors.secondary),
                         ),
                         child: const Text(
-                          "ADQUIRIDO",
+                          'ADQUIRIDO',
                           style: TextStyle(
                             color: AppColors.secondary,
                             fontWeight: FontWeight.bold,
@@ -703,13 +700,12 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
                       )
                     else
                       const SizedBox.shrink(),
-
                     Text(
                       isLoja
                           ? (preco > 0
-                                ? "R\$ ${preco.toStringAsFixed(2)}"
-                                : "GRÁTIS")
-                          : "PRONTO PARA USO",
+                                ? 'R\$ ${preco.toStringAsFixed(2)}'
+                                : 'GRÁTIS')
+                          : 'PRONTO PARA USO',
                       style: TextStyle(
                         color: isLoja ? AppColors.secondary : Colors.white54,
                         fontWeight: FontWeight.bold,
@@ -741,17 +737,7 @@ class _DiscoverWorkoutsPageState extends State<DiscoverWorkoutsPage> {
   }
 }
 
-// ============================================================================
-// COMPONENTE DE CHECKOUT
-// ============================================================================
 class TemplateCheckoutSheet extends StatefulWidget {
-  final String templateId;
-  final String templateNome;
-  final double preco;
-  final String publicKey;
-  final User usuarioAtual;
-  final VoidCallback onSuccess;
-
   const TemplateCheckoutSheet({
     super.key,
     required this.templateId,
@@ -761,6 +747,13 @@ class TemplateCheckoutSheet extends StatefulWidget {
     required this.usuarioAtual,
     required this.onSuccess,
   });
+
+  final String templateId;
+  final String templateNome;
+  final double preco;
+  final String publicKey;
+  final User usuarioAtual;
+  final VoidCallback onSuccess;
 
   @override
   State<TemplateCheckoutSheet> createState() => _TemplateCheckoutSheetState();
@@ -778,6 +771,16 @@ class _TemplateCheckoutSheetState extends State<TemplateCheckoutSheet> {
   final _nomeCtrl = TextEditingController();
   final _cpfCtrl = TextEditingController();
 
+  @override
+  void dispose() {
+    _numCartaoCtrl.dispose();
+    _validadeCtrl.dispose();
+    _cvvCtrl.dispose();
+    _nomeCtrl.dispose();
+    _cpfCtrl.dispose();
+    super.dispose();
+  }
+
   Future<void> _gerarPix() async {
     setState(() => _isProcessing = true);
     try {
@@ -790,45 +793,46 @@ class _TemplateCheckoutSheetState extends State<TemplateCheckoutSheet> {
         'productId': 'workout_template:${widget.templateId}',
       });
 
+      if (!mounted) return;
       setState(() {
         _qrCodeBase64 = response.data['qr_code_base64'];
         _pixCopiaCola = response.data['qr_code'];
         _isProcessing = false;
       });
     } catch (e) {
-      setState(() => _isProcessing = false);
-      _mostrarErro("Erro ao gerar PIX: $e");
+      if (mounted) setState(() => _isProcessing = false);
+      _mostrarErro('Erro ao gerar PIX: $e');
     }
   }
 
   String _traduzirErroMercadoPago(String code, String fallback) {
     switch (code) {
       case '205':
-        return "Digite o número do seu cartão.";
+        return 'Digite o número do seu cartão.';
       case '208':
       case '209':
-        return "Mês ou ano de validade inválido.";
+        return 'Mês ou ano de validade inválido.';
       case '212':
       case '213':
       case '214':
-        return "Informe seu CPF corretamente.";
+        return 'Informe seu CPF corretamente.';
       case '221':
-        return "Digite o nome igual ao do cartão.";
+        return 'Digite o nome igual ao do cartão.';
       case '224':
-        return "Digite o CVV (código de segurança).";
+        return 'Digite o CVV (código de segurança).';
       case 'E301':
-        return "Número do cartão inválido.";
+        return 'Número do cartão inválido.';
       case 'E302':
-        return "CVV inválido. Verifique o código no verso.";
+        return 'CVV inválido. Verifique o código no verso.';
       case '316':
-        return "Nome do titular inválido.";
+        return 'Nome do titular inválido.';
       case '322':
       case '323':
       case '324':
-        return "CPF inválido. Verifique os números.";
+        return 'CPF inválido. Verifique os números.';
       case '325':
       case '326':
-        return "Data de validade incorreta ou expirada.";
+        return 'Data de validade incorreta ou expirada.';
       default:
         return fallback;
     }
@@ -839,34 +843,35 @@ class _TemplateCheckoutSheetState extends State<TemplateCheckoutSheet> {
         _cvvCtrl.text.isEmpty ||
         _cpfCtrl.text.isEmpty ||
         _validadeCtrl.text.isEmpty) {
-      _mostrarErro("Preencha todos os campos do cartão.");
+      _mostrarErro('Preencha todos os campos do cartão.');
       return;
     }
 
     setState(() => _isProcessing = true);
 
     try {
-      String numCartao = _numCartaoCtrl.text.replaceAll(RegExp(r'[^0-9]'), '');
-      String dataValidade = _validadeCtrl.text.replaceAll(
+      final numCartao = _numCartaoCtrl.text.replaceAll(RegExp(r'[^0-9]'), '');
+      final dataValidade = _validadeCtrl.text.replaceAll(
         RegExp(r'[^0-9]'),
         '',
       );
 
-      if (dataValidade.length < 4)
-        throw Exception("A validade do cartão deve ter o formato MM/AA.");
+      if (dataValidade.length < 4) {
+        throw Exception('A validade do cartão deve ter o formato MM/AA.');
+      }
 
       final mes = dataValidade.substring(0, 2);
       final anoRaw = dataValidade.substring(2);
-      final ano = anoRaw.length == 2 ? "20$anoRaw" : anoRaw;
+      final ano = anoRaw.length == 2 ? '20$anoRaw' : anoRaw;
 
-      // Descobre a bandeira automaticamente pelo primeiro dígito para não forçar "master"
-      String metodoPagamentoStr = 'master';
-      if (numCartao.startsWith('4'))
+      var metodoPagamentoStr = 'master';
+      if (numCartao.startsWith('4')) {
         metodoPagamentoStr = 'visa';
-      else if (numCartao.startsWith('3'))
+      } else if (numCartao.startsWith('3')) {
         metodoPagamentoStr = 'amex';
-      else if (numCartao.startsWith('6'))
+      } else if (numCartao.startsWith('6')) {
         metodoPagamentoStr = 'elo';
+      }
 
       await FirebaseAuth.instance.currentUser?.getIdToken(true);
 
@@ -877,26 +882,25 @@ class _TemplateCheckoutSheetState extends State<TemplateCheckoutSheet> {
         url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          "card_number": numCartao,
-          "expiration_month": int.parse(mes),
-          "expiration_year": int.parse(ano),
-          "security_code": _cvvCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''),
-          "cardholder": {
-            "name": _nomeCtrl.text,
-            "identification": {
-              "type": "CPF",
-              "number": _cpfCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''),
+          'card_number': numCartao,
+          'expiration_month': int.parse(mes),
+          'expiration_year': int.parse(ano),
+          'security_code': _cvvCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''),
+          'cardholder': {
+            'name': _nomeCtrl.text,
+            'identification': {
+              'type': 'CPF',
+              'number': _cpfCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''),
             },
           },
         }),
       );
 
       final tokenData = jsonDecode(mpResponse.body);
-
       if (tokenData['id'] == null) {
-        String msgErro = 'Dados inválidos. Verifique as informações.';
+        var msgErro = 'Dados inválidos. Verifique as informações.';
         if (tokenData['cause'] != null && tokenData['cause'].isNotEmpty) {
-          String causeCode = tokenData['cause'][0]['code'].toString();
+          final causeCode = tokenData['cause'][0]['code'].toString();
           msgErro = _traduzirErroMercadoPago(
             causeCode,
             tokenData['cause'][0]['description'],
@@ -907,8 +911,7 @@ class _TemplateCheckoutSheetState extends State<TemplateCheckoutSheet> {
         throw Exception(msgErro);
       }
 
-      final String cardToken = tokenData['id'];
-
+      final cardToken = tokenData['id'] as String;
       final callable = FirebaseFunctions.instanceFor(
         region: 'us-central1',
       ).httpsCallable('criarPagamentoCartao');
@@ -929,8 +932,7 @@ class _TemplateCheckoutSheetState extends State<TemplateCheckoutSheet> {
         }
       } else if (result.data['status'] == 'in_process') {
         throw Exception(
-          "Pagamento em análise. "
-          "O treino será liberado somente após a aprovação.",
+          'Pagamento em análise. O treino será liberado somente após a aprovação.',
         );
       } else {
         throw Exception(result.data['status_detail']);
@@ -943,6 +945,7 @@ class _TemplateCheckoutSheetState extends State<TemplateCheckoutSheet> {
   }
 
   void _mostrarErro(String msg) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg.replaceAll('Exception:', '').trim()),
@@ -960,7 +963,7 @@ class _TemplateCheckoutSheetState extends State<TemplateCheckoutSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text(
-            "Comprar Treino",
+            'Comprar Treino',
             style: TextStyle(
               color: Colors.white,
               fontSize: 20,
@@ -969,55 +972,49 @@ class _TemplateCheckoutSheetState extends State<TemplateCheckoutSheet> {
           ),
           const SizedBox(height: 8),
           Text(
-            "${widget.templateNome} - R\$ ${widget.preco.toStringAsFixed(2)}",
+            '${widget.templateNome} - R\$ ${widget.preco.toStringAsFixed(2)}',
             style: const TextStyle(color: AppColors.primary, fontSize: 16),
           ),
           const SizedBox(height: 20),
-
           Row(
             children: [
               Expanded(
                 child: ChoiceChip(
-                  label: const Text("Pagar com PIX"),
+                  label: const Text('Pagar com PIX'),
                   selected: _metodoSelecionado == 0,
-                  onSelected: (val) => setState(() {
+                  onSelected: (value) => setState(() {
                     _metodoSelecionado = 0;
                     _qrCodeBase64 = null;
                   }),
                   selectedColor: AppColors.primary,
                   labelStyle: TextStyle(
-                    color: _metodoSelecionado == 0
-                        ? Colors.black
-                        : Colors.white,
+                    color:
+                        _metodoSelecionado == 0 ? Colors.black : Colors.white,
                   ),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: ChoiceChip(
-                  label: const Text("Cartão de Crédito"),
+                  label: const Text('Cartão de Crédito'),
                   selected: _metodoSelecionado == 1,
-                  onSelected: (val) => setState(() {
+                  onSelected: (value) => setState(() {
                     _metodoSelecionado = 1;
                     _qrCodeBase64 = null;
                   }),
                   selectedColor: AppColors.primary,
                   labelStyle: TextStyle(
-                    color: _metodoSelecionado == 1
-                        ? Colors.black
-                        : Colors.white,
+                    color:
+                        _metodoSelecionado == 1 ? Colors.black : Colors.white,
                   ),
                 ),
               ),
             ],
           ),
-
           const SizedBox(height: 24),
-
           Expanded(
-            child: _metodoSelecionado == 0
-                ? _buildPixView()
-                : _buildCartaoView(),
+            child:
+                _metodoSelecionado == 0 ? _buildPixView() : _buildCartaoView(),
           ),
         ],
       ),
@@ -1029,7 +1026,7 @@ class _TemplateCheckoutSheetState extends State<TemplateCheckoutSheet> {
       return Column(
         children: [
           const Text(
-            "Escaneie o QR Code abaixo:",
+            'Escaneie o QR Code abaixo:',
             style: TextStyle(color: Colors.white),
           ),
           const SizedBox(height: 16),
@@ -1047,7 +1044,7 @@ class _TemplateCheckoutSheetState extends State<TemplateCheckoutSheet> {
           ),
           const SizedBox(height: 24),
           const Text(
-            "Ou copie o código PIX:",
+            'Ou copie o código PIX:',
             style: TextStyle(color: Colors.white70),
           ),
           const SizedBox(height: 8),
@@ -1064,7 +1061,7 @@ class _TemplateCheckoutSheetState extends State<TemplateCheckoutSheet> {
           ),
           const Spacer(),
           const Text(
-            "Aguardando pagamento... O seu treino será liberado automaticamente assim que o banco confirmar.",
+            'Aguardando pagamento... O seu treino será liberado automaticamente assim que o banco confirmar.',
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.white54, fontSize: 12),
           ),
@@ -1085,7 +1082,7 @@ class _TemplateCheckoutSheetState extends State<TemplateCheckoutSheet> {
               ),
               icon: const Icon(Icons.qr_code, color: Colors.black),
               label: const Text(
-                "GERAR CÓDIGO PIX",
+                'GERAR CÓDIGO PIX',
                 style: TextStyle(
                   color: Colors.black,
                   fontWeight: FontWeight.bold,
@@ -1101,7 +1098,7 @@ class _TemplateCheckoutSheetState extends State<TemplateCheckoutSheet> {
       children: [
         _buildTextField(
           _numCartaoCtrl,
-          "Número do Cartão",
+          'Número do Cartão',
           Icons.credit_card,
           TextInputType.number,
           formatters: [CardInputFormatter()],
@@ -1112,7 +1109,7 @@ class _TemplateCheckoutSheetState extends State<TemplateCheckoutSheet> {
             Expanded(
               child: _buildTextField(
                 _validadeCtrl,
-                "Validade (MM/AA)",
+                'Validade (MM/AA)',
                 Icons.date_range,
                 TextInputType.number,
                 formatters: [DateInputFormatter()],
@@ -1122,7 +1119,7 @@ class _TemplateCheckoutSheetState extends State<TemplateCheckoutSheet> {
             Expanded(
               child: _buildTextField(
                 _cvvCtrl,
-                "CVV",
+                'CVV',
                 Icons.security,
                 TextInputType.number,
                 formatters: [
@@ -1136,19 +1133,18 @@ class _TemplateCheckoutSheetState extends State<TemplateCheckoutSheet> {
         const SizedBox(height: 12),
         _buildTextField(
           _nomeCtrl,
-          "Nome impresso no cartão",
+          'Nome impresso no cartão',
           Icons.person,
           TextInputType.name,
         ),
         const SizedBox(height: 12),
         _buildTextField(
           _cpfCtrl,
-          "CPF do Titular",
+          'CPF do Titular',
           Icons.badge,
           TextInputType.number,
           formatters: [CpfInputFormatter()],
         ),
-
         const SizedBox(height: 30),
         SizedBox(
           height: 50,
@@ -1163,7 +1159,7 @@ class _TemplateCheckoutSheetState extends State<TemplateCheckoutSheet> {
             child: _isProcessing
                 ? const CircularProgressIndicator(color: Colors.black)
                 : const Text(
-                    "CONFIRMAR PAGAMENTO",
+                    'CONFIRMAR PAGAMENTO',
                     style: TextStyle(
                       color: Colors.black,
                       fontWeight: FontWeight.bold,
@@ -1211,7 +1207,7 @@ class DateInputFormatter extends TextInputFormatter {
     var text = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
     if (text.length > 4) text = text.substring(0, 4);
     var formatted = '';
-    for (int i = 0; i < text.length; i++) {
+    for (var i = 0; i < text.length; i++) {
       formatted += text[i];
       if (i == 1 && text.length > 2) formatted += '/';
     }
@@ -1231,7 +1227,7 @@ class CardInputFormatter extends TextInputFormatter {
     var text = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
     if (text.length > 16) text = text.substring(0, 16);
     var formatted = '';
-    for (int i = 0; i < text.length; i++) {
+    for (var i = 0; i < text.length; i++) {
       if (i > 0 && i % 4 == 0) formatted += ' ';
       formatted += text[i];
     }
@@ -1251,7 +1247,7 @@ class CpfInputFormatter extends TextInputFormatter {
     var text = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
     if (text.length > 11) text = text.substring(0, 11);
     var formatted = '';
-    for (int i = 0; i < text.length; i++) {
+    for (var i = 0; i < text.length; i++) {
       if (i == 3 || i == 6) formatted += '.';
       if (i == 9) formatted += '-';
       formatted += text[i];
