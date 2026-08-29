@@ -73,7 +73,7 @@ void main() {
 
   test('mixed pages delegate workout persistence to WorkoutsRepository', () {
     final discover = File(
-      'lib/features/auth/presentation/pages/discover_workouts_page.dart',
+      'lib/features/store/presentation/pages/discover_workouts_page.dart',
     ).readAsStringSync();
     expect(discover, contains('WorkoutsRepository'));
     expect(discover, contains('appendWorkoutDays'));
