@@ -44,8 +44,9 @@ class OkanEnvironmentConfig {
         if (normalizedHost.isEmpty) {
           throw StateError(
             'OKAN_ENV=dev exige OKAN_EMULATOR_HOST. '
-            'Use 10.0.2.2 no Android Emulator, 127.0.0.1 no desktop/web '
-            'ou o IP LAN do computador para um aparelho físico.',
+            'Use 10.0.2.2 no Android Emulator ou 127.0.0.1 no desktop/web. '
+            'Em aparelho Android físico, use adb reverse nas portas dos '
+            'emuladores e mantenha OKAN_EMULATOR_HOST=127.0.0.1.',
           );
         }
         return OkanEnvironmentConfig._(
