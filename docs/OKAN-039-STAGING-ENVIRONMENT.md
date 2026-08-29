@@ -2,15 +2,25 @@
 
 ## 1. Problema
 
-Após o OKAN-038, o Okan possui produção e desenvolvimento local separados, mas `staging` ainda não possui configuração própria. Sem um contrato explícito, um build de homologação poderia cair no Firebase de produção.
+Após o OKAN-038, o Okan possui produção e desenvolvimento local separados, mas staging precisava de um Firebase cloud próprio e de um contrato que impedisse qualquer fallback para produção.
 
-## 2. Risco atual
+## 2. Projeto staging oficial
 
-- build de homologação autenticando em produção;
-- Firestore/Storage de produção recebendo dados de teste;
-- Functions de produção sendo chamadas durante QA;
-- FCM em background reinicializando o projeto de produção;
-- pagamentos externos reais sendo disparados em um ambiente não produtivo.
+O projeto Firebase staging foi criado com o ID:
+
+```text
+okan-staging
+```
+
+Esse é o único project ID aceito pelo contrato `OKAN_ENV=staging`.
+
+Produção e desenvolvimento continuam separados:
+
+```text
+PROD    app-academia-2914d
+STAGING okan-staging
+DEV     demo-okan-dev
+```
 
 ## 3. Comportamento preservado
 
@@ -20,31 +30,22 @@ Após o OKAN-038, o Okan possui produção e desenvolvimento local separados, ma
 - nenhum schema, Rule ou dado é alterado;
 - não existe deploy automático para staging.
 
-## 4. Novo comportamento
-
-Ambientes válidos:
-
-```text
-prod
-staging
-dev
-```
+## 4. Contrato staging
 
 `staging`:
 
 - usa Firebase cloud, não Emulator Suite;
 - exige configuração Firebase explícita por `--dart-define`;
-- rejeita o project ID de produção;
-- rejeita `demo-okan-dev` e qualquer project ID `demo-*`;
+- aceita somente `OKAN_STAGING_FIREBASE_PROJECT_ID=okan-staging`;
 - habilita App Check;
-- habilita push/FCM para permitir homologação próxima de produção;
+- habilita push/FCM para homologação próxima de produção;
 - mantém pagamentos externos desativados;
 - exibe banner `STAGING`;
 - usa título `Okan App [STAGING]`.
 
 ## 5. Configuração Firebase obrigatória
 
-Nenhum project ID de staging é inventado ou versionado antes do provisionamento real. O build exige:
+O build exige:
 
 ```text
 OKAN_STAGING_FIREBASE_PROJECT_ID
@@ -60,16 +61,16 @@ OKAN_STAGING_FIREBASE_IOS_APP_ID
 OKAN_STAGING_FIREBASE_IOS_BUNDLE_ID
 ```
 
-A configuração Firebase de cliente não é tratada como segredo, mas continua fora do código para impedir mistura acidental entre ambientes.
+A configuração Firebase de cliente não é tratada como segredo, mas permanece fora do código para impedir mistura acidental entre ambientes.
 
 ## 6. Execução
 
-Depois que o projeto Firebase staging existir e os apps Web/Android/iOS forem registrados:
+Depois de registrar os apps Web/Android/iOS no projeto `okan-staging`:
 
 ```powershell
 flutter run `
   --dart-define=OKAN_ENV=staging `
-  --dart-define=OKAN_STAGING_FIREBASE_PROJECT_ID=<staging-project-id> `
+  --dart-define=OKAN_STAGING_FIREBASE_PROJECT_ID=okan-staging `
   --dart-define=OKAN_STAGING_FIREBASE_MESSAGING_SENDER_ID=<sender-id> `
   --dart-define=OKAN_STAGING_FIREBASE_STORAGE_BUCKET=<bucket> `
   --dart-define=OKAN_STAGING_FIREBASE_WEB_API_KEY=<web-api-key> `
@@ -79,12 +80,12 @@ flutter run `
   --dart-define=OKAN_STAGING_FIREBASE_ANDROID_APP_ID=<android-app-id> `
   --dart-define=OKAN_STAGING_FIREBASE_IOS_API_KEY=<ios-api-key> `
   --dart-define=OKAN_STAGING_FIREBASE_IOS_APP_ID=<ios-app-id> `
-  --dart-define=OKAN_STAGING_FIREBASE_IOS_BUNDLE_ID=<ios-bundle-id>
+  --dart-define=OKAN_STAGING_FIREBASE_IOS_BUNDLE_ID=com.sankofa.okan
 ```
 
 ## 7. Bootstrap foreground/background
 
-O handler de Firebase Messaging em background não usa mais `DefaultFirebaseOptions` diretamente. Ele resolve `OkanEnvironmentConfig.current` e chama `FirebaseEnvironmentService.initialize(environment)`, assim como o bootstrap principal.
+O handler de Firebase Messaging em background resolve `OkanEnvironmentConfig.current` e chama `FirebaseEnvironmentService.initialize(environment)`, assim como o bootstrap principal.
 
 Isso impede que um build staging reconecte ao Firebase de produção ao receber uma notificação em background.
 
@@ -92,26 +93,25 @@ Isso impede que um build staging reconecte ao Firebase de produção ao receber 
 
 `enableExternalPayments` é verdadeiro somente em produção.
 
-Portanto, staging preserva as guards já existentes antes de:
+Portanto, staging preserva as guards antes de:
 
 - `api.mercadopago.com`;
 - `criarPagamentoPix`;
 - `criarPagamentoCartao`;
 - fluxo de assinatura externa.
 
-A mensagem continua:
+A mensagem legada ainda menciona DEV; a redação é dívida de nomenclatura, não uma falha do bloqueio.
+
+## 9. Android e iOS
+
+Identificadores oficiais atuais do app:
 
 ```text
-Pagamentos externos estão desativados no ambiente DEV.
+Android applicationId: com.sankofa.okan
+iOS bundle identifier: com.sankofa.okan
 ```
 
-A redação dessa mensagem é dívida de nomenclatura; o comportamento de bloqueio é o critério de segurança deste ticket.
-
-## 9. Android
-
-O OKAN-039 mantém o comportamento do OKAN-038: em debug, `FirebaseInitProvider` nativo é removido e o Dart controla o Firebase `[DEFAULT]`.
-
-Enquanto o projeto staging real não estiver provisionado, a validação integrada será feita em debug. Um artefato release staging deve ser validado após registrar o app Android staging e seu App Check no projeto correspondente.
+Em Android debug, `FirebaseInitProvider` nativo permanece removido e o Dart controla o Firebase `[DEFAULT]`. O primeiro teste cloud staging deve ser feito em debug antes de qualquer artefato release staging.
 
 ## 10. Migração de dados
 
@@ -119,15 +119,7 @@ Não.
 
 Staging deve começar vazio. Não existe cópia automática de dados de produção.
 
-## 11. Arquivos alterados
-
-- `lib/core/config/app_environment.dart`;
-- `lib/core/services/firebase_environment_service.dart`;
-- `lib/main.dart`;
-- testes de ambiente/arquitetura;
-- esta documentação.
-
-## 12. Testes locais
+## 11. Testes locais
 
 ```powershell
 flutter analyze --no-fatal-infos --no-fatal-warnings
@@ -135,30 +127,27 @@ flutter test test/core/config/app_environment_test.dart test/core/services/fireb
 flutter test
 ```
 
-## 13. Risco de produção
+## 12. Risco de produção
 
 Baixo.
 
-Produção continua default e staging falha fechado se qualquer valor Firebase obrigatório estiver ausente ou se o project ID coincidir com produção/dev/demo.
+Produção continua default e staging falha fechado se qualquer valor Firebase obrigatório estiver ausente ou se o project ID for diferente de `okan-staging`.
 
-## 14. Rollback
-
-Reverter o merge do OKAN-039. Não existe rollback de dados porque o ticket não migra nem escreve dados automaticamente.
-
-## 15. Critérios de aceite
+## 13. Critérios de aceite
 
 - [x] staging é ambiente reconhecido;
 - [x] staging não usa emuladores;
 - [x] staging exige Firebase config explícita;
-- [x] staging rejeita `app-academia-2914d`;
-- [x] staging rejeita `demo-okan-dev` e `demo-*`;
+- [x] project ID oficial fixado em `okan-staging`;
 - [x] staging mostra banner próprio;
 - [x] App Check e push permanecem habilitados em staging;
 - [x] pagamentos externos ficam bloqueados em staging;
 - [x] bootstrap FCM background respeita o ambiente;
 - [x] produção permanece default;
 - [x] dev permanece Emulator Suite;
-- [ ] projeto Firebase staging real provisionado;
+- [x] projeto Firebase staging criado;
+- [ ] apps Firebase Web/Android/iOS registrados;
+- [ ] Auth/Firestore/Storage/Functions provisionados;
 - [ ] App Check staging configurado;
 - [ ] validação integrada cloud staging concluída;
 - [ ] Flutter CI verde no HEAD final;
