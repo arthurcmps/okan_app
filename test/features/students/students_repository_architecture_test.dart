@@ -8,6 +8,7 @@ void main() {
       'lib/features/students/domain/entities/pending_student_invite.dart',
       'lib/features/students/domain/entities/student_invite_creation_result.dart',
       'lib/features/students/domain/entities/student_profile.dart',
+      'lib/features/students/domain/entities/student_relationship_exception.dart',
       'lib/features/students/domain/entities/student_summary.dart',
       'lib/features/students/domain/repositories/students_repository.dart',
     ];
@@ -36,6 +37,7 @@ void main() {
       expect(source, isNot(contains("collection('invites')")));
       expect(source, isNot(contains('FieldValue')));
       expect(source, isNot(contains('Timestamp')));
+      expect(source, isNot(contains('auth/data/services')));
     }
 
     final detailSource = File(
@@ -43,6 +45,11 @@ void main() {
     ).readAsStringSync();
     expect(detailSource, contains('watchStudentProfile'));
     expect(detailSource, contains('unlinkStudent'));
+
+    final studentsSource = File(
+      'lib/features/students/presentation/pages/students_page.dart',
+    ).readAsStringSync();
+    expect(studentsSource, contains('StudentRelationshipException'));
   });
 
   test('caminhos antigos de Students sao exports de compatibilidade', () {
@@ -74,5 +81,6 @@ void main() {
     expect(source, contains('ProfessionalRelationshipsService'));
     expect(source, contains('watchStudentProfile'));
     expect(source, contains('Timestamp'));
+    expect(source, contains('StudentRelationshipException'));
   });
 }
