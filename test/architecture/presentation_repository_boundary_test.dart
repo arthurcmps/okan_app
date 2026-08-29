@@ -3,11 +3,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 const _legacyInfrastructureExceptions = <String, String>{
-  'lib/features/auth/presentation/pages/anamnese_tab.dart': 'OKAN-033',
   'lib/features/auth/presentation/pages/arena_page.dart': 'OKAN-034',
-  'lib/features/auth/presentation/pages/assessments_tab.dart': 'OKAN-033',
   'lib/features/auth/presentation/pages/discover_workouts_page.dart': 'OKAN-034',
-  'lib/features/auth/presentation/pages/evolution_charts_page.dart': 'OKAN-033',
   'lib/features/auth/presentation/pages/home_page.dart':
       'Fase 6 - composicao das features',
   'lib/features/auth/presentation/pages/library_admin_page.dart': 'OKAN-034',
@@ -81,6 +78,14 @@ void main() {
           'StudentsRepository',
       'lib/features/students/presentation/pages/student_detail_page.dart':
           'StudentsRepository',
+      'lib/features/assessments/presentation/pages/anamnese_tab.dart':
+          'AssessmentsRepository',
+      'lib/features/assessments/presentation/pages/assessments_tab.dart':
+          'AssessmentsRepository',
+      'lib/features/assessments/presentation/pages/evolution_charts_page.dart':
+          'AssessmentsRepository',
+      'lib/features/assessments/presentation/widgets/professor_notes_widget.dart':
+          'AssessmentsRepository',
       'lib/features/auth/presentation/pages/chat_page.dart':
           'ChatRepository',
       'lib/features/auth/presentation/pages/notifications_page.dart':

@@ -80,7 +80,7 @@ void main() {
     expect(discover, isNot(contains("collection('workout_plans')")));
 
     final evolution = File(
-      'lib/features/auth/presentation/pages/evolution_charts_page.dart',
+      'lib/features/assessments/presentation/pages/evolution_charts_page.dart',
     ).readAsStringSync();
     expect(evolution, contains('WorkoutsRepository'));
     expect(evolution, contains('watchWorkoutHistory'));
