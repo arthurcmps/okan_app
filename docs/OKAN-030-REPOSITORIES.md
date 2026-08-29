@@ -105,6 +105,7 @@ O teste `presentation_repository_boundary_test.dart` mantém apenas arquivos nom
 | `register_page.dart` | follow-up Auth |
 | `student_detail_page.dart` | OKAN-032 |
 | `super_admin_page.dart` | OKAN-034 |
+| `train_page.dart` | OKAN-031 |
 | `weekly_plan_page.dart` | OKAN-031 |
 | `workout_history_page.dart` | OKAN-031 |
 
@@ -176,6 +177,14 @@ O projeto possui dívida técnica legada de lint/depreciações. O gate do OKAN-
 - única falha: o gate encontrou `anamnese_tab.dart`, uma dependência já existente e pertencente ao OKAN-033;
 - a suíte completa não foi executada porque o script interrompe corretamente após a falha dos testes focados;
 - correção: o teste passou a usar baseline incremental explícito e a acumular todas as violações inesperadas antes de falhar.
+
+### Terceira rodada
+
+- working tree limpo e branch sincronizada;
+- o gate arquitetural executou e encontrou apenas `train_page.dart` fora do baseline;
+- `train_page.dart` já existia na `main` com leitura/escrita direta em `workout_plans` e `workout_history`;
+- a suíte focada e a suíte completa não executaram porque o script interrompe corretamente quando o gate falha;
+- correção: `train_page.dart` foi adicionado nominalmente ao baseline do OKAN-031.
 
 ## Firebase Emulator
 
