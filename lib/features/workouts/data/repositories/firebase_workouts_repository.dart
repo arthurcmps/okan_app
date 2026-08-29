@@ -147,6 +147,32 @@ class FirebaseWorkoutsRepository implements WorkoutsRepository {
   }
 
   @override
+  Future<void> appendWorkoutDays({
+    required String studentId,
+    required Map<String, List<WorkoutExercise>> exercisesByDay,
+  }) async {
+    if (exercisesByDay.isEmpty) return;
+
+    final planRef = _firestore.collection('workout_plans').doc(studentId);
+
+    await _firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(planRef);
+      final current = snapshot.data() ?? <String, dynamic>{};
+      final payload = <String, dynamic>{};
+
+      for (final entry in exercisesByDay.entries) {
+        final existing = _exercisesFrom(current[entry.key]);
+        payload[entry.key] = <Map<String, dynamic>>[
+          ...existing.map((exercise) => exercise.toMap()),
+          ...entry.value.map((exercise) => exercise.toMap()),
+        ];
+      }
+
+      transaction.set(planRef, payload, SetOptions(merge: true));
+    });
+  }
+
+  @override
   Future<void> saveWorkoutFeedback({
     required String studentId,
     required String dayKey,
