@@ -45,6 +45,12 @@ const AndroidNotificationChannel channel = AndroidNotificationChannel(
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 
+void _bootstrapLog(String message) {
+  if (kDebugMode) {
+    debugPrint('[OKAN BOOT] $message');
+  }
+}
+
 // =======================================================
 // FUNÇÃO MAIN
 // =======================================================
@@ -54,11 +60,18 @@ void main() async {
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
   try {
+    _bootstrapLog('resolving environment');
     final environment = OkanEnvironmentConfig.current;
+    _bootstrapLog(
+      'environment=${environment.label} host=${environment.emulatorHost ?? '-'}',
+    );
 
+    _bootstrapLog('initializing Firebase environment');
     await FirebaseEnvironmentService.initialize(environment);
+    _bootstrapLog('Firebase environment ready');
 
     if (environment.enableAppCheck) {
+      _bootstrapLog('activating App Check');
       await FirebaseAppCheck.instance.activate(
         androidProvider: kReleaseMode
             ? AndroidProvider.playIntegrity
@@ -67,13 +80,18 @@ void main() async {
             ? AppleProvider.deviceCheck
             : AppleProvider.debug,
       );
+      _bootstrapLog('App Check ready');
+    } else {
+      _bootstrapLog('App Check disabled for this environment');
     }
 
-    // Verificação do Onboarding
+    _bootstrapLog('loading SharedPreferences');
     final prefs = await SharedPreferences.getInstance();
     final bool showOnboarding = prefs.getBool('showOnboarding') ?? true;
+    _bootstrapLog('SharedPreferences ready; showOnboarding=$showOnboarding');
 
     if (environment.enablePushNotifications) {
+      _bootstrapLog('initializing push notifications');
       FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
       await flutterLocalNotificationsPlugin
@@ -85,10 +103,16 @@ void main() async {
       final pushService = PushNotificationService();
       await pushService.initialize();
       pushService.setupInteractions(navigatorKey);
+      _bootstrapLog('push notifications ready');
+    } else {
+      _bootstrapLog('push notifications disabled for this environment');
     }
 
+    _bootstrapLog('initializing pt_BR date formatting');
     await initializeDateFormatting('pt_BR', null);
+    _bootstrapLog('date formatting ready');
 
+    _bootstrapLog('starting Flutter UI');
     runApp(
       MultiProvider(
         providers: [
@@ -102,7 +126,13 @@ void main() async {
         ),
       ),
     );
+    _bootstrapLog('Flutter UI started');
   } catch (e, stackTrace) {
+    debugPrint('[OKAN BOOT][FATAL] $e');
+    debugPrintStack(
+      label: '[OKAN BOOT][STACK]',
+      stackTrace: stackTrace,
+    );
     runApp(AppErrorScreen(error: e, stackTrace: stackTrace));
   }
 }
