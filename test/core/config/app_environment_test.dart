@@ -1,7 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:okan_app/core/config/app_environment.dart';
 
-OkanFirebaseConfig _stagingConfig({String projectId = 'okan-staging-test'}) {
+OkanFirebaseConfig _stagingConfig({
+  String projectId = stagingFirebaseProjectId,
+}) {
   return OkanFirebaseConfig(
     projectId: projectId,
     messagingSenderId: '123456789012',
@@ -13,7 +15,7 @@ OkanFirebaseConfig _stagingConfig({String projectId = 'okan-staging-test'}) {
     androidAppId: '1:123456789012:android:staging',
     iosApiKey: 'ios-api-key',
     iosAppId: '1:123456789012:ios:staging',
-    iosBundleId: 'com.sankofa.okan.staging',
+    iosBundleId: 'com.sankofa.okan',
   );
 }
 
@@ -85,26 +87,18 @@ void main() {
       expect(config.showEnvironmentBanner, isTrue);
       expect(config.emulatorHost, isNull);
       expect(config.firebaseConfig, same(stagingFirebase));
+      expect(config.firebaseConfig!.projectId, stagingFirebaseProjectId);
       expect(config.label, 'STAGING');
       expect(config.appTitle, 'Okan App [STAGING]');
     });
 
-    test('staging rejects the production Firebase project', () {
-      expect(
-        () => OkanEnvironmentConfig.fromValues(
-          environment: 'staging',
-          stagingFirebaseConfig: _stagingConfig(
-            projectId: productionFirebaseProjectId,
-          ),
-        ),
-        throwsStateError,
-      );
-    });
-
-    test('staging rejects dev and demo Firebase projects', () {
+    test('staging rejects any Firebase project other than official staging', () {
       for (final projectId in [
+        productionFirebaseProjectId,
         developmentFirebaseProjectId,
         'demo-other-project',
+        'okan-staging-test',
+        'another-cloud-project',
       ]) {
         expect(
           () => OkanEnvironmentConfig.fromValues(
