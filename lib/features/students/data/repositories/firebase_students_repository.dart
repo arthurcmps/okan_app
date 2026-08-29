@@ -4,6 +4,7 @@ import '../../../auth/data/models/user_model.dart';
 import '../../../auth/data/services/professional_relationships_service.dart';
 import '../../domain/entities/pending_student_invite.dart';
 import '../../domain/entities/student_invite_creation_result.dart';
+import '../../domain/entities/student_profile.dart';
 import '../../domain/entities/student_summary.dart';
 import '../../domain/repositories/students_repository.dart';
 
@@ -53,6 +54,23 @@ class FirebaseStudentsRepository implements StudentsRepository {
               .map(_toStudentSummary)
               .toList(growable: false),
         );
+  }
+
+  @override
+  Stream<StudentProfile?> watchStudentProfile(String studentId) {
+    return _firestore.collection('users').doc(studentId).snapshots().map(
+      (snapshot) {
+        if (!snapshot.exists) return null;
+
+        final data = snapshot.data() ?? const <String, dynamic>{};
+
+        return StudentProfile(
+          photoUrl: _nullableString(data['photoUrl']),
+          birthDate: _dateFrom(data['birthDate']) ?? _dateFrom(data['dataNascimento']),
+          gender: _stringOrFallback(data['gender'], 'Não informado'),
+        );
+      },
+    );
   }
 
   @override
@@ -133,10 +151,20 @@ class FirebaseStudentsRepository implements StudentsRepository {
     );
   }
 
-  static String _stringOrFallback(dynamic value, String fallback) {
-    if (value is! String) return fallback;
+  static DateTime? _dateFrom(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    return null;
+  }
+
+  static String? _nullableString(dynamic value) {
+    if (value is! String) return null;
 
     final normalized = value.trim();
-    return normalized.isEmpty ? fallback : normalized;
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  static String _stringOrFallback(dynamic value, String fallback) {
+    return _nullableString(value) ?? fallback;
   }
 }
