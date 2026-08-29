@@ -2,17 +2,17 @@
 
 ## 1. Problema
 
-A feature de treinos ainda está fisicamente misturada dentro de `features/auth` e várias telas conhecem diretamente coleções, snapshots, `Timestamp` e `FieldValue` do Firestore.
+A feature de treinos ainda estava fisicamente misturada dentro de `features/auth` e várias telas conheciam diretamente coleções, snapshots, `Timestamp` e `FieldValue` do Firestore.
 
-Isso impede que Workouts tenha uma fronteira de domínio própria e faz mudanças no schema ou no fluxo de execução atingirem apresentação e persistência ao mesmo tempo.
+Isso impedia Workouts de ter uma fronteira de domínio própria e fazia mudanças no schema ou no fluxo de execução atingirem apresentação e persistência ao mesmo tempo.
 
-## 2. Risco atual
+## 2. Risco tratado
 
-- `create_workout_page.dart`, `manage_workouts_page.dart`, `train_page.dart`, `weekly_plan_page.dart`, `workout_history_page.dart` e partes de outras telas acessam Firebase diretamente;
-- `WorkoutHistory` dependia de `Timestamp`;
-- modelos de treino permaneciam dentro da feature Auth;
-- CRUD, execução e histórico duplicavam conhecimento dos caminhos Firestore;
-- a separação posterior de Students, Assessments e Store ficava acoplada a Workouts.
+- telas de criação, gestão, execução, ficha semanal e histórico acopladas ao Firestore;
+- `WorkoutHistory` dependente de `Timestamp`;
+- modelos de treino dentro da feature Auth;
+- CRUD, execução, feedback, templates, validade e histórico duplicando conhecimento de caminhos Firestore;
+- separação posterior de Students, Assessments e Store acoplada a Workouts.
 
 ## 3. Comportamento preservado
 
@@ -24,97 +24,140 @@ Permanecem:
 - `exercises` para catálogo de exercícios;
 - `workout_plans/{studentId}` para ficha semanal;
 - `workout_history` para histórico;
+- `workout_templates` para templates do profissional;
+- subcoleção `users/{uid}/notifications` para avisos de treino;
 - `personalId`, `criadoEm` e `atualizadoEm` nos modelos;
-- feedback do treino no histórico;
+- compatibilidade de `professorId` via `UserModel` v2;
+- feedback do treino;
+- solicitação de alteração de exercício;
+- validade e aviso de vencimento;
 - reset de `concluido` após finalizar um treino;
-- UI e rotas existentes por meio de exports de compatibilidade.
+- catálogo, templates, vídeos e timer de descanso;
+- rotas/imports antigos por exports de compatibilidade.
 
-## 4. Novo comportamento arquitetural
+## 4. Arquitetura
 
 Workouts passa a possuir:
 
 ```text
 lib/features/workouts/
   data/repositories/firebase_workouts_repository.dart
-  domain/entities/workout_exercise.dart
-  domain/entities/workout_history.dart
-  domain/entities/workout_model.dart
+  domain/entities/
+    weekly_workout_plan.dart
+    workout_exercise.dart
+    workout_history.dart
+    workout_model.dart
   domain/repositories/workouts_repository.dart
   presentation/pages/
+    create_workout_page.dart
+    manage_workouts_page.dart
+    train_page.dart
+    weekly_plan_page.dart
+    workout_history_page.dart
 ```
 
-`WorkoutsRepository` é orientado ao domínio e concentra operações de modelos, catálogo, execução e histórico. Não existe repository genérico de Firestore.
+`WorkoutsRepository` é orientado ao domínio. Não existe repository genérico de Firestore.
 
-`FirebaseWorkoutsRepository` recebe `FirebaseFirestore` opcional por injeção.
+`FirebaseWorkoutsRepository` recebe `FirebaseFirestore` por injeção opcional e concentra a tradução entre entidades e infraestrutura Firebase.
 
 ## 5. Migração de dados
 
 Não.
 
-Não há escrita de script de migração, mudança de coleção ou mudança de documento neste ticket.
+Nenhuma coleção, documento, Security Rule ou Function é alterado neste ticket.
 
-## 6. Arquivos alterados — checkpoint A
+## 6. Checkpoint A — núcleo de Workouts
 
-### Novos
+Migrados para `features/workouts`:
 
-- `lib/features/workouts/domain/entities/workout_exercise.dart`
-- `lib/features/workouts/domain/entities/workout_history.dart`
-- `lib/features/workouts/domain/entities/workout_model.dart`
-- `lib/features/workouts/domain/repositories/workouts_repository.dart`
-- `lib/features/workouts/data/repositories/firebase_workouts_repository.dart`
-- `lib/features/workouts/presentation/pages/create_workout_page.dart`
-- `lib/features/workouts/presentation/pages/manage_workouts_page.dart`
-- `lib/features/workouts/presentation/pages/train_page.dart`
-- `lib/features/workouts/presentation/pages/workout_history_page.dart`
-- `test/features/workouts/workouts_repository_architecture_test.dart`
+- Create Workout;
+- Manage Workouts;
+- Train;
+- Workout History;
+- `WorkoutExercise`;
+- `WorkoutHistory`;
+- `WorkoutModel`;
+- `WorkoutsRepository` e implementação Firebase.
 
-### Compatibilidade
+Os caminhos antigos em `features/auth` permanecem como `export` de compatibilidade.
 
-Os caminhos antigos abaixo permanecem como `export` para não quebrar imports e rotas durante a separação gradual:
+### Validação local recebida
 
-- `features/auth/data/models/workout_plans_model.dart`
-- `features/auth/data/models/workout_history_model.dart`
-- `features/auth/presentation/pages/create_workout_page.dart`
-- `features/auth/presentation/pages/manage_workouts_page.dart`
-- `features/auth/presentation/pages/train_page.dart`
-- `features/auth/presentation/pages/workout_history_page.dart`
+- `flutter analyze --no-fatal-infos --no-fatal-warnings`: sem erro fatal;
+- analyzer: 173 issues legadas não bloqueantes;
+- testes específicos de Workouts + gate arquitetural: `+6`, todos passaram;
+- a saída enviada da suíte completa termina durante a resolução de dependências e não contém resultado final; portanto ela não é contabilizada como aprovada.
 
-## 7. Validação local
+## 7. Checkpoint B — Weekly Plan
 
-Checkpoint A:
+`WeeklyPlanPage` foi movida fisicamente para `features/workouts/presentation/pages`.
+
+A apresentação não acessa mais Firestore diretamente para:
+
+- identificar se o usuário atua como profissional;
+- assistir a ficha semanal;
+- salvar lista de exercícios por dia;
+- salvar/limpar feedback;
+- concluir treino e gerar histórico;
+- definir validade;
+- marcar aviso de vencimento;
+- localizar o profissional do aluno;
+- criar notificações de treino;
+- listar/salvar/excluir templates;
+- listar catálogo de exercícios.
+
+Essas operações agora passam pelo `WorkoutsRepository`.
+
+O `UserModel` existente continua sendo usado dentro da camada `data` para preservar a semântica canônica de `memberType`/`isTrainingProfessional` e o fallback já normalizado de `professorId`.
+
+O caminho antigo `features/auth/presentation/pages/weekly_plan_page.dart` virou export de compatibilidade.
+
+O gate arquitetural removeu `weekly_plan_page.dart` do baseline legado e passou a exigir `WorkoutsRepository` na nova página.
+
+## 8. Testes
+
+Checkpoint B:
 
 ```bash
 flutter analyze --no-fatal-infos --no-fatal-warnings
-flutter test test/features/workouts/workouts_repository_architecture_test.dart
-flutter test test/architecture/presentation_repository_boundary_test.dart
+flutter test \
+  test/features/workouts/workouts_repository_architecture_test.dart \
+  test/architecture/presentation_repository_boundary_test.dart
 flutter test
 ```
 
-A suíte completa é obrigatória porque os exports de compatibilidade podem afetar imports que não aparecem no teste focado.
+A suíte completa continua obrigatória porque existem exports de compatibilidade e a nova página semanal possui grande superfície de UI/integração.
 
-## 8. Firebase Emulator
+## 9. Firebase Emulator
 
-Este checkpoint não muda Security Rules nem schema. Emulator não é obrigatório para a separação estrutural, mas poderá ser usado quando o fluxo semanal completo for migrado.
+O OKAN-031 não muda Security Rules nem schema.
 
-## 9. Risco para produção
+O Emulator não é necessário para validar a separação estrutural, mas pode ser usado na Fase 7 para testes de integração do fluxo completo de Workouts.
+
+## 10. Risco para produção
 
 Moderado.
 
-O risco principal é de compilação/import durante a realocação física, seguido por regressão na serialização dos exercícios e histórico.
+Os principais riscos são:
 
-A persistência continua centralizada nos mesmos caminhos Firebase.
+- compilação/import após realocação física;
+- regressão em operações da ficha semanal;
+- serialização de exercícios/histórico/templates;
+- notificações e validade.
 
-## 10. Rollback
+A persistência permanece nos mesmos caminhos Firebase.
+
+## 11. Rollback
 
 Reverter o merge do OKAN-031.
 
 Não existe rollback de banco porque não há migração de dados.
 
-## 11. Critérios de aceite
+## 12. Critérios de aceite
 
-### Checkpoint A
+### Concluídos
 
-- [x] Existe `features/workouts` com camadas `domain`, `data` e `presentation`.
+- [x] Existe `features/workouts` com `domain`, `data` e `presentation`.
 - [x] `WorkoutExercise` está no domínio sem Firebase.
 - [x] `WorkoutHistory` está no domínio sem `Timestamp`.
 - [x] Existe `WorkoutsRepository` específico do domínio.
@@ -123,19 +166,21 @@ Não existe rollback de banco porque não há migração de dados.
 - [x] Manage Workouts não acessa Firestore diretamente.
 - [x] Train não acessa Firestore diretamente.
 - [x] Workout History não acessa Firestore diretamente.
-- [x] Caminhos antigos permanecem como exports de compatibilidade.
-- [ ] Testes focados passam localmente.
-- [ ] Suíte Flutter completa passa localmente.
+- [x] Weekly Plan não acessa Firestore diretamente.
+- [x] Catálogo/templates/feedback/validade/notificações do Weekly Plan passam pelo repository.
+- [x] Caminhos antigos migrados permanecem como exports de compatibilidade.
+- [x] Gate arquitetural protege as páginas migradas.
+- [x] Nenhuma migração de dados é necessária.
 
-### Conclusão do OKAN-031
+### Pendentes para concluir OKAN-031
 
-- [ ] `weekly_plan_page.dart` sai do Firestore direto e entra em Workouts.
-- [ ] Operações de catálogo/template usadas pelo Weekly Plan entram no repository boundary adequado.
-- [ ] A parte de Workouts de `discover_workouts_page.dart` deixa de acessar Firestore/Functions de treino diretamente sem absorver o escopo de Store/Payments.
+- [ ] Validar localmente o checkpoint B.
+- [ ] A parte de Workouts de `discover_workouts_page.dart` deixa de escrever diretamente em `workout_plans`, sem absorver Store/Payments.
 - [ ] A parte de histórico de `evolution_charts_page.dart` usa boundary de Workouts; Assessments permanece para OKAN-033.
-- [ ] Entradas correspondentes do baseline arquitetural são removidas.
+- [ ] Baseline de `discover_workouts_page.dart` passa a pertencer somente ao OKAN-034.
+- [ ] Baseline de `evolution_charts_page.dart` passa a pertencer somente ao OKAN-033.
 - [ ] Suíte completa passa após a conclusão.
 
-## 12. Documentação
+## 13. Documentação
 
-Este arquivo é atualizado a cada checkpoint do OKAN-031. O ticket só poderá ser marcado como concluído quando o bloco final de critérios estiver integralmente verde.
+Este arquivo é atualizado a cada checkpoint do OKAN-031. O ticket só será concluído quando os critérios finais estiverem verdes.
