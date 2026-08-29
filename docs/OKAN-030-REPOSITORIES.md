@@ -22,6 +22,8 @@ Cada domínio define seu próprio contrato em `domain/repositories` e sua implem
 
 A camada de apresentação consome contratos e entidades de domínio. O repository pode receber dependências Firebase por injeção para permitir testes e evolução gradual.
 
+O OKAN-030 estabelece uma fronteira **incremental**: as fatias migradas devem ficar totalmente livres de Firestore/Functions em `presentation`; as dívidas que já existiam na `main` ficam registradas em um baseline nominal e removível. Qualquer novo arquivo com acesso direto fora desse baseline faz o teste arquitetural falhar.
+
 ## Fatias migradas
 
 ### Students
@@ -82,13 +84,36 @@ O antigo caminho `features/auth/data/models/tarefa_model.dart` permanece como ex
 - nenhuma coleção, documento ou schema é migrado nesta tarefa;
 - comportamento visual das telas permanece o mesmo.
 
-## Exceção legada explícita
+## Baseline legado de infraestrutura em `presentation`
 
-`professor_subscription_page.dart` ainda contém acesso direto a Firestore/Functions porque reúne assinatura, tokenização de cartão e checkout em uma única tela grande.
+O teste `presentation_repository_boundary_test.dart` mantém apenas arquivos nominais que já tinham acesso direto ao Firebase antes da conclusão da modularização. Cada entrada aponta para a tarefa responsável por removê-la:
 
-Ela permanece em allowlist explícita no teste arquitetural para não transformar o OKAN-030 em uma refatoração de pagamentos. A exceção deve ser removida quando `subscriptions` for separada como feature própria.
+| Arquivo | Destino |
+| --- | --- |
+| `anamnese_tab.dart` | OKAN-033 |
+| `assessments_tab.dart` | OKAN-033 |
+| `arena_page.dart` | OKAN-034 |
+| `create_workout_page.dart` | OKAN-031 |
+| `discover_workouts_page.dart` | OKAN-031 / OKAN-034 |
+| `evolution_charts_page.dart` | OKAN-031 / OKAN-033 |
+| `home_page.dart` | composição das features da Fase 6 |
+| `library_admin_page.dart` | OKAN-034 |
+| `manage_workouts_page.dart` | OKAN-031 |
+| `personal_data_page.dart` | follow-up Profile/Auth |
+| `professor_subscription_page.dart` | follow-up Subscriptions/pagamentos |
+| `profile_page.dart` | follow-up Profile/Auth |
+| `register_page.dart` | follow-up Auth |
+| `student_detail_page.dart` | OKAN-032 |
+| `super_admin_page.dart` | OKAN-034 |
+| `weekly_plan_page.dart` | OKAN-031 |
+| `workout_history_page.dart` | OKAN-031 |
 
-A allowlist não permite novos acessos diretos em outras telas ou controllers.
+O baseline não é um bypass genérico. O teste verifica que:
+
+1. qualquer acesso direto novo fora dessa lista falha;
+2. cada exceção continua existindo e realmente contém infraestrutura direta;
+3. quando uma exceção deixa de usar Firebase diretamente, o próprio teste manda removê-la do baseline;
+4. Students, Chat, Notifications e Tasks possuem assertions adicionais exigindo repository boundary e ausência de imports Firestore/Functions.
 
 ## Arquivos principais
 
@@ -124,6 +149,7 @@ Apresentação migrada nesta etapa:
 ## Testes
 
 ```bash
+flutter analyze --no-fatal-infos --no-fatal-warnings
 flutter test test/features/students/students_repository_test.dart
 flutter test test/features/students/students_repository_architecture_test.dart
 flutter test test/features/tasks/tasks_repository_architecture_test.dart
@@ -131,19 +157,25 @@ flutter test test/architecture/presentation_repository_boundary_test.dart
 flutter test
 ```
 
-`flutter analyze` também deve ser executado como diagnóstico. O projeto já possui dívida técnica legada de lint/depreciações fora do OKAN-030; portanto o gate desta tarefa é não introduzir erros de compilação nem novas violações arquiteturais. A limpeza global do analyzer entra na etapa de qualidade/CI.
+O projeto possui dívida técnica legada de lint/depreciações. O gate do OKAN-030 é ausência de erro real de análise/compilação, sucesso dos testes e ausência de novas violações arquiteturais. A limpeza global do analyzer entra na etapa de qualidade/CI.
 
-## Evidência de validação anterior
+## Evidências de validação
 
-Na primeira validação local do OKAN-030:
+### Primeira rodada
 
-- os testes focados chegaram a `+7 -1`;
-- a suíte completa chegou a `+40 -1`;
-- a única falha foi o gate arquitetural detectando Firestore direto no `TarefaController` legado;
-- o working tree estava limpo;
-- não houve erro de compilação dos repositories novos.
+- testes focados: `+7 -1`;
+- suíte completa: `+40 -1`;
+- única falha: o gate encontrou Firestore direto no `TarefaController` legado;
+- correção: Tasks foi migrado para repository em vez de entrar na allowlist.
 
-A falha foi tratada migrando Tasks para repository em vez de adicionar uma exceção à allowlist.
+### Segunda rodada
+
+- `flutter analyze --no-fatal-infos --no-fatal-warnings` executou sem erro fatal;
+- diagnóstico caiu de 179 para 174 issues legadas;
+- testes focados chegaram a `+9 -1`;
+- única falha: o gate encontrou `anamnese_tab.dart`, uma dependência já existente e pertencente ao OKAN-033;
+- a suíte completa não foi executada porque o script interrompe corretamente após a falha dos testes focados;
+- correção: o teste passou a usar baseline incremental explícito e a acumular todas as violações inesperadas antes de falhar.
 
 ## Firebase Emulator
 
@@ -173,8 +205,9 @@ Não existe rollback de banco, Functions ou migração de dados.
 - [x] Chat não acessa Firestore diretamente na apresentação.
 - [x] Notifications não acessa Firestore diretamente na apresentação.
 - [x] Tasks não acessa Firestore diretamente na apresentação.
-- [x] Novos acessos diretos de Firestore/Functions em presentation são bloqueados por teste arquitetural.
-- [x] Dívida de Subscriptions permanece explícita e isolada em allowlist.
+- [x] Novos acessos diretos de Firestore/Functions em `presentation` são bloqueados por teste arquitetural incremental.
+- [x] Dívida legada permanece nominal, documentada e removível por tarefa futura.
 - [x] Nenhuma migração de dados é necessária.
-- [ ] Gates focados do OKAN-030 passam após a correção de Tasks.
-- [ ] Suíte completa `flutter test` passa após a correção de Tasks.
+- [x] Analyzer não apresenta erro fatal com infos/warnings legados não bloqueantes.
+- [ ] Gates focados do OKAN-030 passam com o baseline completo.
+- [ ] Suíte completa `flutter test` passa com o baseline completo.
