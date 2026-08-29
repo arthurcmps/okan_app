@@ -66,7 +66,6 @@ class TarefaController extends ChangeNotifier {
       );
     } catch (error) {
       debugPrint('TarefaController/adicionar: $error');
-      rethrow;
     }
   }
 
@@ -89,7 +88,6 @@ class TarefaController extends ChangeNotifier {
       tarefa.dataConclusao = previousCompletionDate;
       notifyListeners();
       debugPrint('TarefaController/alternarConclusao: $error');
-      rethrow;
     }
   }
 
@@ -100,23 +98,35 @@ class TarefaController extends ChangeNotifier {
       ultimaTarefaRemovida = null;
     }
 
-    await _repository.deleteTask(id);
+    try {
+      await _repository.deleteTask(id);
+    } catch (error) {
+      debugPrint('TarefaController/remover: $error');
+    }
   }
 
   Future<void> desfazerExclusao(Tarefa tarefaRef) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    await _repository.restoreTask(
-      userId: user.uid,
-      task: tarefaRef,
-    );
+    try {
+      await _repository.restoreTask(
+        userId: user.uid,
+        task: tarefaRef,
+      );
+    } catch (error) {
+      debugPrint('TarefaController/desfazerExclusao: $error');
+    }
   }
 
-  Future<void> atualizarTitulo(Tarefa tarefa, String novoTitulo) {
-    return _repository.updateTitle(
-      taskId: tarefa.id,
-      title: novoTitulo,
-    );
+  Future<void> atualizarTitulo(Tarefa tarefa, String novoTitulo) async {
+    try {
+      await _repository.updateTitle(
+        taskId: tarefa.id,
+        title: novoTitulo,
+      );
+    } catch (error) {
+      debugPrint('TarefaController/atualizarTitulo: $error');
+    }
   }
 }
