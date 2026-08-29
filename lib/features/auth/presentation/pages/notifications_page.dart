@@ -1,31 +1,44 @@
-import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_colors.dart';
-import 'chat_page.dart';
-import 'weekly_plan_page.dart';
-import 'student_detail_page.dart';
-import '../../data/models/user_model.dart';
+import '../../../notifications/data/repositories/firebase_notifications_repository.dart';
+import '../../../notifications/domain/entities/notification_models.dart';
+import '../../../notifications/domain/repositories/notifications_repository.dart';
 import '../../data/services/professional_relationships_service.dart';
+import 'chat_page.dart';
+import 'student_detail_page.dart';
+import 'weekly_plan_page.dart';
 
 class NotificationsPage extends StatelessWidget {
-  const NotificationsPage({super.key});
+  const NotificationsPage({
+    super.key,
+    this.repository,
+    this.userId,
+  });
+
+  final NotificationsRepository? repository;
+  final String? userId;
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
+    final currentUserId = userId ?? FirebaseAuth.instance.currentUser?.uid;
 
-    if (user == null) {
-      return const Scaffold(body: Center(child: Text("Não logado")));
+    if (currentUserId == null) {
+      return const Scaffold(
+        body: Center(child: Text('Não logado')),
+      );
     }
+
+    final notificationsRepository =
+        repository ?? FirebaseNotificationsRepository();
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text(
-          "Notificações",
+          'Notificações',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
@@ -35,8 +48,9 @@ class NotificationsPage extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.done_all, color: AppColors.textSub),
-            onPressed: () => _marcarTodasComoLidas(user.uid),
-            tooltip: "Marcar todas como lidas",
+            onPressed: () => notificationsRepository
+                .markAllNotificationsRead(currentUserId),
+            tooltip: 'Marcar todas como lidas',
           ),
         ],
       ),
@@ -48,7 +62,7 @@ class NotificationsPage extends StatelessWidget {
             const Padding(
               padding: EdgeInsets.only(left: 4, bottom: 10),
               child: Text(
-                "CONVITES PENDENTES",
+                'CONVITES PENDENTES',
                 style: TextStyle(
                   color: AppColors.primary,
                   fontWeight: FontWeight.bold,
@@ -57,12 +71,15 @@ class NotificationsPage extends StatelessWidget {
                 ),
               ),
             ),
-            _buildInvitesStream(user),
+            _buildInvitesStream(
+              notificationsRepository,
+              currentUserId,
+            ),
             const SizedBox(height: 24),
             const Padding(
               padding: EdgeInsets.only(left: 4, bottom: 10),
               child: Text(
-                "RECENTES",
+                'RECENTES',
                 style: TextStyle(
                   color: AppColors.secondary,
                   fontWeight: FontWeight.bold,
@@ -71,37 +88,38 @@ class NotificationsPage extends StatelessWidget {
                 ),
               ),
             ),
-            _buildGeneralNotificationsStream(context, user),
+            _buildGeneralNotificationsStream(
+              context,
+              notificationsRepository,
+              currentUserId,
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildInvitesStream(User user) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('invites')
-          .where('studentUid', isEqualTo: user.uid)
-          .where('status', isEqualTo: 'pending')
-          .snapshots(),
+  Widget _buildInvitesStream(
+    NotificationsRepository repository,
+    String userId,
+  ) {
+    return StreamBuilder<List<PendingTrainerInvite>>(
+      stream: repository.watchPendingInvites(userId),
       builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return _buildEmptyState("Nenhum convite pendente.");
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return _buildEmptyState('Nenhum convite pendente.');
         }
 
         return Column(
-          children: snapshot.data!.docs.map((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            final personalName =
-                data['personalName'] ?? data['fromPersonalName'] ?? 'Personal';
-
+          children: snapshot.data!.map((invite) {
             return Container(
               margin: const EdgeInsets.only(bottom: 12),
               decoration: BoxDecoration(
                 color: AppColors.surface,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                border: Border.all(
+                  color: AppColors.primary.withOpacity(0.3),
+                ),
                 boxShadow: [
                   BoxShadow(
                     color: AppColors.primary.withOpacity(0.1),
@@ -117,14 +135,14 @@ class NotificationsPage extends StatelessWidget {
                       child: Icon(Icons.person_add, color: Colors.black),
                     ),
                     title: Text(
-                      personalName,
+                      invite.personalName,
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     subtitle: const Text(
-                      "Quer ser seu treinador no Okan",
+                      'Quer ser seu treinador no Okan',
                       style: TextStyle(color: Colors.white70),
                     ),
                   ),
@@ -134,13 +152,19 @@ class NotificationsPage extends StatelessWidget {
                       children: [
                         Expanded(
                           child: OutlinedButton(
-                            onPressed: () =>
-                                _responderConvite(context, doc.id, false),
+                            onPressed: () => _responderConvite(
+                              context,
+                              repository,
+                              invite.id,
+                              false,
+                            ),
                             style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: AppColors.error),
+                              side: const BorderSide(
+                                color: AppColors.error,
+                              ),
                             ),
                             child: const Text(
-                              "Recusar",
+                              'Recusar',
                               style: TextStyle(color: AppColors.error),
                             ),
                           ),
@@ -148,13 +172,17 @@ class NotificationsPage extends StatelessWidget {
                         const SizedBox(width: 12),
                         Expanded(
                           child: ElevatedButton(
-                            onPressed: () =>
-                                _responderConvite(context, doc.id, true),
+                            onPressed: () => _responderConvite(
+                              context,
+                              repository,
+                              invite.id,
+                              true,
+                            ),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.primary,
                             ),
                             child: const Text(
-                              "Aceitar",
+                              'Aceitar',
                               style: TextStyle(
                                 color: Colors.black,
                                 fontWeight: FontWeight.bold,
@@ -174,15 +202,13 @@ class NotificationsPage extends StatelessWidget {
     );
   }
 
-  Widget _buildGeneralNotificationsStream(BuildContext context, User user) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('notifications')
-          .orderBy('timestamp', descending: true)
-          .limit(20)
-          .snapshots(),
+  Widget _buildGeneralNotificationsStream(
+    BuildContext context,
+    NotificationsRepository repository,
+    String userId,
+  ) {
+    return StreamBuilder<List<OkanNotification>>(
+      stream: repository.watchRecentNotifications(userId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
@@ -190,21 +216,21 @@ class NotificationsPage extends StatelessWidget {
           );
         }
 
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return _buildEmptyState("Nenhuma notificação recente.");
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return _buildEmptyState('Nenhuma notificação recente.');
         }
+
+        final notifications = snapshot.data!;
 
         return ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: snapshot.data!.docs.length,
+          itemCount: notifications.length,
           itemBuilder: (context, index) {
-            final doc = snapshot.data!.docs[index];
-            final data = doc.data() as Map<String, dynamic>;
-            final bool isRead = data['isRead'] ?? false;
+            final notification = notifications[index];
 
             return Dismissible(
-              key: Key(doc.id),
+              key: Key(notification.id),
               direction: DismissDirection.endToStart,
               background: Container(
                 alignment: Alignment.centerRight,
@@ -215,43 +241,51 @@ class NotificationsPage extends StatelessWidget {
                 ),
                 child: const Icon(Icons.delete, color: Colors.white),
               ),
-              onDismissed: (direction) {
-                doc.reference.delete();
+              onDismissed: (_) {
+                repository.deleteNotification(
+                  userId: userId,
+                  notificationId: notification.id,
+                );
               },
               child: GestureDetector(
-                onTap: () {
-                  _handleNotificationTap(context, doc, data);
-                },
+                onTap: () => _handleNotificationTap(
+                  context,
+                  repository,
+                  userId,
+                  notification,
+                ),
                 child: Container(
                   margin: const EdgeInsets.only(bottom: 10),
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: isRead
+                    color: notification.isRead
                         ? AppColors.surface.withOpacity(0.5)
                         : AppColors.surface,
                     borderRadius: BorderRadius.circular(12),
-                    border: isRead
+                    border: notification.isRead
                         ? null
                         : Border(
                             left: BorderSide(
-                              color: _getColorByData(data),
+                              color: _getColorByNotification(notification),
                               width: 4,
                             ),
                           ),
                   ),
                   child: Row(
                     children: [
-                      _getIconByData(data),
+                      _getIconByNotification(notification),
                       const SizedBox(width: 16),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              data['title'] ?? 'Notificação',
+                              notification.title,
                               style: TextStyle(
-                                color: isRead ? Colors.white54 : Colors.white,
-                                fontWeight: isRead
+                                color: notification.isRead
+                                    ? Colors.white54
+                                    : Colors.white,
+                                fontWeight: notification.isRead
                                     ? FontWeight.normal
                                     : FontWeight.bold,
                                 fontSize: 15,
@@ -259,7 +293,7 @@ class NotificationsPage extends StatelessWidget {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              data['body'] ?? '',
+                              notification.body,
                               style: const TextStyle(
                                 color: AppColors.textSub,
                                 fontSize: 13,
@@ -269,7 +303,7 @@ class NotificationsPage extends StatelessWidget {
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              _formatTime(data['timestamp']),
+                              _formatTime(notification.occurredAt),
                               style: const TextStyle(
                                 color: Colors.white30,
                                 fontSize: 10,
@@ -278,12 +312,12 @@ class NotificationsPage extends StatelessWidget {
                           ],
                         ),
                       ),
-                      if (!isRead)
+                      if (!notification.isRead)
                         Container(
                           width: 8,
                           height: 8,
                           decoration: BoxDecoration(
-                            color: _getColorByData(data),
+                            color: _getColorByNotification(notification),
                             shape: BoxShape.circle,
                           ),
                         ),
@@ -298,28 +332,35 @@ class NotificationsPage extends StatelessWidget {
     );
   }
 
-  void _handleNotificationTap(
+  Future<void> _handleNotificationTap(
     BuildContext context,
-    DocumentSnapshot doc,
-    Map<String, dynamic> data,
+    NotificationsRepository repository,
+    String currentUserId,
+    OkanNotification notification,
   ) async {
-    if (data['isRead'] == false) {
-      await doc.reference.update({'isRead': true});
+    if (!notification.isRead) {
+      await repository.markNotificationRead(
+        userId: currentUserId,
+        notificationId: notification.id,
+      );
     }
 
     if (!context.mounted) return;
-    final currentUser = FirebaseAuth.instance.currentUser!;
 
-    switch (data['type']) {
+    switch (notification.type) {
       case 'invite':
-        final inviteId = data['actionId'];
-        if (inviteId != null && inviteId.toString().isNotEmpty) {
-          _mostrarDialogoConvite(context, inviteId);
+        final inviteId = notification.actionId;
+        if (inviteId != null && inviteId.isNotEmpty) {
+          await _mostrarDialogoConvite(
+            context,
+            repository,
+            inviteId,
+          );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                "Olhe no topo da tela, nos seus convites pendentes!",
+                'Olhe no topo da tela, nos seus convites pendentes!',
               ),
             ),
           );
@@ -327,12 +368,15 @@ class NotificationsPage extends StatelessWidget {
         break;
 
       case 'message':
+        final senderId = notification.actionId;
+        if (senderId == null || senderId.isEmpty) return;
+
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => ChatPage(
-              otherUserId: data['actionId'],
-              otherUserName: data['senderName'] ?? 'Chat',
+              otherUserId: senderId,
+              otherUserName: notification.senderName,
             ),
           ),
         );
@@ -340,13 +384,10 @@ class NotificationsPage extends StatelessWidget {
 
       case 'workout':
       case 'workout_update':
-        final myDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(currentUser.uid)
-            .get();
-        final myData = myDoc.data() ?? {};
-        final profile = UserModel.fromMap(myData, myDoc.id);
-        final bool isProfessor = profile.isTrainingProfessional;
+        final currentProfile =
+            await repository.loadUserProfile(currentUserId);
+        final isProfessor =
+            currentProfile?.isTrainingProfessional == true;
 
         if (!isProfessor) {
           if (context.mounted) {
@@ -354,8 +395,8 @@ class NotificationsPage extends StatelessWidget {
               context,
               MaterialPageRoute(
                 builder: (context) => WeeklyPlanPage(
-                  studentId: currentUser.uid,
-                  studentName: "Meus Treinos",
+                  studentId: currentUserId,
+                  studentName: 'Meus Treinos',
                 ),
               ),
             );
@@ -363,15 +404,14 @@ class NotificationsPage extends StatelessWidget {
           break;
         }
 
-        final studentId = data['actionId'] ?? data['studentId'];
+        final studentId =
+            notification.actionId ?? notification.studentId;
+
         if (studentId != null &&
-            studentId.toString().isNotEmpty &&
-            studentId != currentUser.uid) {
-          final studentDoc = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(studentId)
-              .get();
-          final studentData = studentDoc.data() ?? {};
+            studentId.isNotEmpty &&
+            studentId != currentUserId) {
+          final studentProfile =
+              await repository.loadUserProfile(studentId);
 
           if (context.mounted) {
             Navigator.push(
@@ -379,9 +419,8 @@ class NotificationsPage extends StatelessWidget {
               MaterialPageRoute(
                 builder: (context) => StudentDetailPage(
                   studentId: studentId,
-                  studentName:
-                      studentData['name'] ?? studentData['nome'] ?? 'Aluno',
-                  studentEmail: studentData['email'] ?? '',
+                  studentName: studentProfile?.name ?? 'Aluno',
+                  studentEmail: studentProfile?.email ?? '',
                 ),
               ),
             );
@@ -389,7 +428,9 @@ class NotificationsPage extends StatelessWidget {
         } else if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text("Abra a aba 'Meus Alunos' para conferir o treino."),
+              content: Text(
+                "Abra a aba 'Meus Alunos' para conferir o treino.",
+              ),
             ),
           );
         }
@@ -399,20 +440,18 @@ class NotificationsPage extends StatelessWidget {
 
   Future<void> _mostrarDialogoConvite(
     BuildContext context,
+    NotificationsRepository repository,
     String inviteId,
   ) async {
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('invites')
-          .doc(inviteId)
-          .get();
+      final invite = await repository.loadPendingInvite(inviteId);
       if (!context.mounted) return;
 
-      if (!doc.exists || doc.data()!['status'] != 'pending') {
+      if (invite == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              "Este convite já foi respondido ou não está mais disponível.",
+              'Este convite já foi respondido ou não está mais disponível.',
               style: TextStyle(color: Colors.black),
             ),
             backgroundColor: Colors.white,
@@ -421,30 +460,34 @@ class NotificationsPage extends StatelessWidget {
         return;
       }
 
-      final data = doc.data()!;
-      final personalName =
-          data['personalName'] ?? data['fromPersonalName'] ?? 'Personal';
-
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
           backgroundColor: AppColors.surface,
           title: const Text(
-            "Convite Pendente",
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            'Convite Pendente',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           content: Text(
-            "$personalName quer ser o seu treinador no Okan.",
+            '${invite.personalName} quer ser o seu treinador no Okan.',
             style: const TextStyle(color: Colors.white70),
           ),
           actions: [
             TextButton(
               onPressed: () {
                 Navigator.pop(ctx);
-                _responderConvite(context, inviteId, false);
+                _responderConvite(
+                  context,
+                  repository,
+                  inviteId,
+                  false,
+                );
               },
               child: const Text(
-                "Recusar",
+                'Recusar',
                 style: TextStyle(color: AppColors.error),
               ),
             ),
@@ -454,10 +497,15 @@ class NotificationsPage extends StatelessWidget {
               ),
               onPressed: () {
                 Navigator.pop(ctx);
-                _responderConvite(context, inviteId, true);
+                _responderConvite(
+                  context,
+                  repository,
+                  inviteId,
+                  true,
+                );
               },
               child: const Text(
-                "Aceitar",
+                'Aceitar',
                 style: TextStyle(
                   color: Colors.black,
                   fontWeight: FontWeight.bold,
@@ -467,18 +515,17 @@ class NotificationsPage extends StatelessWidget {
           ],
         ),
       );
-    } catch (e) {
+    } catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Erro: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro: $error')),
+        );
       }
     }
   }
 
-  Color _getColorByData(Map<String, dynamic> data) {
-    final title = (data['title'] ?? '').toString().toLowerCase();
-    final type = data['type'];
+  Color _getColorByNotification(OkanNotification notification) {
+    final title = notification.title.toLowerCase();
 
     if (title.contains('vencido')) return Colors.redAccent;
     if (title.contains('vencendo') || title.contains('alteração')) {
@@ -486,7 +533,7 @@ class NotificationsPage extends StatelessWidget {
     }
     if (title.contains('feedback')) return Colors.blueAccent;
 
-    switch (type) {
+    switch (notification.type) {
       case 'message':
         return Colors.blueAccent;
       case 'workout':
@@ -501,12 +548,10 @@ class NotificationsPage extends StatelessWidget {
     }
   }
 
-  Widget _getIconByData(Map<String, dynamic> data) {
-    IconData icon;
-    Color color = _getColorByData(data);
-
-    final title = (data['title'] ?? '').toString().toLowerCase();
-    final type = data['type'];
+  Widget _getIconByNotification(OkanNotification notification) {
+    final title = notification.title.toLowerCase();
+    final color = _getColorByNotification(notification);
+    late final IconData icon;
 
     if (title.contains('vencido')) {
       icon = Icons.warning_amber_rounded;
@@ -517,7 +562,7 @@ class NotificationsPage extends StatelessWidget {
     } else if (title.contains('feedback')) {
       icon = Icons.feedback_outlined;
     } else {
-      switch (type) {
+      switch (notification.type) {
         case 'message':
           icon = Icons.chat_bubble;
           break;
@@ -546,15 +591,15 @@ class NotificationsPage extends StatelessWidget {
     );
   }
 
-  String _formatTime(Timestamp? timestamp) {
+  String _formatTime(DateTime? timestamp) {
     if (timestamp == null) return '';
-    final date = timestamp.toDate();
-    final now = DateTime.now();
-    final diff = now.difference(date);
 
-    if (diff.inMinutes < 60) return "${diff.inMinutes} min atrás";
-    if (diff.inHours < 24) return "${diff.inHours}h atrás";
-    return DateFormat('dd/MM').format(date);
+    final now = DateTime.now();
+    final diff = now.difference(timestamp);
+
+    if (diff.inMinutes < 60) return '${diff.inMinutes} min atrás';
+    if (diff.inHours < 24) return '${diff.inHours}h atrás';
+    return DateFormat('dd/MM').format(timestamp);
   }
 
   Widget _buildEmptyState(String text) {
@@ -576,11 +621,12 @@ class NotificationsPage extends StatelessWidget {
 
   Future<void> _responderConvite(
     BuildContext context,
+    NotificationsRepository repository,
     String inviteId,
     bool aceitar,
   ) async {
     try {
-      await ProfessionalRelationshipsService().respondStudentInvite(
+      await repository.respondStudentInvite(
         inviteId: inviteId,
         accept: aceitar,
       );
@@ -590,37 +636,26 @@ class NotificationsPage extends StatelessWidget {
           SnackBar(
             content: Text(
               aceitar
-                  ? "Convite aceito! Agora vocês estão conectados."
-                  : "Convite recusado.",
+                  ? 'Convite aceito! Agora vocês estão conectados.'
+                  : 'Convite recusado.',
             ),
-            backgroundColor: aceitar ? AppColors.success : Colors.grey,
+            backgroundColor: aceitar
+                ? AppColors.success
+                : Colors.grey,
           ),
         );
       }
-    } catch (e) {
+    } catch (error) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(professionalRelationshipErrorMessage(e)),
+            content: Text(
+              professionalRelationshipErrorMessage(error),
+            ),
             backgroundColor: AppColors.error,
           ),
         );
       }
     }
-  }
-
-  Future<void> _marcarTodasComoLidas(String uid) async {
-    final batch = FirebaseFirestore.instance.batch();
-    final snapshot = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .collection('notifications')
-        .where('isRead', isEqualTo: false)
-        .get();
-
-    for (var doc in snapshot.docs) {
-      batch.update(doc.reference, {'isRead': true});
-    }
-    await batch.commit();
   }
 }
