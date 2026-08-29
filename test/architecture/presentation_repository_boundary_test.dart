@@ -2,52 +2,74 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-const _legacyInfrastructureExceptions = <String>{
-  'lib/features/auth/presentation/pages/professor_subscription_page.dart',
+const _legacyInfrastructureExceptions = <String, String>{
+  'lib/features/auth/presentation/pages/anamnese_tab.dart': 'OKAN-033',
+  'lib/features/auth/presentation/pages/arena_page.dart': 'OKAN-034',
+  'lib/features/auth/presentation/pages/assessments_tab.dart': 'OKAN-033',
+  'lib/features/auth/presentation/pages/create_workout_page.dart': 'OKAN-031',
+  'lib/features/auth/presentation/pages/discover_workouts_page.dart':
+      'OKAN-031 / OKAN-034',
+  'lib/features/auth/presentation/pages/evolution_charts_page.dart':
+      'OKAN-031 / OKAN-033',
+  'lib/features/auth/presentation/pages/library_admin_page.dart': 'OKAN-034',
+  'lib/features/auth/presentation/pages/manage_workouts_page.dart': 'OKAN-031',
+  'lib/features/auth/presentation/pages/professor_subscription_page.dart':
+      'Subscriptions / pagamentos',
+  'lib/features/auth/presentation/pages/super_admin_page.dart': 'OKAN-034',
+  'lib/features/auth/presentation/pages/weekly_plan_page.dart': 'OKAN-031',
+  'lib/features/auth/presentation/pages/workout_history_page.dart': 'OKAN-031',
 };
 
 void main() {
-  test('presentation nao introduz novos acessos diretos ao Firestore', () {
+  test('presentation nao introduz novos acessos diretos ao Firebase', () {
     final presentationFiles = _presentationFiles();
 
     expect(presentationFiles, isNotEmpty);
+
+    final unexpected = <String>[];
 
     for (final file in presentationFiles) {
       final relativePath = _relativePath(file.path);
       final source = file.readAsStringSync();
 
-      if (_legacyInfrastructureExceptions.contains(relativePath)) {
+      if (!_usesDirectFirebaseInfrastructure(source)) {
         continue;
       }
 
-      expect(
-        source,
-        isNot(contains('package:cloud_firestore/cloud_firestore.dart')),
-        reason: '$relativePath importa Firestore diretamente',
-      );
-      expect(
-        source,
-        isNot(contains('FirebaseFirestore')),
-        reason: '$relativePath acessa Firestore diretamente',
-      );
-      expect(
-        source,
-        isNot(contains('FirebaseFunctions.instance')),
-        reason: '$relativePath instancia Functions diretamente',
-      );
+      if (!_legacyInfrastructureExceptions.containsKey(relativePath)) {
+        unexpected.add(relativePath);
+      }
     }
+
+    expect(
+      unexpected,
+      isEmpty,
+      reason: unexpected.isEmpty
+          ? null
+          : 'Novos acessos diretos ao Firebase em presentation:\n'
+                '${unexpected.map((path) => ' - $path').join('\n')}',
+    );
   });
 
-  test('excecoes legadas de infraestrutura permanecem explicitas', () {
+  test('baseline legado permanece explicito e removivel', () {
     final existing = _presentationFiles()
         .map((file) => _relativePath(file.path))
         .toSet();
 
-    for (final exception in _legacyInfrastructureExceptions) {
+    for (final entry in _legacyInfrastructureExceptions.entries) {
       expect(
         existing,
-        contains(exception),
-        reason: 'Remova $exception da allowlist quando a migracao terminar.',
+        contains(entry.key),
+        reason: '${entry.key} deixou de existir; remova do baseline.',
+      );
+
+      final source = File(entry.key).readAsStringSync();
+      expect(
+        _usesDirectFirebaseInfrastructure(source),
+        isTrue,
+        reason:
+            '${entry.key} ja nao usa Firebase diretamente. '
+            'Remova a excecao (${entry.value}) do baseline.',
       );
     }
   });
@@ -68,9 +90,16 @@ void main() {
       final source = File(entry.key).readAsStringSync();
       expect(source, contains(entry.value));
       expect(source, isNot(contains('FirebaseFirestore')));
+      expect(source, isNot(contains('FirebaseFunctions.instance')));
       expect(source, isNot(contains('cloud_firestore')));
+      expect(source, isNot(contains('cloud_functions')));
     }
   });
+}
+
+bool _usesDirectFirebaseInfrastructure(String source) {
+  return source.contains('FirebaseFirestore') ||
+      source.contains('FirebaseFunctions.instance');
 }
 
 List<File> _presentationFiles() {
