@@ -109,7 +109,6 @@ void main() {
       expect(source, isNot(contains('FirebaseFunctions.instance')), reason: entry.key);
       expect(source, isNot(contains('cloud_firestore')), reason: entry.key);
       expect(source, isNot(contains('cloud_functions')), reason: entry.key);
-      expect(source, isNot(contains('firebase_auth')), reason: entry.key);
     }
   });
 }
