@@ -52,20 +52,23 @@ void main() {
     }
   });
 
-  test('Students Chat e Notifications usam repository boundaries', () {
-    const migratedPages = <String, String>{
+  test('fatias migradas usam repository boundaries', () {
+    const migratedPresentation = <String, String>{
       'lib/features/auth/presentation/pages/students_page.dart':
           'StudentsRepository',
       'lib/features/auth/presentation/pages/chat_page.dart':
           'ChatRepository',
       'lib/features/auth/presentation/pages/notifications_page.dart':
           'NotificationsRepository',
+      'lib/features/auth/presentation/controllers/tarefa_controller.dart':
+          'TasksRepository',
     };
 
-    for (final entry in migratedPages.entries) {
+    for (final entry in migratedPresentation.entries) {
       final source = File(entry.key).readAsStringSync();
       expect(source, contains(entry.value));
       expect(source, isNot(contains('FirebaseFirestore')));
+      expect(source, isNot(contains('cloud_firestore')));
     }
   });
 }
