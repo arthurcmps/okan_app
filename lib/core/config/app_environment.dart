@@ -1,4 +1,5 @@
 const String productionFirebaseProjectId = 'app-academia-2914d';
+const String stagingFirebaseProjectId = 'okan-staging';
 const String developmentFirebaseProjectId = 'demo-okan-dev';
 
 enum OkanEnvironment {
@@ -109,12 +110,10 @@ class OkanFirebaseConfig {
     }
 
     final normalizedProjectId = projectId.trim();
-    if (normalizedProjectId == productionFirebaseProjectId ||
-        normalizedProjectId == developmentFirebaseProjectId ||
-        normalizedProjectId.startsWith('demo-')) {
+    if (normalizedProjectId != stagingFirebaseProjectId) {
       throw StateError(
-        'OKAN_ENV=staging não pode usar o projeto Firebase '
-        '$normalizedProjectId.',
+        'OKAN_ENV=staging exige o projeto Firebase oficial '
+        '$stagingFirebaseProjectId. Recebido: $normalizedProjectId.',
       );
     }
   }
