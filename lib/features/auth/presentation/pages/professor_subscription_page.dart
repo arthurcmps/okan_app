@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:http/http.dart' as http;
+import '../../../../core/config/app_environment.dart';
 import '../../../../core/theme/app_colors.dart';
 
 bool _premiumValue(dynamic value) {
@@ -33,6 +34,20 @@ class _ProfessorSubscriptionPageState extends State<ProfessorSubscriptionPage> {
       "TEST-13b66d79-52ea-410d-9efb-57db088806b4";
 
   Future<void> _abrirCheckout(String planoNome, double preco) async {
+    if (!OkanEnvironmentConfig.current.enableExternalPayments) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              "Pagamentos externos estão desativados no ambiente DEV.",
+            ),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+      return;
+    }
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -423,6 +438,11 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
   final _cpfCtrl = TextEditingController();
 
   Future<void> _gerarPix() async {
+    if (!OkanEnvironmentConfig.current.enableExternalPayments) {
+      _mostrarErro("Pagamentos externos estão desativados no ambiente DEV.");
+      return;
+    }
+
     setState(() => _isProcessing = true);
     try {
       await FirebaseAuth.instance.currentUser?.getIdToken(true);
@@ -477,6 +497,11 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
   }
 
   Future<void> _processarCartao() async {
+    if (!OkanEnvironmentConfig.current.enableExternalPayments) {
+      _mostrarErro("Pagamentos externos estão desativados no ambiente DEV.");
+      return;
+    }
+
     if (_numCartaoCtrl.text.isEmpty ||
         _cvvCtrl.text.isEmpty ||
         _cpfCtrl.text.isEmpty ||
