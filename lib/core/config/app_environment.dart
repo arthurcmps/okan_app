@@ -76,6 +76,8 @@ class OkanEnvironmentConfig {
 
   bool get enablePushNotifications => !isDevelopment;
 
+  bool get enableExternalPayments => !isDevelopment;
+
   String get label => isDevelopment ? 'DEV • LOCAL' : 'PROD';
 
   String get appTitle => isDevelopment ? 'Okan App [DEV]' : 'Okan App';
