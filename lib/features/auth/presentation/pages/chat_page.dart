@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:okan_app/features/chat/domain/chat_id.dart';
 import '../../../../core/widgets/user_avatar.dart';
 import '../../../../core/theme/app_colors.dart'; 
 
@@ -28,7 +29,7 @@ class _ChatPageState extends State<ChatPage> {
   @override
   void initState() {
     super.initState();
-    _chatId = _gerarChatId(_currentUserId, widget.otherUserId);
+    _chatId = buildDeterministicChatId(_currentUserId, widget.otherUserId);
     _carregarNomeUsuarioAtual();
   }
 
@@ -43,11 +44,6 @@ class _ChatPageState extends State<ChatPage> {
         });
       }
     }
-  }
-
-  // Gera um ID único para a conversa
-  String _gerarChatId(String id1, String id2) {
-    return id1.hashCode <= id2.hashCode ? '${id1}_$id2' : '${id2}_$id1';
   }
 
   void _enviarMensagem() async {
