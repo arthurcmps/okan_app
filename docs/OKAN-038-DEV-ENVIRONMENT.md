@@ -81,15 +81,20 @@ flutter run `
   --dart-define=OKAN_EMULATOR_HOST=127.0.0.1
 ```
 
-Aparelho Android físico:
+Aparelho Android físico conectado por USB usa `adb reverse`, mantendo os emuladores acessíveis apenas em localhost no computador:
 
 ```powershell
+adb reverse tcp:9099 tcp:9099
+adb reverse tcp:8080 tcp:8080
+adb reverse tcp:5001 tcp:5001
+adb reverse tcp:9199 tcp:9199
+
 flutter run `
   --dart-define=OKAN_ENV=dev `
-  --dart-define=OKAN_EMULATOR_HOST=<IP-LAN-DO-PC>
+  --dart-define=OKAN_EMULATOR_HOST=127.0.0.1
 ```
 
-O computador e o aparelho precisam estar na mesma rede e o firewall deve permitir as portas dos emuladores.
+Isso evita expor Auth, Firestore, Functions e Storage Emulator para a rede local.
 
 ## 7. Integrações desativadas em dev
 
@@ -158,13 +163,27 @@ flutter run `
   --dart-define=OKAN_EMULATOR_HOST=10.0.2.2
 ```
 
+Terminal 2, aparelho Android físico por USB:
+
+```powershell
+adb reverse tcp:9099 tcp:9099
+adb reverse tcp:8080 tcp:8080
+adb reverse tcp:5001 tcp:5001
+adb reverse tcp:9199 tcp:9199
+
+cd C:\Users\Public\Documents\Projetos\Academia\okan_app
+flutter run `
+  --dart-define=OKAN_ENV=dev `
+  --dart-define=OKAN_EMULATOR_HOST=127.0.0.1
+```
+
 Critério visual: o app precisa exibir `DEV • LOCAL` e qualquer usuário criado no Auth Emulator deve existir somente no ambiente local.
 
 ## 14. Risco de produção
 
 Baixo.
 
-O modo padrão continua produção, enquanto o modo dev é fail-closed e usa um project ID `demo-` separado.
+O modo padrão continua produção, enquanto o modo dev é fail-closed e usa um project ID `demo-` separado. Em aparelho físico, o fluxo recomendado usa `adb reverse` em vez de abrir os emuladores para a LAN.
 
 ## 15. Rollback
 
@@ -181,6 +200,7 @@ Reverter o merge do OKAN-038. Não existe rollback de dados.
 - [x] staging não pode cair em produção;
 - [x] ambiente desconhecido não pode cair em produção;
 - [x] cleartext HTTP restrito a Android debug;
+- [x] aparelho físico usa fluxo localhost via `adb reverse`;
 - [x] banner visual de ambiente criado;
 - [x] testes automatizados do contrato criados;
 - [ ] Flutter CI verde no HEAD final;
