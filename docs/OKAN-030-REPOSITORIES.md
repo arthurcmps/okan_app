@@ -186,6 +186,14 @@ O projeto possui dívida técnica legada de lint/depreciações. O gate do OKAN-
 - a suíte focada e a suíte completa não executaram porque o script interrompe corretamente quando o gate falha;
 - correção: `train_page.dart` foi adicionado nominalmente ao baseline do OKAN-031.
 
+### Quarta rodada — validação final
+
+- branch sincronizada e working tree limpo;
+- gate arquitetural: `+3`, todos os testes passaram;
+- testes focados do OKAN-030: `+7`, todos os testes passaram;
+- suíte completa Flutter: `+43`, todos os testes passaram;
+- nenhum bloqueador funcional ou arquitetural permaneceu para o merge.
+
 ## Firebase Emulator
 
 O OKAN-030 não modifica Security Rules nem schema. Os repositories mantêm os mesmos caminhos e contratos já protegidos pelas Rules existentes.
@@ -218,5 +226,5 @@ Não existe rollback de banco, Functions ou migração de dados.
 - [x] Dívida legada permanece nominal, documentada e removível por tarefa futura.
 - [x] Nenhuma migração de dados é necessária.
 - [x] Analyzer não apresenta erro fatal com infos/warnings legados não bloqueantes.
-- [ ] Gates focados do OKAN-030 passam com o baseline completo.
-- [ ] Suíte completa `flutter test` passa com o baseline completo.
+- [x] Gates focados do OKAN-030 passam com o baseline completo.
+- [x] Suíte completa `flutter test` passa com o baseline completo.
