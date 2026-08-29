@@ -62,13 +62,13 @@ Timeout:
 
 ## 5. Toolchain reproduzível
 
-A primeira versão do OKAN-035 usou Flutter 3.38.9 porque a `.metadata` contém a revisão `67323de285b00232883f53b84095eb72be97d35c`, que corresponde a esse release.
+A primeira versão do OKAN-035 usou Flutter 3.38.9 porque a `.metadata` contém a revisão `67323de285b00232883f53b84095eb72be97d35c`, correspondente a esse release.
 
-A primeira execução real da CI mostrou que essa interpretação estava incorreta para o estado atual do projeto: `.metadata` registra a revisão histórica do projeto/migração e não necessariamente o SDK usado para gerar o lockfile atual.
+A primeira execução real mostrou que `.metadata` registra a revisão histórica do projeto/migração e não necessariamente o SDK usado para gerar o lockfile atual.
 
-Com Flutter 3.38.9 / Dart 3.10.8, `flutter pub get` tentou rebaixar sete dependências transitivas e alterou o `pubspec.lock`. O check de drift bloqueou corretamente o pipeline antes do analyzer e dos testes.
+Com Flutter 3.38.9 / Dart 3.10.8, `flutter pub get` tentou rebaixar sete dependências transitivas e alterou `pubspec.lock`. O gate de lockfile bloqueou corretamente o pipeline antes do analyzer e dos testes.
 
-O lockfile atual é compatível com a família Flutter 3.47 e possui pins que coincidem com Flutter 3.47.0, incluindo:
+O lockfile atual coincide com os pins do Flutter 3.47.0, incluindo:
 
 - `characters 1.4.1`;
 - `intl 0.20.3`;
@@ -78,23 +78,27 @@ O lockfile atual é compatível com a família Flutter 3.47 e possui pins que co
 - `vector_math 2.4.2`;
 - SDK Dart `>=3.11.0-0`.
 
-Por isso o workflow fixa explicitamente:
+O workflow final fixa:
 
 ```yaml
 flutter-version: '3.47.0'
 channel: stable
 ```
 
-O OKAN-035 não modifica o `pubspec.lock` para acomodar a CI; a CI é que deve reproduzir o contrato já versionado pelo projeto.
+A execução verde confirmou Flutter 3.47.0 com Dart 3.13.0 e lockfile inalterado.
+
+O OKAN-035 não modifica `pubspec.lock` para acomodar a CI; a CI reproduz o contrato já versionado pelo projeto.
 
 ## 6. Actions fixadas por SHA
 
-Para evitar referências flutuantes no pipeline, as actions são chamadas por commit SHA completo, mantendo o comentário da major tag apenas para legibilidade:
+Para evitar referências flutuantes, as actions são chamadas por SHA completo:
 
-- `actions/checkout` v4 → `11d5960a326750d5838078e36cf38b85af677262`;
+- `actions/checkout` v6 → `d23441a48e516b6c34aea4fa41551a30e30af803`;
 - `subosito/flutter-action` v2 → `1a449444c387b1966244ae4d4f8c696479add0b2`.
 
-A atualização futura desses SHAs deve ocorrer em ticket explícito e ser revisada como alteração de infraestrutura.
+A primeira execução verde ainda usava checkout v4 e revelou o warning de depreciação do runtime Node 20. Como o runner já utiliza Node 24, o workflow foi atualizado para checkout v6 antes do merge.
+
+Atualizações futuras desses SHAs devem ocorrer em ticket explícito e ser revisadas como alteração de infraestrutura.
 
 ## 7. Lockfile
 
@@ -104,25 +108,30 @@ Depois de `flutter pub get`, o workflow executa:
 git diff --exit-code -- pubspec.lock
 ```
 
-Se a resolução de dependências modificar o lockfile, o job falha. Isso obriga qualquer mudança de resolução a ser versionada explicitamente em vez de acontecer apenas dentro da CI.
+Se a resolução modificar o lockfile, o job falha. A primeira execução do OKAN-035 comprovou esse gate ao detectar a incompatibilidade de Flutter 3.38.9.
 
-A primeira execução do OKAN-035 comprovou que esse gate é útil: ele detectou imediatamente a incompatibilidade entre Flutter 3.38.9 e o lockfile atual.
+Com Flutter 3.47.0 o check passou sem qualquer modificação do lockfile.
 
 ## 8. Analyzer
 
-O projeto possui infos/warnings legados conhecidos. Para preservar o contrato já utilizado durante a Fase 6, a CI executa:
+O projeto possui infos/warnings legados conhecidos. Para preservar o contrato utilizado durante a Fase 6, a CI executa:
 
 ```bash
 flutter analyze --no-fatal-infos --no-fatal-warnings
+```
+
+Resultado validado no GitHub Actions:
+
+```text
+95 issues found
+sem erro fatal
 ```
 
 Assim:
 
 - erros reais continuam bloqueando o job;
 - infos/warnings legados continuam visíveis no log;
-- o OKAN-035 não mistura criação de CI com uma limpeza ampla de lint.
-
-A redução do baseline de warnings deve ocorrer em trabalho separado.
+- o OKAN-035 não mistura criação de CI com limpeza ampla de lint.
 
 ## 9. Testes
 
@@ -132,9 +141,13 @@ A CI executa a suíte completa com:
 flutter test
 ```
 
-Isso inclui os testes funcionais existentes e os gates arquiteturais criados nas fases anteriores.
+Resultado validado:
 
-Nenhuma lista manual de testes é mantida no workflow, evitando que novos testes sejam esquecidos no pipeline.
+```text
+70 tests passed
+```
+
+Isso inclui os testes funcionais e os gates arquiteturais das fases anteriores. Nenhuma lista manual de testes é mantida no workflow.
 
 ## 10. Permissões e secrets
 
@@ -151,7 +164,7 @@ O OKAN-035 não exige Firebase credentials, service accounts, tokens de pagament
 
 O workflow usa `concurrency` por workflow/ref e cancela execuções antigas da mesma branch quando um commit mais novo é enviado.
 
-Isso evita gastar minutos de CI validando commits que já foram substituídos no mesmo PR.
+Isso evita gastar minutos de CI validando commits substituídos no mesmo PR.
 
 ## 12. Migração de dados
 
@@ -169,7 +182,7 @@ Baixo.
 
 O ticket adiciona apenas infraestrutura de validação do repositório. Não altera binário, runtime ou persistência do app.
 
-O principal risco era escolher uma toolchain diferente daquela que gerou o lockfile. A primeira execução detectou esse problema antes do merge e o workflow foi alinhado ao Flutter 3.47.0 sem modificar dependências.
+O principal risco era escolher uma toolchain diferente daquela que gerou o lockfile. A própria primeira execução detectou esse problema antes do merge; a execução corrigida com Flutter 3.47.0 ficou verde de ponta a ponta.
 
 ## 15. Rollback
 
@@ -186,16 +199,18 @@ Não existe rollback de dados.
 - [x] toolchain fixada explicitamente;
 - [x] Flutter alinhado ao lockfile atual em 3.47.0;
 - [x] actions externas fixadas por SHA;
+- [x] checkout atualizado para v6/Node 24;
 - [x] permissões mínimas `contents: read`;
 - [x] lockfile verificado contra drift;
 - [x] analyzer usa o contrato atual do projeto;
-- [x] suíte Flutter completa é executada;
+- [x] analyzer CI sem erro fatal, 95 issues legadas;
+- [x] suíte Flutter completa executada;
+- [x] 70/70 testes verdes na CI;
 - [x] nenhum secret necessário;
 - [x] nenhuma dependência atualizada;
 - [x] nenhuma mudança de Rules/Functions/schema;
-- [x] primeira execução provou que o gate de lockfile bloqueia incompatibilidade de SDK;
-- [ ] execução corrigida do workflow em PR verde;
-- [ ] working tree local limpa e sincronizada após validação.
+- [x] gate de lockfile provou bloquear incompatibilidade de SDK;
+- [x] execução corrigida do workflow em PR verde.
 
 ## 17. Próximo ticket
 
@@ -205,8 +220,12 @@ Depois do OKAN-035:
 
 ## 18. Status
 
-Workflow criado na branch `quality/okan-035-ci-flutter`.
+Implementação e validação do GitHub Actions concluídas na branch `quality/okan-035-ci-flutter`.
 
-A primeira execução falhou de forma esperada no gate de lockfile por usar Flutter 3.38.9. O workflow foi corrigido para Flutter 3.47.0 sem alteração do lockfile.
+Evidência principal:
 
-Pendente confirmar a execução corrigida do GitHub Actions antes do merge.
+- primeira execução: falhou no lockfile com Flutter 3.38.9, detectando toolchain incompatível;
+- execução corrigida: Flutter 3.47.0, lockfile inalterado, analyzer sem erro fatal com 95 issues legadas e 70/70 testes verdes;
+- checkout atualizado para v6 antes do merge para remover dependência de runtime Node 20.
+
+Ticket pronto para merge após a execução final com checkout v6.
