@@ -39,17 +39,37 @@ class FirebaseEnvironmentService {
 
     final host = environment.emulatorHost!;
 
-    await FirebaseAuth.instance.useAuthEmulator(host, authPort);
-    FirebaseFirestore.instance.useFirestoreEmulator(host, firestorePort);
-    await FirebaseStorage.instance.useStorageEmulator(host, storagePort);
+    // OKAN_EMULATOR_HOST is explicit by design. Do not let FlutterFire rewrite
+    // 127.0.0.1 to 10.0.2.2 automatically: physical Android devices use
+    // adb reverse, while Android Emulator callers already pass 10.0.2.2.
+    await FirebaseAuth.instance.useAuthEmulator(
+      host,
+      authPort,
+      automaticHostMapping: false,
+    );
+    FirebaseFirestore.instance.useFirestoreEmulator(
+      host,
+      firestorePort,
+      automaticHostMapping: false,
+    );
+    await FirebaseStorage.instance.useStorageEmulator(
+      host,
+      storagePort,
+      automaticHostMapping: false,
+    );
 
     FirebaseFunctions.instanceFor(region: 'us-central1').useFunctionsEmulator(
       host,
       functionsPort,
+      automaticHostMapping: false,
     );
     FirebaseFunctions.instanceFor(
       region: 'southamerica-east1',
-    ).useFunctionsEmulator(host, functionsPort);
+    ).useFunctionsEmulator(
+      host,
+      functionsPort,
+      automaticHostMapping: false,
+    );
   }
 
   static FirebaseOptions get _developmentOptionsForCurrentPlatform {
