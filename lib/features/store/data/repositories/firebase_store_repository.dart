@@ -5,6 +5,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
+import '../../../../core/config/app_environment.dart';
 import '../../domain/entities/store_models.dart';
 import '../../domain/repositories/store_repository.dart';
 
@@ -14,11 +15,13 @@ class FirebaseStoreRepository implements StoreRepository {
     FirebaseAuth? auth,
     FirebaseFunctions? functions,
     http.Client? httpClient,
+    OkanEnvironmentConfig? environment,
   }) : _firestore = firestore ?? FirebaseFirestore.instance,
        _auth = auth ?? FirebaseAuth.instance,
        _functions =
            functions ?? FirebaseFunctions.instanceFor(region: 'us-central1'),
-       _httpClient = httpClient ?? http.Client();
+       _httpClient = httpClient ?? http.Client(),
+       _environment = environment ?? OkanEnvironmentConfig.current;
 
   static const _mercadoPagoPublicKey =
       'TEST-13b66d79-52ea-410d-9efb-57db088806b4';
@@ -27,6 +30,7 @@ class FirebaseStoreRepository implements StoreRepository {
   final FirebaseAuth _auth;
   final FirebaseFunctions _functions;
   final http.Client _httpClient;
+  final OkanEnvironmentConfig _environment;
 
   @override
   String? get currentUserId => _auth.currentUser?.uid;
@@ -35,6 +39,14 @@ class FirebaseStoreRepository implements StoreRepository {
     final uid = currentUserId;
     if (uid == null) throw StateError('Store requer usuário autenticado.');
     return uid;
+  }
+
+  void _requireExternalPaymentsEnabled() {
+    if (!_environment.enableExternalPayments) {
+      throw StateError(
+        'Pagamentos externos estão desativados no ambiente DEV.',
+      );
+    }
   }
 
   @override
@@ -96,6 +108,8 @@ class FirebaseStoreRepository implements StoreRepository {
 
   @override
   Future<PixPaymentData> createPixPayment(String templateId) async {
+    _requireExternalPaymentsEnabled();
+
     await _auth.currentUser?.getIdToken(true);
     final callable = _functions.httpsCallable('criarPagamentoPix');
     final result = await callable.call({
@@ -110,6 +124,8 @@ class FirebaseStoreRepository implements StoreRepository {
 
   @override
   Future<CardPaymentResult> createCardPayment(CardPaymentRequest request) async {
+    _requireExternalPaymentsEnabled();
+
     await _auth.currentUser?.getIdToken(true);
 
     final tokenUri = Uri.parse(
