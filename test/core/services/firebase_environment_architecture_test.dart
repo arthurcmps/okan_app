@@ -27,6 +27,24 @@ void main() {
     expect(source, contains('environment.isDevelopment'));
   });
 
+  test('dev guards every remaining direct Mercado Pago client path', () async {
+    final storeSource = await File(
+      'lib/features/store/data/repositories/firebase_store_repository.dart',
+    ).readAsString();
+    final subscriptionSource = await File(
+      'lib/features/auth/presentation/pages/professor_subscription_page.dart',
+    ).readAsString();
+
+    for (final source in [storeSource, subscriptionSource]) {
+      expect(source, contains('enableExternalPayments'));
+      expect(source, contains('https://api.mercadopago.com'));
+      expect(
+        source.indexOf('enableExternalPayments'),
+        lessThan(source.indexOf('https://api.mercadopago.com')),
+      );
+    }
+  });
+
   test('Android cleartext is enabled only in debug manifest', () async {
     final debugManifest = await File(
       'android/app/src/debug/AndroidManifest.xml',
