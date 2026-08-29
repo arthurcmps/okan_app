@@ -102,6 +102,15 @@ flutter test \
 flutter test
 ```
 
+Validação final executada em 2026-08-29:
+
+- analyzer: sem erro fatal; 145 issues legadas não bloqueantes;
+- gate Assessments + arquitetura: 11/11;
+- gate Workouts afetado pela mudança física de `EvolutionChartsPage`: 5/5 após atualização do caminho arquitetural;
+- suíte Flutter completa: 58/58;
+- branch sincronizada com `origin/refactor/frontend-okan-033-assessments`;
+- working tree limpa.
+
 ## 10. Firebase Emulator
 
 Não é obrigatório para este ticket porque não há alteração de Rules, Functions ou schema.
@@ -137,10 +146,10 @@ Não existe rollback de banco porque não há migração.
 - [x] paths antigos são exports de compatibilidade;
 - [x] exceções OKAN-033 saíram do baseline global;
 - [x] nenhuma migração de dados é necessária;
-- [ ] analyzer final sem erro fatal;
-- [ ] gate Assessments + arquitetura verde;
-- [ ] suíte Flutter completa verde;
-- [ ] working tree local limpa e sincronizada.
+- [x] analyzer final sem erro fatal;
+- [x] gate Assessments + arquitetura verde;
+- [x] suíte Flutter completa verde;
+- [x] working tree local limpa e sincronizada.
 
 ## 14. Próximos tickets preservados
 
@@ -149,6 +158,4 @@ Não existe rollback de banco porque não há migração.
 
 ## 15. Status
 
-Implementação arquitetural concluída na branch `refactor/frontend-okan-033-assessments`.
-
-Pendente validação local final antes de marcar o PR como pronto para merge.
+OKAN-033 concluído e pronto para merge.
