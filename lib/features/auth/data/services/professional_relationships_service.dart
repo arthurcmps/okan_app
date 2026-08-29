@@ -54,8 +54,14 @@ class ProfessionalRelationshipsService {
     Map<String, dynamic> payload,
   ) async {
     final callable = _functions.httpsCallable(functionName);
-    final result = await callable.call<Map<String, dynamic>>(payload);
-    return Map<String, dynamic>.from(result.data);
+    final result = await callable.call(payload);
+    final data = result.data;
+
+    if (data is! Map) {
+      throw StateError('Resposta inválida do serviço de vínculos.');
+    }
+
+    return Map<String, dynamic>.from(data);
   }
 }
 
