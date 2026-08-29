@@ -24,7 +24,7 @@ Permanecem:
 - `exercises` para catálogo de exercícios;
 - `workout_plans/{studentId}` para ficha semanal;
 - `workout_history` para histórico;
-- `workout_templates` para templates do profissional;
+- `workout_templates` para templates do profissional e catálogo da loja;
 - subcoleção `users/{uid}/notifications` para avisos de treino;
 - `personalId`, `criadoEm` e `atualizadoEm` nos modelos;
 - compatibilidade de `professorId` via `UserModel` v2;
@@ -33,6 +33,8 @@ Permanecem:
 - validade e aviso de vencimento;
 - reset de `concluido` após finalizar um treino;
 - catálogo, templates, vídeos e timer de descanso;
+- checkout/Store/Payments de `discover_workouts_page.dart` permanece fora do escopo deste ticket;
+- avaliações corporais de `evolution_charts_page.dart` permanecem para OKAN-033;
 - rotas/imports antigos por exports de compatibilidade.
 
 ## 4. Arquitetura
@@ -86,7 +88,7 @@ Os caminhos antigos em `features/auth` permanecem como `export` de compatibilida
 - `flutter analyze --no-fatal-infos --no-fatal-warnings`: sem erro fatal;
 - analyzer: 173 issues legadas não bloqueantes;
 - testes específicos de Workouts + gate arquitetural: `+6`, todos passaram;
-- a saída enviada da suíte completa termina durante a resolução de dependências e não contém resultado final; portanto ela não é contabilizada como aprovada.
+- a primeira saída da suíte completa terminou durante resolução de dependências e não foi contabilizada.
 
 ## 7. Checkpoint B — Weekly Plan
 
@@ -114,9 +116,47 @@ O caminho antigo `features/auth/presentation/pages/weekly_plan_page.dart` virou 
 
 O gate arquitetural removeu `weekly_plan_page.dart` do baseline legado e passou a exigir `WorkoutsRepository` na nova página.
 
-## 8. Testes
+### Validação local recebida
 
-Checkpoint B:
+- analyzer sem erro fatal;
+- analyzer: 160 issues legadas não bloqueantes;
+- Workouts + gate arquitetural: `+7`, todos passaram;
+- suíte completa: `+47`, todos passaram;
+- branch sincronizada com `origin` e working tree limpa.
+
+## 8. Checkpoint C — telas mistas
+
+### `discover_workouts_page.dart`
+
+A tela continua sendo uma composição temporária de Store/Payments + recomendações + aplicação de treino.
+
+O OKAN-031 remove apenas a responsabilidade de persistência da ficha:
+
+- a apresentação não lê mais `workout_plans` para concatenar exercícios;
+- a apresentação não grava mais `workout_plans` diretamente;
+- a aplicação de fichas adquiridas usa `WorkoutsRepository.appendWorkoutDays()`;
+- a implementação Firebase faz a concatenação dentro de transação;
+- checkout, `FirebaseFunctions`, templates premium, compras e recomendação permanecem para OKAN-034.
+
+### `evolution_charts_page.dart`
+
+A tela continua temporariamente misturando Assessments + histórico de treino.
+
+O OKAN-031 remove apenas a responsabilidade de histórico de treino:
+
+- lista de exercícios já realizados vem de `WorkoutsRepository.watchWorkoutHistory()`;
+- gráfico de progressão de carga usa entidades `WorkoutHistory`/`WorkoutExercise` puras;
+- a apresentação não consulta mais a coleção `workout_history` diretamente;
+- `users/{studentId}/assessments` e `Timestamp` de avaliações permanecem para OKAN-033.
+
+### Baseline arquitetural
+
+- `discover_workouts_page.dart`: reclassificado de `OKAN-031 / OKAN-034` para somente `OKAN-034`;
+- `evolution_charts_page.dart`: reclassificado de `OKAN-031 / OKAN-033` para somente `OKAN-033`.
+
+O teste de Workouts agora bloqueia regressões que reintroduzam `collection('workout_plans')` em Discover ou `collection('workout_history')` em Evolution Charts.
+
+## 9. Testes finais
 
 ```bash
 flutter analyze --no-fatal-infos --no-fatal-warnings
@@ -126,15 +166,15 @@ flutter test \
 flutter test
 ```
 
-A suíte completa continua obrigatória porque existem exports de compatibilidade e a nova página semanal possui grande superfície de UI/integração.
+A suíte completa é obrigatória porque existem exports de compatibilidade e telas grandes de composição.
 
-## 9. Firebase Emulator
+## 10. Firebase Emulator
 
 O OKAN-031 não muda Security Rules nem schema.
 
-O Emulator não é necessário para validar a separação estrutural, mas pode ser usado na Fase 7 para testes de integração do fluxo completo de Workouts.
+O Emulator não é necessário para validar a separação estrutural. Testes de integração do fluxo completo de Workouts permanecem para a Fase 7.
 
-## 10. Risco para produção
+## 11. Risco para produção
 
 Moderado.
 
@@ -143,17 +183,18 @@ Os principais riscos são:
 - compilação/import após realocação física;
 - regressão em operações da ficha semanal;
 - serialização de exercícios/histórico/templates;
+- concatenação de fichas adquiridas;
 - notificações e validade.
 
 A persistência permanece nos mesmos caminhos Firebase.
 
-## 11. Rollback
+## 12. Rollback
 
 Reverter o merge do OKAN-031.
 
 Não existe rollback de banco porque não há migração de dados.
 
-## 12. Critérios de aceite
+## 13. Critérios de aceite
 
 ### Concluídos
 
@@ -171,18 +212,16 @@ Não existe rollback de banco porque não há migração de dados.
 - [x] Caminhos antigos migrados permanecem como exports de compatibilidade.
 - [x] Gate arquitetural protege as páginas migradas.
 - [x] Nenhuma migração de dados é necessária.
-- [x] Analyzer do checkpoint A não apresentou erro fatal.
-- [x] Testes focados do checkpoint A passaram (`+6`).
+- [x] Checkpoint B validado localmente: analyzer sem erro fatal, gate `+7`, suíte `+47`, tree limpa.
+- [x] Discover deixa de escrever diretamente em `workout_plans`.
+- [x] Evolution Charts deixa de consultar diretamente `workout_history`.
+- [x] Baseline de Discover pertence somente ao OKAN-034.
+- [x] Baseline de Evolution Charts pertence somente ao OKAN-033.
 
-### Pendentes para concluir OKAN-031
+### Pendente para concluir OKAN-031
 
-- [ ] Validar localmente o checkpoint B.
-- [ ] A parte de Workouts de `discover_workouts_page.dart` deixa de escrever diretamente em `workout_plans`, sem absorver Store/Payments.
-- [ ] A parte de histórico de `evolution_charts_page.dart` usa boundary de Workouts; Assessments permanece para OKAN-033.
-- [ ] Baseline de `discover_workouts_page.dart` passa a pertencer somente ao OKAN-034.
-- [ ] Baseline de `evolution_charts_page.dart` passa a pertencer somente ao OKAN-033.
-- [ ] Suíte completa passa após a conclusão.
+- [ ] Validação local final após o Checkpoint C: analyzer sem erro fatal, gate verde e suíte completa verde.
 
-## 13. Documentação
+## 14. Documentação
 
-Este arquivo é atualizado a cada checkpoint do OKAN-031. O ticket só será concluído quando os critérios finais estiverem verdes.
+Este arquivo registra problema, risco, comportamento preservado, migração, testes, rollback e critérios de aceite. O ticket só será concluído após a validação final do Checkpoint C.
