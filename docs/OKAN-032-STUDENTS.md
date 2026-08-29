@@ -77,7 +77,9 @@ Nenhum documento existente precisa ser alterado.
 - exports de compatibilidade em `features/auth/presentation/pages`;
 - gates arquiteturais de Students e apresentação global.
 
-## 7. Testes locais obrigatórios
+## 7. Validação local final
+
+Executado localmente:
 
 ```bash
 flutter analyze --no-fatal-infos --no-fatal-warnings
@@ -87,6 +89,17 @@ flutter test \
   test/architecture/presentation_repository_boundary_test.dart
 flutter test
 ```
+
+Resultado:
+
+- analyzer sem erro fatal;
+- 149 issues legadas não bloqueantes;
+- gate de Students + arquitetura: `+10`, todos passaram;
+- suíte Flutter completa: `+50`, todos passaram;
+- branch sincronizada com `origin/refactor/frontend-okan-032-students`;
+- working tree limpa.
+
+As issues do analyzer permanecem como dívida técnica independente. Dependências e CI não são alterados no OKAN-032.
 
 ## 8. Firebase Emulator
 
@@ -123,10 +136,10 @@ Não existe rollback de banco porque não há migração de dados.
 - [x] erros de relacionamento chegam à UI como domínio de Students.
 - [x] `student_detail_page.dart` sai do baseline legado do gate global.
 - [x] nenhuma migração de dados é necessária.
-- [ ] analyzer final sem erro fatal.
-- [ ] gate de Students + arquitetura verde.
-- [ ] suíte Flutter completa verde.
-- [ ] working tree local limpa e sincronizada.
+- [x] analyzer final sem erro fatal, com 149 issues legadas não bloqueantes.
+- [x] gate de Students + arquitetura verde: `+10`.
+- [x] suíte Flutter completa verde: `+50`.
+- [x] working tree local limpa e sincronizada.
 
 ## 12. Próximas fronteiras preservadas
 
@@ -140,6 +153,6 @@ Essas dependências de composição não reabrem o escopo de Students.
 
 ## 13. Status
 
-Implementação arquitetural concluída na branch `refactor/frontend-okan-032-students`.
+**OKAN-032 concluído e apto para merge.**
 
-Pendente apenas validação local final antes de marcar o PR como pronto para merge.
+A separação de Assessments/Anamnese continua no OKAN-033; Chat/Arena/Store no OKAN-034; CI Flutter no OKAN-035.
