@@ -98,6 +98,8 @@ Para evitar referências flutuantes, as actions são chamadas por SHA completo:
 
 A primeira execução verde ainda usava checkout v4 e revelou o warning de depreciação do runtime Node 20. Como o runner já utiliza Node 24, o workflow foi atualizado para checkout v6 antes do merge.
 
+A execução final com checkout v6 também ficou verde e não apresentou o warning de Node 20.
+
 Atualizações futuras desses SHAs devem ocorrer em ticket explícito e ser revisadas como alteração de infraestrutura.
 
 ## 7. Lockfile
@@ -110,7 +112,7 @@ git diff --exit-code -- pubspec.lock
 
 Se a resolução modificar o lockfile, o job falha. A primeira execução do OKAN-035 comprovou esse gate ao detectar a incompatibilidade de Flutter 3.38.9.
 
-Com Flutter 3.47.0 o check passou sem qualquer modificação do lockfile.
+Com Flutter 3.47.0 o check passou sem qualquer modificação do lockfile, inclusive na execução final com checkout v6.
 
 ## 8. Analyzer
 
@@ -120,7 +122,7 @@ O projeto possui infos/warnings legados conhecidos. Para preservar o contrato ut
 flutter analyze --no-fatal-infos --no-fatal-warnings
 ```
 
-Resultado validado no GitHub Actions:
+Resultado final validado no GitHub Actions:
 
 ```text
 95 issues found
@@ -141,7 +143,7 @@ A CI executa a suíte completa com:
 flutter test
 ```
 
-Resultado validado:
+Resultado final validado:
 
 ```text
 70 tests passed
@@ -182,7 +184,7 @@ Baixo.
 
 O ticket adiciona apenas infraestrutura de validação do repositório. Não altera binário, runtime ou persistência do app.
 
-O principal risco era escolher uma toolchain diferente daquela que gerou o lockfile. A própria primeira execução detectou esse problema antes do merge; a execução corrigida com Flutter 3.47.0 ficou verde de ponta a ponta.
+O principal risco era escolher uma toolchain diferente daquela que gerou o lockfile. A própria primeira execução detectou esse problema antes do merge; as execuções corrigidas com Flutter 3.47.0 ficaram verdes de ponta a ponta.
 
 ## 15. Rollback
 
@@ -210,7 +212,8 @@ Não existe rollback de dados.
 - [x] nenhuma dependência atualizada;
 - [x] nenhuma mudança de Rules/Functions/schema;
 - [x] gate de lockfile provou bloquear incompatibilidade de SDK;
-- [x] execução corrigida do workflow em PR verde.
+- [x] execução corrigida do workflow em PR verde;
+- [x] execução final com checkout v6 verde e sem warning de Node 20.
 
 ## 17. Próximo ticket
 
@@ -226,6 +229,6 @@ Evidência principal:
 
 - primeira execução: falhou no lockfile com Flutter 3.38.9, detectando toolchain incompatível;
 - execução corrigida: Flutter 3.47.0, lockfile inalterado, analyzer sem erro fatal com 95 issues legadas e 70/70 testes verdes;
-- checkout atualizado para v6 antes do merge para remover dependência de runtime Node 20.
+- execução final: checkout v6 + Flutter 3.47.0, lockfile inalterado, analyzer sem erro fatal com 95 issues legadas, 70/70 testes verdes e sem warning de runtime Node 20.
 
-Ticket pronto para merge após a execução final com checkout v6.
+OKAN-035 concluído e pronto para merge.
