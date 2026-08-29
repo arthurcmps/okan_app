@@ -1,13 +1,21 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../domain/entities/chat_message.dart';
 import '../../domain/repositories/chat_repository.dart';
 
 class FirebaseChatRepository implements ChatRepository {
-  FirebaseChatRepository({FirebaseFirestore? firestore})
-    : _firestore = firestore ?? FirebaseFirestore.instance;
+  FirebaseChatRepository({
+    FirebaseFirestore? firestore,
+    FirebaseAuth? auth,
+  }) : _firestore = firestore ?? FirebaseFirestore.instance,
+       _auth = auth ?? FirebaseAuth.instance;
 
   final FirebaseFirestore _firestore;
+  final FirebaseAuth _auth;
+
+  @override
+  String? get currentUserId => _auth.currentUser?.uid;
 
   @override
   Future<String> loadUserDisplayName(String userId) async {
@@ -16,10 +24,7 @@ class FirebaseChatRepository implements ChatRepository {
 
     if (data == null) return 'Usuário';
 
-    return _stringOrFallback(
-      data['name'] ?? data['nome'],
-      'Usuário',
-    );
+    return _stringOrFallback(data['name'] ?? data['nome'], 'Usuário');
   }
 
   @override
@@ -48,16 +53,13 @@ class FirebaseChatRepository implements ChatRepository {
         .snapshots()
         .map(
           (snapshot) => snapshot.docs
-              .map(
-                (document) {
-                  final data = document.data();
-
-                  return ChatMessage(
-                    senderId: _stringOrFallback(data['senderId'], ''),
-                    text: _stringOrFallback(data['text'], ''),
-                  );
-                },
-              )
+              .map((document) {
+                final data = document.data();
+                return ChatMessage(
+                  senderId: _stringOrFallback(data['senderId'], ''),
+                  text: _stringOrFallback(data['text'], ''),
+                );
+              })
               .toList(growable: false),
         );
   }
@@ -108,7 +110,6 @@ class FirebaseChatRepository implements ChatRepository {
 
   static String _stringOrFallback(dynamic value, String fallback) {
     if (value is! String) return fallback;
-
     final normalized = value.trim();
     return normalized.isEmpty ? fallback : normalized;
   }
