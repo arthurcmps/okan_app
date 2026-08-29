@@ -176,6 +176,15 @@ flutter test \
 flutter test
 ```
 
+### Evidência final
+
+- `flutter analyze --no-fatal-infos --no-fatal-warnings`: sem erro fatal; 95 issues legadas não bloqueantes;
+- gates Chat + Arena + Store + Workouts + arquitetura global: 20/20;
+- suíte Flutter completa: 70/70;
+- branch local sincronizada com `origin/refactor/frontend-okan-034-chat-arena-store`;
+- working tree limpa;
+- 122 packages possuem versões mais novas incompatíveis com os constraints atuais; nenhuma dependência foi atualizada neste ticket.
+
 ## 11. Firebase Emulator
 
 Não é obrigatório para este ticket porque Rules, Functions e schema não foram alterados.
@@ -218,10 +227,10 @@ Não há rollback de banco porque não existe migração.
 - [x] gate cruzado Workouts aponta para a nova Store;
 - [x] nenhuma migração de dados;
 - [x] nenhuma mudança de Rules/Functions/schema/dependências;
-- [ ] analyzer final sem erro fatal;
-- [ ] gates OKAN-034 verdes;
-- [ ] suíte Flutter completa verde;
-- [ ] working tree local limpa e sincronizada.
+- [x] analyzer final sem erro fatal;
+- [x] gates OKAN-034 verdes;
+- [x] suíte Flutter completa verde;
+- [x] working tree local limpa e sincronizada.
 
 ## 15. Próximo ticket
 
@@ -231,6 +240,6 @@ Após a conclusão do OKAN-034, a Fase 6 planejada termina e inicia a Fase 7 com
 
 ## 16. Status
 
-Implementação arquitetural concluída na branch `refactor/frontend-okan-034-chat-arena-store`.
+Implementação e validação local concluídas na branch `refactor/frontend-okan-034-chat-arena-store`.
 
-Pendente validação local final antes do merge.
+OKAN-034 pronto para merge.
