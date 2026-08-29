@@ -18,7 +18,6 @@ const _legacyInfrastructureExceptions = <String, String>{
   'lib/features/auth/presentation/pages/profile_page.dart':
       'Profile/Auth follow-up',
   'lib/features/auth/presentation/pages/register_page.dart': 'Auth follow-up',
-  'lib/features/auth/presentation/pages/student_detail_page.dart': 'OKAN-032',
   'lib/features/auth/presentation/pages/super_admin_page.dart': 'OKAN-034',
 };
 
@@ -78,7 +77,9 @@ void main() {
 
   test('fatias migradas usam repository boundaries', () {
     const migratedPresentation = <String, String>{
-      'lib/features/auth/presentation/pages/students_page.dart':
+      'lib/features/students/presentation/pages/students_page.dart':
+          'StudentsRepository',
+      'lib/features/students/presentation/pages/student_detail_page.dart':
           'StudentsRepository',
       'lib/features/auth/presentation/pages/chat_page.dart':
           'ChatRepository',
