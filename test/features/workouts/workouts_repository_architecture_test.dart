@@ -23,6 +23,7 @@ void main() {
       'lib/features/workouts/presentation/pages/create_workout_page.dart',
       'lib/features/workouts/presentation/pages/manage_workouts_page.dart',
       'lib/features/workouts/presentation/pages/train_page.dart',
+      'lib/features/workouts/presentation/pages/weekly_plan_page.dart',
       'lib/features/workouts/presentation/pages/workout_history_page.dart',
     ];
 
@@ -42,12 +43,30 @@ void main() {
       'lib/features/auth/presentation/pages/create_workout_page.dart',
       'lib/features/auth/presentation/pages/manage_workouts_page.dart',
       'lib/features/auth/presentation/pages/train_page.dart',
+      'lib/features/auth/presentation/pages/weekly_plan_page.dart',
       'lib/features/auth/presentation/pages/workout_history_page.dart',
     ];
 
     for (final path in compatibility) {
       final source = File(path).readAsStringSync().trim();
       expect(source, startsWith('export '), reason: path);
+    }
+  });
+
+  test('weekly plan infrastructure stays behind repository contract', () {
+    final contract = File(
+      'lib/features/workouts/domain/repositories/workouts_repository.dart',
+    ).readAsStringSync();
+
+    for (final member in <String>[
+      'watchWeeklyPlan',
+      'saveWorkoutDay',
+      'saveWorkoutFeedback',
+      'setWorkoutValidity',
+      'watchWorkoutTemplates',
+      'notifyUser',
+    ]) {
+      expect(contract, contains(member));
     }
   });
 }
