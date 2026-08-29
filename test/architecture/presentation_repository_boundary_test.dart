@@ -6,7 +6,6 @@ const _legacyInfrastructureExceptions = <String, String>{
   'lib/features/auth/presentation/pages/anamnese_tab.dart': 'OKAN-033',
   'lib/features/auth/presentation/pages/arena_page.dart': 'OKAN-034',
   'lib/features/auth/presentation/pages/assessments_tab.dart': 'OKAN-033',
-  'lib/features/auth/presentation/pages/create_workout_page.dart': 'OKAN-031',
   'lib/features/auth/presentation/pages/discover_workouts_page.dart':
       'OKAN-031 / OKAN-034',
   'lib/features/auth/presentation/pages/evolution_charts_page.dart':
@@ -14,7 +13,6 @@ const _legacyInfrastructureExceptions = <String, String>{
   'lib/features/auth/presentation/pages/home_page.dart':
       'Fase 6 - composicao das features',
   'lib/features/auth/presentation/pages/library_admin_page.dart': 'OKAN-034',
-  'lib/features/auth/presentation/pages/manage_workouts_page.dart': 'OKAN-031',
   'lib/features/auth/presentation/pages/personal_data_page.dart':
       'Profile/Auth follow-up',
   'lib/features/auth/presentation/pages/professor_subscription_page.dart':
@@ -24,9 +22,7 @@ const _legacyInfrastructureExceptions = <String, String>{
   'lib/features/auth/presentation/pages/register_page.dart': 'Auth follow-up',
   'lib/features/auth/presentation/pages/student_detail_page.dart': 'OKAN-032',
   'lib/features/auth/presentation/pages/super_admin_page.dart': 'OKAN-034',
-  'lib/features/auth/presentation/pages/train_page.dart': 'OKAN-031',
   'lib/features/auth/presentation/pages/weekly_plan_page.dart': 'OKAN-031',
-  'lib/features/auth/presentation/pages/workout_history_page.dart': 'OKAN-031',
 };
 
 void main() {
@@ -93,6 +89,14 @@ void main() {
           'NotificationsRepository',
       'lib/features/auth/presentation/controllers/tarefa_controller.dart':
           'TasksRepository',
+      'lib/features/workouts/presentation/pages/create_workout_page.dart':
+          'WorkoutsRepository',
+      'lib/features/workouts/presentation/pages/manage_workouts_page.dart':
+          'WorkoutsRepository',
+      'lib/features/workouts/presentation/pages/train_page.dart':
+          'WorkoutsRepository',
+      'lib/features/workouts/presentation/pages/workout_history_page.dart':
+          'WorkoutsRepository',
     };
 
     for (final entry in migratedPresentation.entries) {
