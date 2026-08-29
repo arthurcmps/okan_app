@@ -1,13 +1,12 @@
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/user_avatar.dart';
-import '../../../auth/data/services/professional_relationships_service.dart';
 import '../../../auth/presentation/pages/chat_page.dart';
 import '../../data/repositories/firebase_students_repository.dart';
 import '../../domain/entities/pending_student_invite.dart';
+import '../../domain/entities/student_relationship_exception.dart';
 import '../../domain/entities/student_summary.dart';
 import '../../domain/repositories/students_repository.dart';
 import 'student_detail_page.dart';
@@ -59,10 +58,6 @@ class _StudentsPageState extends State<StudentsPage>
     super.dispose();
   }
 
-  bool _isPermissionDenied(Object error) {
-    return error is FirebaseException && error.code == 'permission-denied';
-  }
-
   void _mostrarErroDeAcao(
     Object error, {
     required String action,
@@ -72,49 +67,26 @@ class _StudentsPageState extends State<StudentsPage>
 
     if (!mounted) return;
 
-    if (isProfessionalRelationshipPlanLimit(error)) {
-      if (fecharDialogoAtual && Navigator.of(context).canPop()) {
-        Navigator.pop(context);
+    if (error is StudentRelationshipException) {
+      if (error.isPlanLimit) {
+        if (fecharDialogoAtual && Navigator.of(context).canPop()) {
+          Navigator.pop(context);
+        }
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+
+          _mostrarAlerta(
+            'Limite do Plano Base',
+            'Seu Plano Base permite até 3 alunos entre ativos e convites '
+                'pendentes. Seus vínculos atuais permanecem seguros. '
+                'Para adicionar novos alunos, reative o Premium.',
+          );
+        });
+        return;
       }
 
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-
-        _mostrarAlerta(
-          'Limite do Plano Base',
-          'Seu Plano Base permite até 3 alunos entre ativos e convites '
-              'pendentes. Seus vínculos atuais permanecem seguros. '
-              'Para adicionar novos alunos, reative o Premium.',
-        );
-      });
-
-      return;
-    }
-
-    final callableMessage = professionalRelationshipErrorMessage(error);
-    if (callableMessage !=
-        'Não foi possível concluir esta ação agora. Tente novamente em instantes.') {
-      _mostrarSnack(callableMessage, isError: true);
-      return;
-    }
-
-    if (_isPermissionDenied(error)) {
-      if (fecharDialogoAtual && Navigator.of(context).canPop()) {
-        Navigator.pop(context);
-      }
-
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-
-        _mostrarAlerta(
-          'Ação indisponível no plano atual',
-          'Seu plano atual limita a gestão de alguns vínculos de alunos. '
-              'Este vínculo continua salvo e nenhum dado foi perdido. '
-              'Para voltar a gerenciar todos os alunos normalmente, '
-              'reative o Premium.',
-        );
-      });
-
+      _mostrarSnack(error.message, isError: true);
       return;
     }
 
@@ -539,6 +511,7 @@ class _StudentsPageState extends State<StudentsPage>
                             studentId: aluno.id,
                             studentName: nome,
                             studentEmail: email,
+                            repository: _studentsRepository,
                           ),
                         ),
                       );
