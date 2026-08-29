@@ -8,6 +8,7 @@ import 'chat_page.dart';
 import 'weekly_plan_page.dart';
 import 'student_detail_page.dart';
 import '../../data/models/user_model.dart';
+import '../../data/services/professional_relationships_service.dart';
 
 class NotificationsPage extends StatelessWidget {
   const NotificationsPage({super.key});
@@ -81,7 +82,7 @@ class NotificationsPage extends StatelessWidget {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('invites')
-          .where('toStudentEmail', isEqualTo: user.email)
+          .where('studentUid', isEqualTo: user.uid)
           .where('status', isEqualTo: 'pending')
           .snapshots(),
       builder: (context, snapshot) {
@@ -388,9 +389,7 @@ class NotificationsPage extends StatelessWidget {
         } else if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text(
-                "Abra a aba 'Meus Alunos' para conferir o treino.",
-              ),
+              content: Text("Abra a aba 'Meus Alunos' para conferir o treino."),
             ),
           );
         }
@@ -581,38 +580,10 @@ class NotificationsPage extends StatelessWidget {
     bool aceitar,
   ) async {
     try {
-      final inviteDoc = await FirebaseFirestore.instance
-          .collection('invites')
-          .doc(inviteId)
-          .get();
-      if (!inviteDoc.exists) return;
-
-      final data = inviteDoc.data()!;
-      final studentId = FirebaseAuth.instance.currentUser!.uid;
-      final personalId = data['personalId'] ?? data['fromPersonalId'];
-      final personalName = data['personalName'] ?? data['fromPersonalName'];
-
-      if (aceitar) {
-        if (personalId == null || personalId.toString().trim().isEmpty) {
-          throw StateError('Convite sem identificador de professor.');
-        }
-
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(studentId)
-            .update({
-              'professorId': personalId,
-              'personalId': personalId,
-              'personalName': personalName,
-              'inviteFromPersonalId': inviteId,
-              'updatedAt': FieldValue.serverTimestamp(),
-            });
-      }
-
-      await FirebaseFirestore.instance
-          .collection('invites')
-          .doc(inviteId)
-          .update({'status': aceitar ? 'accepted' : 'rejected'});
+      await ProfessionalRelationshipsService().respondStudentInvite(
+        inviteId: inviteId,
+        accept: aceitar,
+      );
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -628,9 +599,12 @@ class NotificationsPage extends StatelessWidget {
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Erro: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(professionalRelationshipErrorMessage(e)),
+            backgroundColor: AppColors.error,
+          ),
+        );
       }
     }
   }
