@@ -31,6 +31,11 @@ abstract class WorkoutsRepository {
     required List<WorkoutExercise> exercises,
   });
 
+  Future<void> appendWorkoutDays({
+    required String studentId,
+    required Map<String, List<WorkoutExercise>> exercisesByDay,
+  });
+
   Future<void> saveWorkoutFeedback({
     required String studentId,
     required String dayKey,
