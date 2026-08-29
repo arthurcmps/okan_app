@@ -3,7 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'package:flutter/services.dart'; 
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -14,9 +14,11 @@ import 'firebase_options.dart';
 import 'features/auth/presentation/pages/login_page.dart';
 import 'features/auth/presentation/pages/home_page.dart';
 import 'features/auth/presentation/pages/onboarding_page.dart';
+import 'core/config/app_environment.dart';
+import 'core/services/firebase_environment_service.dart';
 import 'core/services/time_service.dart';
 import 'features/auth/presentation/controllers/tarefa_controller.dart';
-import 'core/theme/app_colors.dart'; 
+import 'core/theme/app_colors.dart';
 import 'core/services/push_notification_service.dart';
 
 // --- CHAVE MESTRA DE NAVEGAÇÃO ---
@@ -33,14 +35,21 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 }
 
 const AndroidNotificationChannel channel = AndroidNotificationChannel(
-  'high_importance_channel', 
-  'Notificações Importantes', 
-  description: 'Este canal é usado para alertas de treinos e mensagens.', 
-  importance: Importance.max, 
+  'high_importance_channel',
+  'Notificações Importantes',
+  description: 'Este canal é usado para alertas de treinos e mensagens.',
+  importance: Importance.max,
   playSound: true,
 );
 
-final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+    FlutterLocalNotificationsPlugin();
+
+void _bootstrapLog(String message) {
+  if (kDebugMode) {
+    debugPrint('[OKAN BOOT] $message');
+  }
+}
 
 // =======================================================
 // FUNÇÃO MAIN
@@ -51,40 +60,59 @@ void main() async {
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
   try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
+    _bootstrapLog('resolving environment');
+    final environment = OkanEnvironmentConfig.current;
+    _bootstrapLog(
+      'environment=${environment.label} host=${environment.emulatorHost ?? '-'}',
     );
 
-// ATIVAÇÃO DO APP CHECK INTELIGENTE
-    await FirebaseAppCheck.instance.activate(
-      androidProvider: kReleaseMode 
-          ? AndroidProvider.playIntegrity 
-          : AndroidProvider.debug,
-      appleProvider: kReleaseMode 
-          ? AppleProvider.deviceCheck 
-          : AppleProvider.debug,
-    );
-    
-    // Verificação do Onboarding
+    _bootstrapLog('initializing Firebase environment');
+    await FirebaseEnvironmentService.initialize(environment);
+    _bootstrapLog('Firebase environment ready');
+
+    if (environment.enableAppCheck) {
+      _bootstrapLog('activating App Check');
+      await FirebaseAppCheck.instance.activate(
+        androidProvider: kReleaseMode
+            ? AndroidProvider.playIntegrity
+            : AndroidProvider.debug,
+        appleProvider: kReleaseMode
+            ? AppleProvider.deviceCheck
+            : AppleProvider.debug,
+      );
+      _bootstrapLog('App Check ready');
+    } else {
+      _bootstrapLog('App Check disabled for this environment');
+    }
+
+    _bootstrapLog('loading SharedPreferences');
     final prefs = await SharedPreferences.getInstance();
     final bool showOnboarding = prefs.getBool('showOnboarding') ?? true;
+    _bootstrapLog('SharedPreferences ready; showOnboarding=$showOnboarding');
 
-    // --- SETUP DO MOTOR DE NOTIFICAÇÕES ---
-    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    if (environment.enablePushNotifications) {
+      _bootstrapLog('initializing push notifications');
+      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-    await flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(channel);
+      await flutterLocalNotificationsPlugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >()
+          ?.createNotificationChannel(channel);
 
-    final pushService = PushNotificationService();
-    await pushService.initialize();
-    
-    // Passamos a chave mestra para o serviço de notificações
-    pushService.setupInteractions(navigatorKey);
-    // ----------------------------------------
+      final pushService = PushNotificationService();
+      await pushService.initialize();
+      pushService.setupInteractions(navigatorKey);
+      _bootstrapLog('push notifications ready');
+    } else {
+      _bootstrapLog('push notifications disabled for this environment');
+    }
 
+    _bootstrapLog('initializing pt_BR date formatting');
     await initializeDateFormatting('pt_BR', null);
+    _bootstrapLog('date formatting ready');
 
+    _bootstrapLog('starting Flutter UI');
     runApp(
       MultiProvider(
         providers: [
@@ -92,11 +120,19 @@ void main() async {
             create: (_) => TarefaController()..iniciarEscuta(),
           ),
         ],
-        child: OkanApp(showOnboarding: showOnboarding),
+        child: OkanApp(
+          showOnboarding: showOnboarding,
+          environment: environment,
+        ),
       ),
     );
-
+    _bootstrapLog('Flutter UI started');
   } catch (e, stackTrace) {
+    debugPrint('[OKAN BOOT][FATAL] $e');
+    debugPrintStack(
+      label: '[OKAN BOOT][STACK]',
+      stackTrace: stackTrace,
+    );
     runApp(AppErrorScreen(error: e, stackTrace: stackTrace));
   }
 }
@@ -104,10 +140,9 @@ void main() async {
 // --- TEMA DO APP (CYBER-SANKOFA) ---
 final ThemeData sportTheme = ThemeData(
   useMaterial3: true,
-  brightness: Brightness.dark, 
+  brightness: Brightness.dark,
   scaffoldBackgroundColor: AppColors.background,
-  fontFamily: 'Montserrat', 
-  
+  fontFamily: 'Montserrat',
   colorScheme: ColorScheme.fromSeed(
     seedColor: AppColors.primary,
     brightness: Brightness.dark,
@@ -116,93 +151,104 @@ final ThemeData sportTheme = ThemeData(
     error: AppColors.error,
     primary: AppColors.primary,
     secondary: AppColors.secondary,
-    onPrimary: Colors.black, 
-    onSecondary: Colors.white, 
+    onPrimary: Colors.black,
+    onSecondary: Colors.white,
   ),
-
   cardTheme: CardThemeData(
     color: AppColors.surface,
-    elevation: 0, 
+    elevation: 0,
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(16),
-      side: BorderSide(color: Colors.white.withOpacity(0.05), width: 1) 
+      side: BorderSide(color: Colors.white.withOpacity(0.05), width: 1),
     ),
     margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
   ),
-
   appBarTheme: const AppBarTheme(
     backgroundColor: Colors.transparent,
     elevation: 0,
     centerTitle: false,
     iconTheme: IconThemeData(color: AppColors.textMain),
     titleTextStyle: TextStyle(
-      color: AppColors.textMain, 
-      fontSize: 24, 
+      color: AppColors.textMain,
+      fontSize: 24,
       fontWeight: FontWeight.w800,
       letterSpacing: -0.5,
     ),
   ),
-
   textTheme: const TextTheme(
-    headlineLarge: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w900),
-    titleMedium: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.bold),
-    bodyLarge: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w600),
-    bodyMedium: TextStyle(color: AppColors.textSub, fontWeight: FontWeight.w500),
+    headlineLarge: TextStyle(
+      color: AppColors.textMain,
+      fontWeight: FontWeight.w900,
+    ),
+    titleMedium: TextStyle(
+      color: AppColors.textMain,
+      fontWeight: FontWeight.bold,
+    ),
+    bodyLarge: TextStyle(
+      color: AppColors.textMain,
+      fontWeight: FontWeight.w600,
+    ),
+    bodyMedium: TextStyle(
+      color: AppColors.textSub,
+      fontWeight: FontWeight.w500,
+    ),
   ),
-
-  iconTheme: const IconThemeData(
-    color: AppColors.primary, 
-  ),
-
+  iconTheme: const IconThemeData(color: AppColors.primary),
   elevatedButtonTheme: ElevatedButtonThemeData(
     style: ElevatedButton.styleFrom(
       backgroundColor: AppColors.primary,
-      foregroundColor: Colors.black, 
+      foregroundColor: Colors.black,
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, letterSpacing: 0.5),
+      textStyle: const TextStyle(
+        fontWeight: FontWeight.w800,
+        fontSize: 16,
+        letterSpacing: 0.5,
+      ),
     ),
   ),
-  
   outlinedButtonTheme: OutlinedButtonThemeData(
     style: OutlinedButton.styleFrom(
-      foregroundColor: AppColors.textMain, 
-      side: const BorderSide(color: AppColors.textSub, width: 1), 
+      foregroundColor: AppColors.textMain,
+      side: const BorderSide(color: AppColors.textSub, width: 1),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
     ),
   ),
-
   inputDecorationTheme: InputDecorationTheme(
     filled: true,
-    fillColor: AppColors.surface, 
+    fillColor: AppColors.surface,
     labelStyle: const TextStyle(color: AppColors.textSub),
     hintStyle: TextStyle(color: AppColors.textSub.withOpacity(0.5)),
-    prefixIconColor: AppColors.textSub, 
+    prefixIconColor: AppColors.textSub,
     contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide.none,
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide.none,
+    ),
     focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12), 
-      borderSide: const BorderSide(color: AppColors.primary, width: 1), 
+      borderRadius: BorderRadius.circular(12),
+      borderSide: const BorderSide(color: AppColors.primary, width: 1),
     ),
     errorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12), 
+      borderRadius: BorderRadius.circular(12),
       borderSide: const BorderSide(color: AppColors.error, width: 1),
     ),
   ),
-  
-  // --- CORREÇÃO APLICADA AQUI (WidgetStateProperty em vez de MaterialStateProperty) ---
   checkboxTheme: CheckboxThemeData(
     fillColor: WidgetStateProperty.resolveWith((states) {
       if (states.contains(WidgetState.selected)) {
-        return AppColors.primary; 
+        return AppColors.primary;
       }
       return Colors.transparent;
     }),
-    checkColor: WidgetStateProperty.all(Colors.black), 
+    checkColor: WidgetStateProperty.all(Colors.black),
     side: const BorderSide(color: AppColors.textSub, width: 2),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
   ),
@@ -211,12 +257,18 @@ final ThemeData sportTheme = ThemeData(
 // --- WIDGET RAIZ ---
 class OkanApp extends StatelessWidget {
   final bool showOnboarding;
-  const OkanApp({super.key, required this.showOnboarding});
+  final OkanEnvironmentConfig environment;
+
+  const OkanApp({
+    super.key,
+    required this.showOnboarding,
+    required this.environment,
+  });
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Okan App',
+      title: environment.appTitle,
       debugShowCheckedModeBanner: false,
       theme: sportTheme,
       navigatorKey: navigatorKey,
@@ -225,24 +277,33 @@ class OkanApp extends StatelessWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      supportedLocales: const [
-        Locale('pt', 'BR'),
-        Locale('en', 'US'),
-      ],
-      home: AuthCheck(showOnboarding: showOnboarding), 
+      supportedLocales: const [Locale('pt', 'BR'), Locale('en', 'US')],
+      home: AuthCheck(showOnboarding: showOnboarding),
       builder: (context, child) {
-        return Scaffold(
-          backgroundColor: Colors.transparent, 
+        Widget root = Scaffold(
+          backgroundColor: Colors.transparent,
           body: Stack(
             children: [
-              if (child != null) child!, 
+              if (child != null) child,
               const Positioned(
-                bottom: 0, left: 0, right: 0, 
-                child: GlobalTimerBar() 
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: GlobalTimerBar(),
               ),
             ],
           ),
         );
+
+        if (environment.isDevelopment) {
+          root = Banner(
+            message: environment.label,
+            location: BannerLocation.topEnd,
+            child: root,
+          );
+        }
+
+        return root;
       },
     );
   }
@@ -255,22 +316,22 @@ class AuthCheck extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 1. Verificação SÍNCRONA (Instantânea): Se o Firebase já tiver o utilizador em memória, entra direto!
     if (FirebaseAuth.instance.currentUser != null) {
       return const HomePage();
     }
 
-    // 2. Verificação ASSÍNCRONA (Aguardando resposta do Cofre)
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             backgroundColor: AppColors.background,
-            body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+            body: Center(
+              child: CircularProgressIndicator(color: AppColors.primary),
+            ),
           );
         }
-        
+
         if (snapshot.hasData && snapshot.data != null) {
           return const HomePage();
         }
@@ -298,15 +359,15 @@ class _GlobalTimerBarState extends State<GlobalTimerBar> {
     super.initState();
     TimerService.instance.addListener(_atualizar);
   }
-  
+
   @override
   void dispose() {
     TimerService.instance.removeListener(_atualizar);
     super.dispose();
   }
-  
-  void _atualizar() { 
-    if (mounted) setState(() {}); 
+
+  void _atualizar() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -321,43 +382,54 @@ class _GlobalTimerBarState extends State<GlobalTimerBar> {
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(30),
-          border: Border.all(color: AppColors.primary.withOpacity(0.3)), 
+          border: Border.all(color: AppColors.primary.withOpacity(0.3)),
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 10, offset: const Offset(0, 5))
-          ]
+            BoxShadow(
+              color: Colors.black.withOpacity(0.5),
+              blurRadius: 10,
+              offset: const Offset(0, 5),
+            ),
+          ],
         ),
         child: Material(
           color: Colors.transparent,
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.timer_outlined, color: AppColors.primary), 
+              const Icon(Icons.timer_outlined, color: AppColors.primary),
               const SizedBox(width: 12),
               Text(
-                TimerService.instance.formattedTime, 
+                TimerService.instance.formattedTime,
                 style: const TextStyle(
-                  color: AppColors.textMain, 
-                  fontSize: 18, 
-                  fontWeight: FontWeight.bold, 
-                  fontFamily: 'monospace'
-                )
+                  color: AppColors.textMain,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'monospace',
+                ),
               ),
               const Spacer(),
               IconButton(
-                icon: const Icon(Icons.add_circle_outline, color: AppColors.secondary), 
-                onPressed: () => TimerService.instance.addTime(10)
+                icon: const Icon(
+                  Icons.add_circle_outline,
+                  color: AppColors.secondary,
+                ),
+                onPressed: () => TimerService.instance.addTime(10),
               ),
               const SizedBox(width: 4),
               InkWell(
-                onTap: () => TimerService.instance.stop(), 
+                onTap: () => TimerService.instance.stop(),
                 borderRadius: BorderRadius.circular(20),
                 child: Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: AppColors.error.withOpacity(0.2), 
-                    shape: BoxShape.circle
+                    color: AppColors.error.withOpacity(0.2),
+                    shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.close, color: AppColors.error, size: 20)
+                  child: const Icon(
+                    Icons.close,
+                    color: AppColors.error,
+                    size: 20,
+                  ),
                 ),
               ),
             ],
@@ -387,14 +459,27 @@ class AppErrorScreen extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.bug_report_outlined, size: 64, color: Colors.white),
+                  const Icon(
+                    Icons.bug_report_outlined,
+                    size: 64,
+                    color: Colors.white,
+                  ),
                   const SizedBox(height: 16),
-                  const Text("ERRO NA INICIALIZAÇÃO", style: TextStyle(color: Colors.white, fontSize: 20)),
+                  const Text(
+                    "ERRO NA INICIALIZAÇÃO",
+                    style: TextStyle(color: Colors.white, fontSize: 20),
+                  ),
                   const SizedBox(height: 8),
                   Container(
                     padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(8)),
-                    child: Text(error.toString(), style: const TextStyle(color: Colors.orange)),
+                    decoration: BoxDecoration(
+                      color: Colors.white10,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      error.toString(),
+                      style: const TextStyle(color: Colors.orange),
+                    ),
                   ),
                 ],
               ),
