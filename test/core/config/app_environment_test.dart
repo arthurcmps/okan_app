@@ -10,6 +10,7 @@ void main() {
       expect(config.usesFirebaseEmulators, isFalse);
       expect(config.enableAppCheck, isTrue);
       expect(config.enablePushNotifications, isTrue);
+      expect(config.enableExternalPayments, isTrue);
       expect(config.emulatorHost, isNull);
       expect(config.appTitle, 'Okan App');
     });
@@ -31,6 +32,7 @@ void main() {
       expect(config.usesFirebaseEmulators, isTrue);
       expect(config.enableAppCheck, isFalse);
       expect(config.enablePushNotifications, isFalse);
+      expect(config.enableExternalPayments, isFalse);
       expect(config.emulatorHost, '10.0.2.2');
       expect(config.label, 'DEV • LOCAL');
     });
