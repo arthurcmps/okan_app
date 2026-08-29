@@ -63,12 +63,11 @@ bool isProfessionalRelationshipPlanLimit(Object error) {
   return error is FirebaseFunctionsException && error.code == 'resource-exhausted';
 }
 
-String professionalRelationshipErrorMessage(Object error) {
-  if (error is! FirebaseFunctionsException) {
-    return 'Não foi possível concluir esta ação agora. Tente novamente em instantes.';
-  }
-
-  switch (error.code) {
+String professionalRelationshipMessageForCode(
+  String code, {
+  String? fallbackMessage,
+}) {
+  switch (code) {
     case 'resource-exhausted':
       return 'Seu Plano Base atingiu o limite de alunos e convites pendentes.';
     case 'permission-denied':
@@ -82,8 +81,20 @@ String professionalRelationshipErrorMessage(Object error) {
     case 'unauthenticated':
       return 'Sua sessão expirou. Entre novamente para continuar.';
     default:
-      return error.message?.trim().isNotEmpty == true
-          ? error.message!.trim()
+      final normalizedFallback = fallbackMessage?.trim();
+      return normalizedFallback?.isNotEmpty == true
+          ? normalizedFallback!
           : 'Não foi possível concluir esta ação agora. Tente novamente em instantes.';
   }
+}
+
+String professionalRelationshipErrorMessage(Object error) {
+  if (error is FirebaseFunctionsException) {
+    return professionalRelationshipMessageForCode(
+      error.code,
+      fallbackMessage: error.message,
+    );
+  }
+
+  return 'Não foi possível concluir esta ação agora. Tente novamente em instantes.';
 }
