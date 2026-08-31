@@ -6,10 +6,12 @@ Após o OKAN-038, o Okan possui produção e desenvolvimento local separados, ma
 
 ## 2. Projeto staging oficial
 
-O projeto Firebase staging foi criado com o ID:
+O primeiro projeto `okan-staging` foi descartado porque o Firestore `(default)` foi criado em `nam5`, divergindo da arquitetura canônica `southamerica-east1`.
+
+O projeto Firebase staging oficial de substituição é:
 
 ```text
-okan-staging
+okan-staging-24829
 ```
 
 Esse é o único project ID aceito pelo contrato `OKAN_ENV=staging`.
@@ -18,7 +20,7 @@ Produção e desenvolvimento continuam separados:
 
 ```text
 PROD    app-academia-2914d
-STAGING okan-staging
+STAGING okan-staging-24829
 DEV     demo-okan-dev
 ```
 
@@ -36,7 +38,7 @@ DEV     demo-okan-dev
 
 - usa Firebase cloud, não Emulator Suite;
 - exige configuração Firebase explícita por `--dart-define`;
-- aceita somente `OKAN_STAGING_FIREBASE_PROJECT_ID=okan-staging`;
+- aceita somente `OKAN_STAGING_FIREBASE_PROJECT_ID=okan-staging-24829`;
 - habilita App Check;
 - habilita push/FCM para homologação próxima de produção;
 - mantém pagamentos externos desativados;
@@ -65,12 +67,12 @@ A configuração Firebase de cliente não é tratada como segredo, mas permanece
 
 ## 6. Execução
 
-Depois de registrar os apps Web/Android/iOS no projeto `okan-staging`:
+Depois de registrar os apps Web/Android/iOS no projeto `okan-staging-24829`:
 
 ```powershell
 flutter run `
   --dart-define=OKAN_ENV=staging `
-  --dart-define=OKAN_STAGING_FIREBASE_PROJECT_ID=okan-staging `
+  --dart-define=OKAN_STAGING_FIREBASE_PROJECT_ID=okan-staging-24829 `
   --dart-define=OKAN_STAGING_FIREBASE_MESSAGING_SENDER_ID=<sender-id> `
   --dart-define=OKAN_STAGING_FIREBASE_STORAGE_BUCKET=<bucket> `
   --dart-define=OKAN_STAGING_FIREBASE_WEB_API_KEY=<web-api-key> `
@@ -131,22 +133,22 @@ flutter test
 
 Baixo.
 
-Produção continua default e staging falha fechado se qualquer valor Firebase obrigatório estiver ausente ou se o project ID for diferente de `okan-staging`.
+Produção continua default e staging falha fechado se qualquer valor Firebase obrigatório estiver ausente ou se o project ID for diferente de `okan-staging-24829`.
 
 ## 13. Critérios de aceite
 
 - [x] staging é ambiente reconhecido;
 - [x] staging não usa emuladores;
 - [x] staging exige Firebase config explícita;
-- [x] project ID oficial fixado em `okan-staging`;
+- [x] project ID oficial fixado em `okan-staging-24829`;
 - [x] staging mostra banner próprio;
 - [x] App Check e push permanecem habilitados em staging;
 - [x] pagamentos externos ficam bloqueados em staging;
 - [x] bootstrap FCM background respeita o ambiente;
 - [x] produção permanece default;
 - [x] dev permanece Emulator Suite;
-- [x] projeto Firebase staging criado;
-- [ ] apps Firebase Web/Android/iOS registrados;
+- [x] projeto Firebase staging de substituição criado;
+- [ ] apps Firebase Web/Android/iOS registrados no projeto de substituição;
 - [ ] Auth/Firestore/Storage/Functions provisionados;
 - [ ] App Check staging configurado;
 - [ ] validação integrada cloud staging concluída;
