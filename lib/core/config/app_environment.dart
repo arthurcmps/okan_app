@@ -1,5 +1,5 @@
 const String productionFirebaseProjectId = 'app-academia-2914d';
-const String stagingFirebaseProjectId = 'okan-staging';
+const String stagingFirebaseProjectId = 'okan-staging-24829';
 const String developmentFirebaseProjectId = 'demo-okan-dev';
 
 enum OkanEnvironment {
