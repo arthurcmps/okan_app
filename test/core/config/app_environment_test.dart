@@ -97,6 +97,7 @@ void main() {
         productionFirebaseProjectId,
         developmentFirebaseProjectId,
         'demo-other-project',
+        'okan-staging',
         'okan-staging-test',
         'another-cloud-project',
       ]) {
