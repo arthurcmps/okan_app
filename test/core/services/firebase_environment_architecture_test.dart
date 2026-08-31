@@ -49,7 +49,14 @@ void main() {
     expect(configSource, contains('OKAN_STAGING_FIREBASE_IOS_APP_ID'));
     expect(configSource, contains('productionFirebaseProjectId'));
     expect(configSource, contains('developmentFirebaseProjectId'));
-    expect(configSource, contains("startsWith('demo-')"));
+    expect(
+      configSource,
+      contains("stagingFirebaseProjectId = 'okan-staging-24829'"),
+    );
+    expect(
+      configSource,
+      contains('normalizedProjectId != stagingFirebaseProjectId'),
+    );
     expect(configSource, contains('enableExternalPayments => isProduction'));
 
     expect(serviceSource, contains('_stagingOptionsForCurrentPlatform'));
