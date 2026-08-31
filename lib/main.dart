@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter/services.dart';
@@ -10,7 +9,6 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter/foundation.dart';
-import 'firebase_options.dart';
 import 'features/auth/presentation/pages/login_page.dart';
 import 'features/auth/presentation/pages/home_page.dart';
 import 'features/auth/presentation/pages/onboarding_page.dart';
@@ -30,7 +28,8 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  final environment = OkanEnvironmentConfig.current;
+  await FirebaseEnvironmentService.initialize(environment);
   debugPrint("A processar mensagem em background: ${message.messageId}");
 }
 
@@ -295,7 +294,7 @@ class OkanApp extends StatelessWidget {
           ),
         );
 
-        if (environment.isDevelopment) {
+        if (environment.showEnvironmentBanner) {
           root = Banner(
             message: environment.label,
             location: BannerLocation.topEnd,

@@ -16,25 +16,20 @@ class FirebaseEnvironmentService {
   static const int functionsPort = 5001;
   static const int storagePort = 9199;
 
-  static const String developmentProjectId = 'demo-okan-dev';
-
   static Future<void> initialize(OkanEnvironmentConfig environment) async {
-    await Firebase.initializeApp(
-      options: environment.isDevelopment
-          ? _developmentOptionsForCurrentPlatform
-          : DefaultFirebaseOptions.currentPlatform,
-    );
+    await Firebase.initializeApp(options: _optionsFor(environment));
+
+    final defaultProjectId = Firebase.app().options.projectId;
+    final expectedProjectId = _expectedProjectId(environment);
+    if (defaultProjectId != expectedProjectId) {
+      throw StateError(
+        'OKAN_ENV=${environment.label} iniciou Firebase no projeto inesperado '
+        '$defaultProjectId. Esperado: $expectedProjectId.',
+      );
+    }
 
     if (!environment.usesFirebaseEmulators) {
       return;
-    }
-
-    final defaultProjectId = Firebase.app().options.projectId;
-    if (defaultProjectId != developmentProjectId) {
-      throw StateError(
-        'OKAN_ENV=dev iniciou Firebase no projeto inesperado '
-        '$defaultProjectId. Esperado: $developmentProjectId.',
-      );
     }
 
     final host = environment.emulatorHost!;
@@ -72,6 +67,26 @@ class FirebaseEnvironmentService {
     );
   }
 
+  static FirebaseOptions _optionsFor(OkanEnvironmentConfig environment) {
+    if (environment.isDevelopment) {
+      return _developmentOptionsForCurrentPlatform;
+    }
+    if (environment.isStaging) {
+      return _stagingOptionsForCurrentPlatform(environment.firebaseConfig!);
+    }
+    return DefaultFirebaseOptions.currentPlatform;
+  }
+
+  static String _expectedProjectId(OkanEnvironmentConfig environment) {
+    if (environment.isDevelopment) {
+      return developmentFirebaseProjectId;
+    }
+    if (environment.isStaging) {
+      return environment.firebaseConfig!.projectId;
+    }
+    return productionFirebaseProjectId;
+  }
+
   static FirebaseOptions get _developmentOptionsForCurrentPlatform {
     if (kIsWeb) {
       return _developmentWeb;
@@ -84,11 +99,56 @@ class FirebaseEnvironmentService {
       case TargetPlatform.macOS:
         return _developmentApple;
       case TargetPlatform.windows:
-        return _developmentWeb;
       case TargetPlatform.linux:
-        return _developmentWeb;
       default:
         return _developmentWeb;
+    }
+  }
+
+  static FirebaseOptions _stagingOptionsForCurrentPlatform(
+    OkanFirebaseConfig config,
+  ) {
+    if (kIsWeb) {
+      return FirebaseOptions(
+        apiKey: config.webApiKey,
+        appId: config.webAppId,
+        messagingSenderId: config.messagingSenderId,
+        projectId: config.projectId,
+        authDomain: config.webAuthDomain,
+        storageBucket: config.storageBucket,
+      );
+    }
+
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        return FirebaseOptions(
+          apiKey: config.androidApiKey,
+          appId: config.androidAppId,
+          messagingSenderId: config.messagingSenderId,
+          projectId: config.projectId,
+          storageBucket: config.storageBucket,
+        );
+      case TargetPlatform.iOS:
+      case TargetPlatform.macOS:
+        return FirebaseOptions(
+          apiKey: config.iosApiKey,
+          appId: config.iosAppId,
+          messagingSenderId: config.messagingSenderId,
+          projectId: config.projectId,
+          storageBucket: config.storageBucket,
+          iosBundleId: config.iosBundleId,
+        );
+      case TargetPlatform.windows:
+      case TargetPlatform.linux:
+      default:
+        return FirebaseOptions(
+          apiKey: config.webApiKey,
+          appId: config.webAppId,
+          messagingSenderId: config.messagingSenderId,
+          projectId: config.projectId,
+          authDomain: config.webAuthDomain,
+          storageBucket: config.storageBucket,
+        );
     }
   }
 
@@ -96,25 +156,25 @@ class FirebaseEnvironmentService {
     apiKey: 'demo-okan-dev-api-key',
     appId: '1:123456789012:web:0000000000000000000000',
     messagingSenderId: '123456789012',
-    projectId: developmentProjectId,
-    authDomain: '$developmentProjectId.firebaseapp.com',
-    storageBucket: '$developmentProjectId.appspot.com',
+    projectId: developmentFirebaseProjectId,
+    authDomain: '$developmentFirebaseProjectId.firebaseapp.com',
+    storageBucket: '$developmentFirebaseProjectId.appspot.com',
   );
 
   static const FirebaseOptions _developmentAndroid = FirebaseOptions(
     apiKey: 'demo-okan-dev-api-key',
     appId: '1:123456789012:android:0000000000000000000000',
     messagingSenderId: '123456789012',
-    projectId: developmentProjectId,
-    storageBucket: '$developmentProjectId.appspot.com',
+    projectId: developmentFirebaseProjectId,
+    storageBucket: '$developmentFirebaseProjectId.appspot.com',
   );
 
   static const FirebaseOptions _developmentApple = FirebaseOptions(
     apiKey: 'demo-okan-dev-api-key',
     appId: '1:123456789012:ios:0000000000000000000000',
     messagingSenderId: '123456789012',
-    projectId: developmentProjectId,
-    storageBucket: '$developmentProjectId.appspot.com',
+    projectId: developmentFirebaseProjectId,
+    storageBucket: '$developmentFirebaseProjectId.appspot.com',
     iosBundleId: 'com.example.okanApp',
   );
 }
