@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "993246251446",
+    "project_id": "okan-staging-24829",
+    "storage_bucket": "okan-staging-24829.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:993246251446:android:c7e12e7f386b5c67cf1917",
+        "android_client_info": {
+          "package_name": "com.sankofa.okan"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCZW7lZ88nd_Y68N43bZPBr7-nWfltkX58"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

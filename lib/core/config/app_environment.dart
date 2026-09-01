@@ -1,12 +1,10 @@
+import 'package:flutter/services.dart';
+
 const String productionFirebaseProjectId = 'app-academia-2914d';
 const String stagingFirebaseProjectId = 'okan-staging-24829';
 const String developmentFirebaseProjectId = 'demo-okan-dev';
 
-enum OkanEnvironment {
-  production,
-  staging,
-  development,
-}
+enum OkanEnvironment { production, staging, development }
 
 class OkanFirebaseConfig {
   const OkanFirebaseConfig({
@@ -140,11 +138,74 @@ class OkanEnvironmentConfig {
   final String? emulatorHost;
   final OkanFirebaseConfig? firebaseConfig;
 
-  static OkanEnvironmentConfig get current => OkanEnvironmentConfig.fromValues(
-        environment: _environmentValue,
-        emulatorHost: _emulatorHostValue,
-        stagingFirebaseConfig: OkanFirebaseConfig.stagingFromEnvironment,
-      );
+  static OkanEnvironmentConfig get current {
+    final resolvedEnvironment = resolveEnvironmentValue(
+      flavor: appFlavor,
+      environmentValue: _environmentValue,
+      hasExplicitEnvironment: const bool.hasEnvironment('OKAN_ENV'),
+    );
+
+    return OkanEnvironmentConfig.fromValues(
+      environment: resolvedEnvironment,
+      emulatorHost: _emulatorHostValue,
+      stagingFirebaseConfig: OkanFirebaseConfig.stagingFromEnvironment,
+    );
+  }
+
+  static String resolveEnvironmentValue({
+    required String? flavor,
+    required String environmentValue,
+    required bool hasExplicitEnvironment,
+  }) {
+    final normalizedFlavor = flavor?.trim().toLowerCase();
+
+    if (normalizedFlavor == null || normalizedFlavor.isEmpty) {
+      return environmentValue;
+    }
+
+    final flavorEnvironment = switch (normalizedFlavor) {
+      'prod' => 'prod',
+      'staging' => 'staging',
+      'dev' => 'dev',
+      _ => throw StateError(
+        'Flavor Android inválido: `$normalizedFlavor`. '
+        'Valores suportados: prod, staging ou dev.',
+      ),
+    };
+
+    if (hasExplicitEnvironment) {
+      final explicitEnvironment = _canonicalEnvironmentValue(environmentValue);
+
+      if (explicitEnvironment != flavorEnvironment) {
+        throw StateError(
+          'Flavor `$normalizedFlavor` é incompatível com '
+          'OKAN_ENV=`$environmentValue`. '
+          'O flavor Android é a fonte de verdade do ambiente.',
+        );
+      }
+    }
+
+    return flavorEnvironment;
+  }
+
+  static String _canonicalEnvironmentValue(String value) {
+    switch (value.trim().toLowerCase()) {
+      case 'prod':
+      case 'production':
+        return 'prod';
+
+      case 'staging':
+      case 'stage':
+        return 'staging';
+
+      case 'dev':
+      case 'development':
+        return 'dev';
+
+      default:
+        return value.trim().toLowerCase();
+    }
+  }
 
   factory OkanEnvironmentConfig.fromValues({
     required String environment,
@@ -207,6 +268,8 @@ class OkanEnvironmentConfig {
   bool get enableAppCheck => !isDevelopment;
 
   bool get enablePushNotifications => !isDevelopment;
+
+  bool get enableCrashReporting => !isDevelopment;
 
   bool get enableExternalPayments => isProduction;
 

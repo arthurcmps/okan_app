@@ -31,6 +31,7 @@ void main() {
       expect(config.usesFirebaseEmulators, isFalse);
       expect(config.enableAppCheck, isTrue);
       expect(config.enablePushNotifications, isTrue);
+      expect(config.enableCrashReporting, isTrue);
       expect(config.enableExternalPayments, isTrue);
       expect(config.showEnvironmentBanner, isFalse);
       expect(config.emulatorHost, isNull);
@@ -56,6 +57,7 @@ void main() {
       expect(config.usesFirebaseEmulators, isTrue);
       expect(config.enableAppCheck, isFalse);
       expect(config.enablePushNotifications, isFalse);
+      expect(config.enableCrashReporting, isFalse);
       expect(config.enableExternalPayments, isFalse);
       expect(config.showEnvironmentBanner, isTrue);
       expect(config.emulatorHost, '10.0.2.2');
@@ -83,6 +85,7 @@ void main() {
       expect(config.usesFirebaseEmulators, isFalse);
       expect(config.enableAppCheck, isTrue);
       expect(config.enablePushNotifications, isTrue);
+      expect(config.enableCrashReporting, isTrue);
       expect(config.enableExternalPayments, isFalse);
       expect(config.showEnvironmentBanner, isTrue);
       expect(config.emulatorHost, isNull);
