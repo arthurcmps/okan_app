@@ -4,7 +4,7 @@
       "android": {
         "default": {
           "projectId": "app-academia-2914d",
-          "appId": "1:1080333508962:android:98fb49231c4699c94ccc3b",
+          "appId": "1:1080333508962:android:3ca19861ae2585504ccc3b",
           "fileOutput": "android/app/google-services.json"
         }
       },
@@ -12,7 +12,7 @@
         "lib/firebase_options.dart": {
           "projectId": "app-academia-2914d",
           "configurations": {
-            "android": "1:1080333508962:android:98fb49231c4699c94ccc3b",
+            "android": "1:1080333508962:android:3ca19861ae2585504ccc3b",
             "ios": "1:1080333508962:ios:52353ec0642e9b044ccc3b",
             "macos": "1:1080333508962:ios:52353ec0642e9b044ccc3b",
             "web": "1:1080333508962:web:e93dccc19e32aaaf4ccc3b",

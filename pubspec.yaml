@@ -49,6 +49,7 @@ dependencies:
   shared_preferences: ^2.5.4
   audioplayers: ^6.6.0
   firebase_app_check: ^0.3.2+10
+  firebase_crashlytics: 4.3.10
 
 dev_dependencies:
   flutter_test:

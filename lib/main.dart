@@ -14,6 +14,7 @@ import 'features/auth/presentation/pages/home_page.dart';
 import 'features/auth/presentation/pages/onboarding_page.dart';
 import 'core/config/app_environment.dart';
 import 'core/services/firebase_environment_service.dart';
+import 'core/services/crash_reporting_service.dart';
 import 'core/services/time_service.dart';
 import 'features/auth/presentation/controllers/tarefa_controller.dart';
 import 'core/theme/app_colors.dart';
@@ -69,6 +70,17 @@ void main() async {
     await FirebaseEnvironmentService.initialize(environment);
     _bootstrapLog('Firebase environment ready');
 
+    _bootstrapLog('initializing crash reporting');
+    final crashReporting = CrashReportingService.instance;
+    await crashReporting.initialize(environment);
+    crashReporting.installFlutterErrorHandler();
+    crashReporting.installPlatformErrorHandler();
+    _bootstrapLog(
+      crashReporting.isEnabled
+          ? 'crash reporting ready'
+          : 'crash reporting disabled or unavailable',
+    );
+
     if (environment.enableAppCheck) {
       _bootstrapLog('activating App Check');
       await FirebaseAppCheck.instance.activate(
@@ -91,7 +103,9 @@ void main() async {
 
     if (environment.enablePushNotifications) {
       _bootstrapLog('initializing push notifications');
-      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+      FirebaseMessaging.onBackgroundMessage(
+        _firebaseMessagingBackgroundHandler,
+      );
 
       await flutterLocalNotificationsPlugin
           .resolvePlatformSpecificImplementation<
@@ -128,10 +142,18 @@ void main() async {
     _bootstrapLog('Flutter UI started');
   } catch (e, stackTrace) {
     debugPrint('[OKAN BOOT][FATAL] $e');
-    debugPrintStack(
-      label: '[OKAN BOOT][STACK]',
-      stackTrace: stackTrace,
-    );
+    debugPrintStack(label: '[OKAN BOOT][STACK]', stackTrace: stackTrace);
+
+    final crashReporting = CrashReportingService.instance;
+    if (crashReporting.isEnabled) {
+      await crashReporting.recordError(
+        e,
+        stackTrace,
+        fatal: true,
+        reason: 'bootstrap_failure',
+      );
+    }
+
     runApp(AppErrorScreen(error: e, stackTrace: stackTrace));
   }
 }
