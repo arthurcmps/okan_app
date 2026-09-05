@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:okan_app/features/students/domain/entities/pending_student_invite.dart';
+import 'package:okan_app/features/students/domain/entities/student_invite_creation_result.dart';
+import 'package:okan_app/features/students/domain/entities/student_profile.dart';
 import 'package:okan_app/features/students/domain/entities/student_summary.dart';
+import 'package:okan_app/features/students/domain/repositories/students_repository.dart';
+import 'package:okan_app/features/students/presentation/pages/students_page.dart';
 import 'package:okan_app/features/students/presentation/widgets/students_lists.dart';
 
 void main() {
@@ -43,8 +47,6 @@ void main() {
   testWidgets('shows an instructive active-students empty state', (
     tester,
   ) async {
-    var inviteCalls = 0;
-
     await tester.pumpWidget(
       testApp(
         ActiveStudentsList(
@@ -52,7 +54,6 @@ void main() {
           hasError: false,
           isPremium: false,
           students: const [],
-          onInvite: () => inviteCalls++,
           onOpenStudent: (_) {},
           onOpenBlockedStudent: (_) {},
           onChat: (_) {},
@@ -72,9 +73,27 @@ void main() {
       ),
       findsOneWidget,
     );
+    expect(find.text('Convidar aluno'), findsNothing);
+  });
 
-    await tester.tap(find.text('Convidar aluno'));
-    expect(inviteCalls, 1);
+  testWidgets('keeps one invite action after the first student is added', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: testTheme(),
+        home: StudentsPage(
+          repository: _FakeStudentsRepository(students: [student(1)]),
+          professionalId: 'professional-1',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Aluno 1'), findsOneWidget);
+    expect(find.text('Convidar'), findsOneWidget);
+    expect(find.byType(FloatingActionButton), findsOneWidget);
+    expect(find.text('Convidar aluno'), findsNothing);
   });
 
   testWidgets('preserves active student actions and base-plan blocking', (
@@ -93,7 +112,6 @@ void main() {
           hasError: false,
           isPremium: false,
           students: students,
-          onInvite: () {},
           onOpenStudent: (item) => opened.add(item.id),
           onOpenBlockedStudent: (item) => blocked.add(item.id),
           onChat: (item) => chats.add(item.id),
@@ -136,7 +154,6 @@ void main() {
   testWidgets('distinguishes pending loading, empty and populated states', (
     tester,
   ) async {
-    var inviteCalls = 0;
     final cancelled = <String>[];
 
     await tester.pumpWidget(
@@ -145,7 +162,6 @@ void main() {
           isLoading: true,
           hasError: false,
           invites: const [],
-          onInvite: () => inviteCalls++,
           onCancel: (invite) => cancelled.add(invite.id),
         ),
       ),
@@ -163,15 +179,13 @@ void main() {
           isLoading: false,
           hasError: false,
           invites: const [],
-          onInvite: () => inviteCalls++,
           onCancel: (invite) => cancelled.add(invite.id),
         ),
       ),
     );
 
     expect(find.text('Nenhum convite pendente'), findsOneWidget);
-    await tester.tap(find.text('Convidar aluno'));
-    expect(inviteCalls, 1);
+    expect(find.text('Convidar aluno'), findsNothing);
 
     const invite = PendingStudentInvite(
       id: 'invite-1',
@@ -183,7 +197,6 @@ void main() {
           isLoading: false,
           hasError: false,
           invites: const [invite],
-          onInvite: () => inviteCalls++,
           onCancel: (item) => cancelled.add(item.id),
         ),
       ),
@@ -201,4 +214,52 @@ void main() {
     );
     expect(cancelled, ['invite-1']);
   });
+}
+
+class _FakeStudentsRepository implements StudentsRepository {
+  const _FakeStudentsRepository({required this.students});
+
+  final List<StudentSummary> students;
+
+  @override
+  Stream<bool> watchProfessionalPremium(String professionalId) {
+    return Stream.value(true);
+  }
+
+  @override
+  Stream<List<StudentSummary>> watchActiveStudents(String professionalId) {
+    return Stream.value(students);
+  }
+
+  @override
+  Stream<List<PendingStudentInvite>> watchPendingInvites(
+    String professionalId,
+  ) {
+    return Stream.value(const []);
+  }
+
+  @override
+  Stream<StudentProfile?> watchStudentProfile(String studentId) {
+    return Stream.value(null);
+  }
+
+  @override
+  Future<List<StudentSummary>> findCanonicalStudentsByEmail(String email) {
+    return Future.value(const []);
+  }
+
+  @override
+  Future<StudentInviteCreationResult> createStudentInvite({
+    required String studentId,
+  }) {
+    return Future.value(
+      const StudentInviteCreationResult(alreadyPending: false),
+    );
+  }
+
+  @override
+  Future<void> unlinkStudent({required String studentId}) async {}
+
+  @override
+  Future<void> cancelStudentInvite({required String inviteId}) async {}
 }
