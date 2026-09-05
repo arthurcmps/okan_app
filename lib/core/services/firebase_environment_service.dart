@@ -8,6 +8,13 @@ import 'package:flutter/foundation.dart';
 import '../../firebase_options.dart';
 import '../config/app_environment.dart';
 
+/// Chave fictícia com o formato exigido pelo Firebase Installations Android.
+///
+/// Ela é usada exclusivamente com o projeto `demo-okan-dev` e não concede
+/// acesso a nenhum projeto Firebase real.
+const developmentFirebaseApiKey =
+    'AIzaSyOKAN_DEV_EMULATOR_ONLY_0000000000';
+
 class FirebaseEnvironmentService {
   FirebaseEnvironmentService._();
 
@@ -153,7 +160,7 @@ class FirebaseEnvironmentService {
   }
 
   static const FirebaseOptions _developmentWeb = FirebaseOptions(
-    apiKey: 'demo-okan-dev-api-key',
+    apiKey: developmentFirebaseApiKey,
     appId: '1:123456789012:web:0000000000000000000000',
     messagingSenderId: '123456789012',
     projectId: developmentFirebaseProjectId,
@@ -162,7 +169,7 @@ class FirebaseEnvironmentService {
   );
 
   static const FirebaseOptions _developmentAndroid = FirebaseOptions(
-    apiKey: 'demo-okan-dev-api-key',
+    apiKey: developmentFirebaseApiKey,
     appId: '1:123456789012:android:0000000000000000000000',
     messagingSenderId: '123456789012',
     projectId: developmentFirebaseProjectId,
@@ -170,7 +177,7 @@ class FirebaseEnvironmentService {
   );
 
   static const FirebaseOptions _developmentApple = FirebaseOptions(
-    apiKey: 'demo-okan-dev-api-key',
+    apiKey: developmentFirebaseApiKey,
     appId: '1:123456789012:ios:0000000000000000000000',
     messagingSenderId: '123456789012',
     projectId: developmentFirebaseProjectId,
