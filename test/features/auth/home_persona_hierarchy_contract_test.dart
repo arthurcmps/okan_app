@@ -42,8 +42,10 @@ void main() {
     }
   });
 
-  test('reordering does not add another users stream', () {
-    expect(".collection('users')".allMatches(source).length, 3);
+  test('reordering preserves the existing users stream baseline', () {
+    // A home já possui quatro usos: título, notificações, avatar e ações da
+    // persona. A mudança apenas reposiciona o último StreamBuilder.
+    expect(".collection('users')".allMatches(source).length, 4);
   });
 
   test('users without a mobile persona do not see an empty section', () {
