@@ -9,6 +9,7 @@ import '../../domain/entities/weekly_workout_plan.dart';
 import '../../domain/entities/workout_exercise.dart';
 import '../../domain/entities/workout_model.dart';
 import '../../domain/repositories/workouts_repository.dart';
+import '../widgets/workout_template_library.dart';
 
 class WeeklyPlanPage extends StatefulWidget {
   const WeeklyPlanPage({
@@ -1170,86 +1171,37 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage>
           stream: _repository.watchWorkoutTemplates(userId),
           builder: (context, snapshot) {
             final templates = snapshot.data ?? const <WorkoutTemplate>[];
-            return Column(
-              children: [
-                const Padding(
-                  padding: EdgeInsets.all(20),
-                  child: Text(
-                    'Minha Biblioteca',
-                    style: TextStyle(
-                      color: AppColors.secondary,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: snapshot.connectionState == ConnectionState.waiting
-                      ? const Center(
-                          child: CircularProgressIndicator(color: AppColors.secondary),
-                        )
-                      : ListView.builder(
-                          controller: scrollController,
-                          itemCount: templates.length,
-                          itemBuilder: (_, index) {
-                            final template = templates[index];
-                            return ListTile(
-                              leading: const CircleAvatar(
-                                backgroundColor: Colors.black26,
-                                child: Icon(
-                                  Icons.fitness_center,
-                                  color: AppColors.secondary,
-                                  size: 20,
-                                ),
-                              ),
-                              title: Text(
-                                template.nome,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              subtitle: Text(
-                                '${template.exercicios.length} exercícios',
-                                style: const TextStyle(color: Colors.white54),
-                              ),
-                              trailing: IconButton(
-                                icon: const Icon(
-                                  Icons.delete_outline,
-                                  color: Colors.redAccent,
-                                ),
-                                onPressed: () =>
-                                    _repository.deleteWorkoutTemplate(template.id),
-                              ),
-                              onTap: () async {
-                                final imported = template.exercicios.map((exercise) {
-                                  final copy = WorkoutExercise.fromMap(exercise.toMap());
-                                  copy.id =
-                                      '${DateTime.now().microsecondsSinceEpoch}${copy.nome.hashCode}';
-                                  copy.concluido = false;
-                                  return copy;
-                                }).toList();
+            return WorkoutTemplateLibrary(
+              isLoading:
+                  snapshot.connectionState == ConnectionState.waiting,
+              templates: templates,
+              scrollController: scrollController,
+              onDelete: (template) =>
+                  _repository.deleteWorkoutTemplate(template.id),
+              onImport: (template) async {
+                final imported = template.exercicios.map((exercise) {
+                  final copy = WorkoutExercise.fromMap(exercise.toMap());
+                  copy.id =
+                      '${DateTime.now().microsecondsSinceEpoch}${copy.nome.hashCode}';
+                  copy.concluido = false;
+                  return copy;
+                }).toList();
 
-                                _exerciseCache
-                                    .putIfAbsent(dayKey, () => <WorkoutExercise>[])
-                                    .addAll(imported);
-                                await _saveDay(dayKey);
-                                if (sheetContext.mounted) Navigator.pop(sheetContext);
-                                if (mounted) {
-                                  setState(() {});
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Template importado com sucesso!'),
-                                      backgroundColor: AppColors.success,
-                                    ),
-                                  );
-                                }
-                              },
-                            );
-                          },
-                        ),
-                ),
-              ],
+                _exerciseCache
+                    .putIfAbsent(dayKey, () => <WorkoutExercise>[])
+                    .addAll(imported);
+                await _saveDay(dayKey);
+                if (sheetContext.mounted) Navigator.pop(sheetContext);
+                if (mounted) {
+                  setState(() {});
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Template importado com sucesso!'),
+                      backgroundColor: AppColors.success,
+                    ),
+                  );
+                }
+              },
             );
           },
         ),
