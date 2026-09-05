@@ -7,9 +7,9 @@ void main() {
   test('User v2 rollout contract matches app release metadata', () {
     expect(ClientCompatibilityInfo.schemaVersion, 2);
     expect(ClientCompatibilityInfo.appVersion, '1.0.1');
-    expect(ClientCompatibilityInfo.buildNumber, 9);
+    expect(ClientCompatibilityInfo.buildNumber, 10);
 
     final pubspec = File('pubspec.yaml').readAsStringSync();
-    expect(pubspec, contains('version: 1.0.1+9'));
+    expect(pubspec, contains('version: 1.0.1+10'));
   });
 }
