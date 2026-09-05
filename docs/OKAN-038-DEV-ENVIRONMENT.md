@@ -96,6 +96,11 @@ flutter run `
 
 Isso evita expor Auth, Firestore, Functions e Storage Emulator para a rede local.
 
+O bootstrap DEV usa uma chave fictícia no formato sintaticamente aceito pelo
+Firebase Installations no Android. Ela pertence somente à configuração local do
+projeto `demo-okan-dev`, não é uma credencial real e não libera acesso a nenhum
+serviço Firebase de produção.
+
 ## 7. Integrações desativadas em dev
 
 Em `dev` o app não inicializa:

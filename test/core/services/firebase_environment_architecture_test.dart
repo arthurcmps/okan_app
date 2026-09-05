@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:okan_app/core/services/firebase_environment_service.dart';
 
 void main() {
   test('dev Firebase bootstrap is emulator-only and uses demo project', () async {
@@ -32,6 +33,18 @@ void main() {
     expect(
       source,
       contains('Android Emulator callers already pass 10.0.2.2'),
+    );
+  });
+
+  test('dev API key satisfies the Android Firebase format locally', () {
+    expect(developmentFirebaseApiKey, hasLength(39));
+    expect(
+      developmentFirebaseApiKey,
+      matches(RegExp(r'^A[\w-]{38}$')),
+    );
+    expect(
+      developmentFirebaseApiKey,
+      contains('OKAN_DEV_EMULATOR_ONLY'),
     );
   });
 
