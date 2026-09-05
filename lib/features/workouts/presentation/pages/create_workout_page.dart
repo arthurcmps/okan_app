@@ -134,9 +134,9 @@ class _CreateWorkoutPageState extends State<CreateWorkoutPage> {
                           return ListTile(
                             title: Text(exercise.nome),
                             subtitle: Text(exercise.grupo),
-                            trailing: const Icon(
+                            trailing: Icon(
                               Icons.add_circle_outline,
-                              color: Colors.blue,
+                              color: Theme.of(context).colorScheme.primary,
                             ),
                             onTap: () {
                               Navigator.pop(context);
@@ -215,6 +215,7 @@ class _CreateWorkoutPageState extends State<CreateWorkoutPage> {
   @override
   Widget build(BuildContext context) {
     final isEditing = widget.treinoId != null;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(title: Text(isEditing ? 'Editar Treino' : 'Criar Treino')),
@@ -245,7 +246,13 @@ class _CreateWorkoutPageState extends State<CreateWorkoutPage> {
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.add_box, size: 30, color: Colors.blue),
+                    key: const ValueKey('create-workout-add-exercise'),
+                    tooltip: 'Adicionar exercício',
+                    icon: Icon(
+                      Icons.add_box,
+                      size: 30,
+                      color: colorScheme.primary,
+                    ),
                     onPressed: _adicionarExercicioModal,
                   ),
                 ],
@@ -264,8 +271,15 @@ class _CreateWorkoutPageState extends State<CreateWorkoutPage> {
                     for (var i = 0; i < _exerciciosSelecionados.length; i++)
                       ListTile(
                         key: ValueKey('ex_$i${_exerciciosSelecionados[i].nome}'),
-                        tileColor: Colors.grey.shade50,
-                        leading: CircleAvatar(child: Text('${i + 1}')),
+                        tileColor: colorScheme.surface,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        leading: CircleAvatar(
+                          backgroundColor: colorScheme.primary.withOpacity(0.14),
+                          foregroundColor: colorScheme.primary,
+                          child: Text('${i + 1}'),
+                        ),
                         title: Text(_exerciciosSelecionados[i].nome),
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -280,7 +294,7 @@ class _CreateWorkoutPageState extends State<CreateWorkoutPage> {
                                   'Obs: ${_exerciciosSelecionados[i].observacao}',
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: Colors.blue.shade700,
+                                    color: colorScheme.secondary,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -288,7 +302,8 @@ class _CreateWorkoutPageState extends State<CreateWorkoutPage> {
                           ],
                         ),
                         trailing: IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
+                          tooltip: 'Remover exercício',
+                          icon: Icon(Icons.delete, color: colorScheme.error),
                           onPressed: () => setState(
                             () => _exerciciosSelecionados.removeAt(i),
                           ),
@@ -300,14 +315,15 @@ class _CreateWorkoutPageState extends State<CreateWorkoutPage> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
+                  key: const ValueKey('create-workout-save'),
                   onPressed: _isLoading ? null : _salvarTreino,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: isEditing ? Colors.orange : Colors.blue,
+                    backgroundColor: colorScheme.primary,
+                    foregroundColor: colorScheme.onPrimary,
                   ),
                   child: Text(
                     isEditing ? 'ATUALIZAR TREINO' : 'SALVAR TREINO',
                     style: const TextStyle(
-                      color: Colors.white,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
