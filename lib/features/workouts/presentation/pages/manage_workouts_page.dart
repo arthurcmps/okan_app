@@ -37,10 +37,7 @@ class ManageWorkoutsPage extends StatelessWidget {
                 const SnackBar(content: Text('Treino excluído.')),
               );
             },
-            child: Text(
-              'Excluir',
-              style: TextStyle(color: Theme.of(ctx).colorScheme.error),
-            ),
+            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -68,119 +65,67 @@ class ManageWorkoutsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Scaffold(
       appBar: AppBar(title: const Text('Meus Modelos')),
       body: StreamBuilder<List<WorkoutModel>>(
         stream: _repository.watchWorkoutModels(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(
-              child: CircularProgressIndicator(color: colorScheme.primary),
-            );
+            return const Center(child: CircularProgressIndicator());
           }
 
           final workouts = snapshot.data ?? const <WorkoutModel>[];
           if (workouts.isEmpty) {
-            return Center(
-              key: const ValueKey('manage-workouts-empty'),
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.fitness_center,
-                      size: 48,
-                      color: colorScheme.primary,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Nenhum modelo criado.',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Quando você criar um modelo de treino, ele aparecerá aqui.',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ],
-                ),
-              ),
-            );
+            return const Center(child: Text('Nenhum modelo criado.'));
           }
 
-          return Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 720),
-              child: ListView.builder(
-                key: const ValueKey('manage-workouts-list'),
-                padding: const EdgeInsets.all(16),
-                itemCount: workouts.length,
-                itemBuilder: (context, index) {
-                  final workout = workouts[index];
-                  final exerciseCount = workout.exercicios.length;
-                  final exerciseLabel = exerciseCount == 1
-                      ? '1 exercício'
-                      : '$exerciseCount exercícios';
-
-                  return Card(
-                    key: ValueKey('manage-workout-card-${workout.id}'),
-                    color: colorScheme.surface,
-                    margin: const EdgeInsets.only(bottom: 12),
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: workouts.length,
+            itemBuilder: (context, index) {
+              final workout = workouts[index];
+              return Card(
+                elevation: 2,
+                margin: const EdgeInsets.only(bottom: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.teal.withOpacity(0.1),
+                    child: const Icon(Icons.fitness_center, color: Colors.teal),
+                  ),
+                  title: Text(
+                    workout.nome,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: Text(
+                    '${workout.grupoMuscular} • ${workout.exercicios.length} exercícios',
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.edit, color: Colors.blue),
+                        onPressed: () => _editarTreino(context, workout),
                       ),
-                      leading: CircleAvatar(
-                        backgroundColor: colorScheme.primary.withOpacity(0.14),
-                        foregroundColor: colorScheme.primary,
-                        child: const Icon(Icons.fitness_center),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline, color: Colors.red),
+                        onPressed: () => _deletarTreino(
+                          context,
+                          workout.id,
+                          workout.nome,
+                        ),
                       ),
-                      title: Text(
-                        workout.nome,
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      subtitle: Text(
-                        '${workout.grupoMuscular} • $exerciseLabel',
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            key: ValueKey(
-                              'manage-workout-edit-${workout.id}',
-                            ),
-                            tooltip: 'Editar treino',
-                            icon: Icon(Icons.edit, color: colorScheme.primary),
-                            onPressed: () => _editarTreino(context, workout),
-                          ),
-                          IconButton(
-                            key: ValueKey(
-                              'manage-workout-delete-${workout.id}',
-                            ),
-                            tooltip: 'Excluir treino',
-                            icon: Icon(
-                              Icons.delete_outline,
-                              color: colorScheme.error,
-                            ),
-                            onPressed: () => _deletarTreino(
-                              context,
-                              workout.id,
-                              workout.nome,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
+                    ],
+                  ),
+                ),
+              );
+            },
           );
         },
       ),
