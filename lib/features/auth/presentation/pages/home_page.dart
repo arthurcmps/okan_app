@@ -14,6 +14,7 @@ import '../../../../core/theme/app_colors.dart';
 import 'discover_workouts_page.dart';
 import '../../../../core/services/push_notification_service.dart';
 import '../../data/models/user_model.dart';
+import '../widgets/home_action_cards.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -343,7 +344,10 @@ class _HomePageState extends State<HomePage> {
                     exerciciosHoje.first['nome'] ?? 'Treino';
                 final totalExercicios = exerciciosHoje.length;
 
-                return GestureDetector(
+                return HomeWorkoutCard(
+                  dayLabel: diaNome,
+                  exerciseCount: totalExercicios,
+                  firstExerciseName: primeiroExercicio.toString(),
                   onTap: () {
                     Navigator.push(
                       context,
@@ -355,89 +359,6 @@ class _HomePageState extends State<HomePage> {
                       ),
                     );
                   },
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          AppColors.primary.withOpacity(0.9),
-                          AppColors.primary.withOpacity(0.6),
-                        ],
-                      ),
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withOpacity(0.2),
-                          blurRadius: 15,
-                          offset: const Offset(0, 5),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.black26,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                diaNome,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                            const Icon(
-                              Icons.fitness_center,
-                              color: Colors.white,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        Text(
-                          "$totalExercicios Exercícios",
-                          style: const TextStyle(color: Colors.white70),
-                        ),
-                        Text(
-                          "Foco: ${primeiroExercicio.split(' ')[0]}...",
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        const Row(
-                          children: [
-                            Text(
-                              "INICIAR",
-                              style: TextStyle(
-                                color: Colors.black,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            SizedBox(width: 5),
-                            Icon(
-                              Icons.arrow_forward,
-                              size: 16,
-                              color: Colors.black,
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
                 );
               },
             ),
@@ -451,36 +372,31 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
             const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildMenuCard(
-                    icon: Icons.check_circle_outline,
-                    color: AppColors.secondary,
-                    title: "Metas",
-                    subtitle: "Foco!",
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const TarefasPage(),
-                      ),
+            HomeQuickActionsGrid(
+              actions: [
+                _buildMenuCard(
+                  icon: Icons.check_circle_outline,
+                  color: AppColors.secondary,
+                  title: "Metas",
+                  subtitle: "Foco!",
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const TarefasPage(),
                     ),
                   ),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildMenuCard(
-                    icon: Icons.calendar_month,
-                    color: AppColors.primary,
-                    title: "Semana",
-                    subtitle: "Planejamento",
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => WeeklyPlanPage(
-                          studentId: user!.uid,
-                          studentName: "Meus Treinos",
-                        ),
+                _buildMenuCard(
+                  icon: Icons.calendar_month,
+                  color: AppColors.primary,
+                  title: "Semana",
+                  subtitle: "Planejamento",
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => WeeklyPlanPage(
+                        studentId: user!.uid,
+                        studentName: "Meus Treinos",
                       ),
                     ),
                   ),
