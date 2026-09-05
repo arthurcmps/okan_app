@@ -11,7 +11,6 @@ class ActiveStudentsList extends StatelessWidget {
     required this.hasError,
     required this.isPremium,
     required this.students,
-    required this.onInvite,
     required this.onOpenStudent,
     required this.onOpenBlockedStudent,
     required this.onChat,
@@ -22,7 +21,6 @@ class ActiveStudentsList extends StatelessWidget {
   final bool hasError;
   final bool isPremium;
   final List<StudentSummary> students;
-  final VoidCallback onInvite;
   final ValueChanged<StudentSummary> onOpenStudent;
   final ValueChanged<StudentSummary> onOpenBlockedStudent;
   final ValueChanged<StudentSummary> onChat;
@@ -53,8 +51,6 @@ class ActiveStudentsList extends StatelessWidget {
         title: 'Nenhum aluno ativo',
         description:
             'Convide seu primeiro aluno para acompanhar treinos e evolução.',
-        actionLabel: 'Convidar aluno',
-        onAction: onInvite,
       );
     }
 
@@ -101,14 +97,12 @@ class PendingStudentInvitesList extends StatelessWidget {
     required this.isLoading,
     required this.hasError,
     required this.invites,
-    required this.onInvite,
     required this.onCancel,
   });
 
   final bool isLoading;
   final bool hasError;
   final List<PendingStudentInvite> invites;
-  final VoidCallback onInvite;
   final ValueChanged<PendingStudentInvite> onCancel;
 
   @override
@@ -136,8 +130,6 @@ class PendingStudentInvitesList extends StatelessWidget {
         title: 'Nenhum convite pendente',
         description:
             'Os convites enviados e ainda não aceitos aparecerão aqui.',
-        actionLabel: 'Convidar aluno',
-        onAction: onInvite,
       );
     }
 
@@ -383,15 +375,11 @@ class _StudentsMessageState extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.description,
-    this.actionLabel,
-    this.onAction,
   });
 
   final IconData icon;
   final String title;
   final String description;
-  final String? actionLabel;
-  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -422,14 +410,6 @@ class _StudentsMessageState extends StatelessWidget {
               textAlign: TextAlign.center,
               style: textTheme.bodyMedium,
             ),
-            if (actionLabel != null && onAction != null) ...[
-              const SizedBox(height: 24),
-              FilledButton.icon(
-                onPressed: onAction,
-                icon: const Icon(Icons.person_add_outlined),
-                label: Text(actionLabel!),
-              ),
-            ],
           ],
         ),
       ),
