@@ -405,7 +405,6 @@ class _StudentsPageState extends State<StudentsPage>
               hasError: personalSnapshot.hasError || snapshot.hasError,
               isPremium: isPremium,
               students: snapshot.data ?? const [],
-              onInvite: _mostrarDialogoAdicionar,
               onOpenBlockedStudent: (_) => _mostrarAlerta(
                 'Acesso limitado pelo Plano Base',
                 'Este aluno continua vinculado à sua conta e nenhum dado foi '
@@ -455,7 +454,6 @@ class _StudentsPageState extends State<StudentsPage>
           isLoading: snapshot.connectionState == ConnectionState.waiting,
           hasError: snapshot.hasError,
           invites: snapshot.data ?? const [],
-          onInvite: _mostrarDialogoAdicionar,
           onCancel: (invite) => _cancelarConvite(invite.id),
         );
       },
