@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 abstract final class ClientCompatibilityInfo {
   static const int schemaVersion = 2;
   static const String appVersion = '1.0.1';
-  static const int buildNumber = 9;
+  static const int buildNumber = 10;
 }
 
 class ClientCompatibilityService {
