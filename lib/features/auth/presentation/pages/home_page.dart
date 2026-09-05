@@ -363,47 +363,6 @@ class _HomePageState extends State<HomePage> {
               },
             ),
             const SizedBox(height: 30),
-            const Text(
-              "MENU RÁPIDO",
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: AppColors.secondary,
-                letterSpacing: 1.2,
-              ),
-            ),
-            const SizedBox(height: 10),
-            HomeQuickActionsGrid(
-              actions: [
-                _buildMenuCard(
-                  icon: Icons.check_circle_outline,
-                  color: AppColors.secondary,
-                  title: "Metas",
-                  subtitle: "Foco!",
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const TarefasPage(),
-                    ),
-                  ),
-                ),
-                _buildMenuCard(
-                  icon: Icons.calendar_month,
-                  color: AppColors.primary,
-                  title: "Semana",
-                  subtitle: "Planejamento",
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => WeeklyPlanPage(
-                        studentId: user!.uid,
-                        studentName: "Meus Treinos",
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
             StreamBuilder<DocumentSnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('users')
@@ -419,7 +378,21 @@ class _HomePageState extends State<HomePage> {
                   final professorId = profile.professorId;
                   final temProfessor = professorId != null;
 
-                  final cardsSecao = <Widget>[];
+                  if (!isProfessor && !isAluno) {
+                    return const SizedBox.shrink();
+                  }
+
+                  final cardsSecao = <Widget>[
+                    Text(
+                      isProfessor ? 'GESTÃO DO DIA' : 'PARA VOCÊ',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.secondary,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                  ];
 
                   if (isAluno && !temProfessor) {
                     cardsSecao.add(_buildBannerDescobrirTreinos(context));
@@ -430,7 +403,7 @@ class _HomePageState extends State<HomePage> {
                     cardsSecao.add(
                       _buildMenuCard(
                         icon: Icons.people_outline,
-                        color: Colors.purpleAccent,
+                        color: AppColors.primary,
                         title: "Meus Alunos",
                         subtitle: "Gerenciar Atletas",
                         onTap: () => Navigator.push(
@@ -492,6 +465,47 @@ class _HomePageState extends State<HomePage> {
                 }
                 return const SizedBox.shrink();
               },
+            ),
+            const SizedBox(height: 30),
+            const Text(
+              "MENU RÁPIDO",
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: AppColors.secondary,
+                letterSpacing: 1.2,
+              ),
+            ),
+            const SizedBox(height: 10),
+            HomeQuickActionsGrid(
+              actions: [
+                _buildMenuCard(
+                  icon: Icons.check_circle_outline,
+                  color: AppColors.secondary,
+                  title: "Metas",
+                  subtitle: "Foco!",
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const TarefasPage(),
+                    ),
+                  ),
+                ),
+                _buildMenuCard(
+                  icon: Icons.calendar_month,
+                  color: AppColors.primary,
+                  title: "Semana",
+                  subtitle: "Planejamento",
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => WeeklyPlanPage(
+                        studentId: user!.uid,
+                        studentName: "Meus Treinos",
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 30),
             const Text(
