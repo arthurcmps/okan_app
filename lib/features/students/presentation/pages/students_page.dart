@@ -2,13 +2,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/widgets/user_avatar.dart';
 import '../../../auth/presentation/pages/chat_page.dart';
 import '../../data/repositories/firebase_students_repository.dart';
 import '../../domain/entities/pending_student_invite.dart';
 import '../../domain/entities/student_relationship_exception.dart';
 import '../../domain/entities/student_summary.dart';
 import '../../domain/repositories/students_repository.dart';
+import '../widgets/students_lists.dart';
 import 'student_detail_page.dart';
 
 class StudentsPage extends StatefulWidget {
@@ -348,25 +348,23 @@ class _StudentsPageState extends State<StudentsPage>
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text(
           'Meus Alunos',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        foregroundColor: Colors.white,
         centerTitle: true,
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: AppColors.primary,
-          labelColor: AppColors.primary,
-          unselectedLabelColor: Colors.white54,
+          indicatorColor: colors.primary,
+          labelColor: colors.primary,
+          unselectedLabelColor: colors.onSurfaceVariant,
           tabs: const [
-            Tab(text: 'Ativos'),
-            Tab(text: 'Convites Pendentes'),
+            Tab(icon: Icon(Icons.groups_2_outlined), text: 'Ativos'),
+            Tab(icon: Icon(Icons.outgoing_mail), text: 'Convites'),
           ],
         ),
       ),
@@ -378,14 +376,12 @@ class _StudentsPageState extends State<StudentsPage>
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AppColors.secondary,
-        icon: const Icon(Icons.person_add, color: Colors.white),
+        backgroundColor: colors.secondary,
+        foregroundColor: colors.onSecondary,
+        icon: const Icon(Icons.person_add_outlined),
         label: const Text(
           'Convidar',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(fontWeight: FontWeight.bold),
         ),
         onPressed: _mostrarDialogoAdicionar,
       ),
@@ -396,160 +392,54 @@ class _StudentsPageState extends State<StudentsPage>
     return StreamBuilder<bool>(
       stream: _studentsRepository.watchProfessionalPremium(_personalId),
       builder: (context, personalSnapshot) {
-        if (personalSnapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(color: AppColors.secondary),
-          );
-        }
-
         final isPremium = personalSnapshot.data ?? false;
 
         return StreamBuilder<List<StudentSummary>>(
           stream: _studentsRepository.watchActiveStudents(_personalId),
           builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(
-                child: CircularProgressIndicator(color: AppColors.secondary),
-              );
-            }
-
-            if (!snapshot.hasData || snapshot.data!.isEmpty) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.people_outline,
-                      size: 80,
-                      color: Colors.white.withOpacity(0.2),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Nenhum aluno ativo.',
-                      style: TextStyle(color: Colors.white54),
-                    ),
-                  ],
-                ),
-              );
-            }
-
-            final alunos = snapshot.data!;
-
-            return ListView.builder(
-              itemCount: alunos.length,
-              padding: const EdgeInsets.all(16),
-              itemBuilder: (context, index) {
-                final aluno = alunos[index];
+            return ActiveStudentsList(
+              isLoading:
+                  personalSnapshot.connectionState ==
+                      ConnectionState.waiting ||
+                  snapshot.connectionState == ConnectionState.waiting,
+              hasError: personalSnapshot.hasError || snapshot.hasError,
+              isPremium: isPremium,
+              students: snapshot.data ?? const [],
+              onInvite: _mostrarDialogoAdicionar,
+              onOpenBlockedStudent: (_) => _mostrarAlerta(
+                'Acesso limitado pelo Plano Base',
+                'Este aluno continua vinculado à sua conta e nenhum dado foi '
+                    'perdido. O Plano Base permite gerenciar até 3 alunos por '
+                    'vez. Para acessar todos os vínculos novamente, reative o '
+                    'Premium.',
+              ),
+              onOpenStudent: (aluno) {
                 final nome = _studentName(aluno);
-                final email = aluno.email;
-                final isBloqueado = !isPremium && index > 2;
-
-                return Card(
-                  color: isBloqueado
-                      ? AppColors.background
-                      : AppColors.surface,
-                  margin: const EdgeInsets.only(bottom: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(
-                      color: isBloqueado
-                          ? Colors.amber.withOpacity(0.35)
-                          : Colors.white.withOpacity(0.05),
-                    ),
-                  ),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    leading: isBloqueado
-                        ? const CircleAvatar(
-                            backgroundColor: Colors.black45,
-                            child: Icon(
-                              Icons.lock_outline,
-                              color: Colors.amber,
-                            ),
-                          )
-                        : UserAvatar(
-                            photoUrl: aluno.photoUrl,
-                            name: nome,
-                            radius: 25,
-                          ),
-                    title: Text(
-                      nome,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: isBloqueado
-                            ? Colors.white54
-                            : Colors.white,
-                      ),
-                    ),
-                    subtitle: Text(
-                      email,
-                      style: TextStyle(
-                        color: isBloqueado
-                            ? Colors.white38
-                            : Colors.white70,
-                      ),
-                    ),
-                    onTap: () {
-                      if (isBloqueado) {
-                        _mostrarAlerta(
-                          'Acesso limitado pelo Plano Base',
-                          'Este aluno continua vinculado à sua conta e nenhum '
-                              'dado foi perdido. O Plano Base permite gerenciar '
-                              'até 3 alunos por vez. Para acessar todos os '
-                              'vínculos novamente, reative o Premium.',
-                        );
-                        return;
-                      }
-
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => StudentDetailPage(
-                            studentId: aluno.id,
-                            studentName: nome,
-                            studentEmail: email,
-                            repository: _studentsRepository,
-                          ),
-                        ),
-                      );
-                    },
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (!isBloqueado)
-                          IconButton(
-                            icon: const Icon(
-                              Icons.chat_bubble_outline,
-                              color: AppColors.primary,
-                            ),
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => ChatPage(
-                                    otherUserId: aluno.id,
-                                    otherUserName: nome,
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        IconButton(
-                          icon: const Icon(
-                            Icons.delete_outline,
-                            color: AppColors.error,
-                          ),
-                          onPressed: () =>
-                              _confirmarRemocao(aluno.id, nome),
-                        ),
-                      ],
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => StudentDetailPage(
+                      studentId: aluno.id,
+                      studentName: nome,
+                      studentEmail: aluno.email,
+                      repository: _studentsRepository,
                     ),
                   ),
                 );
               },
+              onChat: (aluno) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ChatPage(
+                      otherUserId: aluno.id,
+                      otherUserName: _studentName(aluno),
+                    ),
+                  ),
+                );
+              },
+              onUnlink: (aluno) =>
+                  _confirmarRemocao(aluno.id, _studentName(aluno)),
             );
           },
         );
@@ -561,53 +451,12 @@ class _StudentsPageState extends State<StudentsPage>
     return StreamBuilder<List<PendingStudentInvite>>(
       stream: _studentsRepository.watchPendingInvites(_personalId),
       builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const Center(
-            child: Text(
-              'Nenhum convite pendente.',
-              style: TextStyle(color: Colors.white30),
-            ),
-          );
-        }
-
-        final invites = snapshot.data!;
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: invites.length,
-          itemBuilder: (context, index) {
-            final invite = invites[index];
-
-            return Card(
-              color: AppColors.surface.withOpacity(0.5),
-              margin: const EdgeInsets.only(bottom: 12),
-              child: ListTile(
-                leading: const Icon(
-                  Icons.mark_email_unread_outlined,
-                  color: AppColors.secondary,
-                ),
-                title: Text(
-                  invite.studentEmail,
-                  style: const TextStyle(color: Colors.white70),
-                ),
-                subtitle: const Text(
-                  'Aguardando aceitação...',
-                  style: TextStyle(
-                    color: AppColors.secondary,
-                    fontSize: 12,
-                  ),
-                ),
-                trailing: IconButton(
-                  icon: const Icon(
-                    Icons.close,
-                    color: AppColors.error,
-                  ),
-                  onPressed: () => _cancelarConvite(invite.id),
-                  tooltip: 'Cancelar Convite',
-                ),
-              ),
-            );
-          },
+        return PendingStudentInvitesList(
+          isLoading: snapshot.connectionState == ConnectionState.waiting,
+          hasError: snapshot.hasError,
+          invites: snapshot.data ?? const [],
+          onInvite: _mostrarDialogoAdicionar,
+          onCancel: (invite) => _cancelarConvite(invite.id),
         );
       },
     );
