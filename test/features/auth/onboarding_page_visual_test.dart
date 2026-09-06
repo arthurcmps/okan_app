@@ -59,7 +59,6 @@ void main() {
 
   testWidgets('page indicator exposes its current position', (tester) async {
     final semantics = tester.ensureSemantics();
-    addTearDown(semantics.dispose);
 
     await tester.pumpWidget(
       MaterialApp(home: OnboardingPage(onCompleted: () {})),
@@ -71,6 +70,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.bySemanticsLabel('Página 2 de 3'), findsOneWidget);
+    semantics.dispose();
   });
 
   testWidgets('small screen and enlarged text do not overflow', (tester) async {
