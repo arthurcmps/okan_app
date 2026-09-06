@@ -20,7 +20,8 @@ void main() {
     );
 
     await tester.tap(find.text('Pular'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
 
     final preferences = await SharedPreferences.getInstance();
     expect(preferences.getBool('showOnboarding'), isFalse);
@@ -48,7 +49,8 @@ void main() {
     expect(find.text('Pular'), findsNothing);
 
     await tester.tap(find.text('COMEÇAR AGORA'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
 
     final preferences = await SharedPreferences.getInstance();
     expect(preferences.getBool('showOnboarding'), isFalse);
