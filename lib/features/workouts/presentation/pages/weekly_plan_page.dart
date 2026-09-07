@@ -1174,6 +1174,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage>
             return WorkoutTemplateLibrary(
               isLoading:
                   snapshot.connectionState == ConnectionState.waiting,
+              hasError: snapshot.hasError,
               templates: templates,
               scrollController: scrollController,
               onDelete: (template) =>
