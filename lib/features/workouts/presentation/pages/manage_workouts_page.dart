@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/widgets/okan_async_state.dart';
 import '../../data/repositories/firebase_workouts_repository.dart';
 import '../../domain/entities/workout_model.dart';
 import '../../domain/repositories/workouts_repository.dart';
 import 'create_workout_page.dart';
 
-class ManageWorkoutsPage extends StatelessWidget {
+class ManageWorkoutsPage extends StatefulWidget {
   ManageWorkoutsPage({
     super.key,
     WorkoutsRepository? repository,
@@ -13,12 +14,33 @@ class ManageWorkoutsPage extends StatelessWidget {
 
   final WorkoutsRepository _repository;
 
-  void _deletarTreino(
-    BuildContext context,
+  @override
+  State<ManageWorkoutsPage> createState() => _ManageWorkoutsPageState();
+}
+
+class _ManageWorkoutsPageState extends State<ManageWorkoutsPage> {
+  late Stream<List<WorkoutModel>> _workoutsStream;
+  final Set<String> _deletingWorkoutIds = <String>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _workoutsStream = widget._repository.watchWorkoutModels();
+  }
+
+  void _retryLoading() {
+    setState(() {
+      _workoutsStream = widget._repository.watchWorkoutModels();
+    });
+  }
+
+  Future<void> _deletarTreino(
     String treinoId,
     String nomeTreino,
-  ) {
-    showDialog(
+  ) async {
+    if (_deletingWorkoutIds.contains(treinoId)) return;
+
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Excluir Treino?'),
@@ -29,19 +51,40 @@ class ManageWorkoutsPage extends StatelessWidget {
             child: const Text('Cancelar'),
           ),
           TextButton(
-            onPressed: () async {
-              await _repository.deleteWorkoutModel(treinoId);
-              if (!ctx.mounted) return;
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Treino excluído.')),
-              );
-            },
+            onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Excluir', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
     );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _deletingWorkoutIds.add(treinoId));
+
+    try {
+      await widget._repository.deleteWorkoutModel(treinoId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Treino excluído.')),
+      );
+    } catch (error) {
+      debugPrint(
+        'ManageWorkoutsPage/deleteWorkoutModel: ${error.runtimeType}',
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Não foi possível excluir o treino. Tente novamente.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _deletingWorkoutIds.remove(treinoId));
+      }
+    }
   }
 
   void _editarTreino(BuildContext context, WorkoutModel workout) {
@@ -57,7 +100,7 @@ class ManageWorkoutsPage extends StatelessWidget {
                 .map((exercise) => exercise.toMap())
                 .toList(),
           },
-          repository: _repository,
+          repository: widget._repository,
         ),
       ),
     );
@@ -68,15 +111,38 @@ class ManageWorkoutsPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Meus Modelos')),
       body: StreamBuilder<List<WorkoutModel>>(
-        stream: _repository.watchWorkoutModels(),
+        stream: _workoutsStream,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
+            return const OkanLoadingState(
+              label: 'Carregando modelos de treino',
+            );
+          }
+
+          if (snapshot.hasError) {
+            return OkanMessageState(
+              key: const ValueKey('workout-models-error'),
+              icon: Icons.cloud_off_outlined,
+              title: 'Não foi possível carregar seus modelos',
+              description:
+                  'Verifique sua conexão e tente novamente em alguns instantes.',
+              actionLabel: 'Tentar novamente',
+              onAction: _retryLoading,
+              isError: true,
+              announce: true,
+            );
           }
 
           final workouts = snapshot.data ?? const <WorkoutModel>[];
           if (workouts.isEmpty) {
-            return const Center(child: Text('Nenhum modelo criado.'));
+            return const OkanMessageState(
+              key: ValueKey('workout-models-empty'),
+              icon: Icons.fitness_center_outlined,
+              title: 'Nenhum modelo criado',
+              description:
+                  'Crie um treino e salve-o como modelo para reutilizar depois.',
+            );
           }
 
           return ListView.builder(
@@ -84,6 +150,7 @@ class ManageWorkoutsPage extends StatelessWidget {
             itemCount: workouts.length,
             itemBuilder: (context, index) {
               final workout = workouts[index];
+              final isDeleting = _deletingWorkoutIds.contains(workout.id);
               return Card(
                 elevation: 2,
                 margin: const EdgeInsets.only(bottom: 12),
@@ -110,16 +177,31 @@ class ManageWorkoutsPage extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
+                        tooltip: 'Editar ${workout.nome}',
                         icon: const Icon(Icons.edit, color: Colors.blue),
-                        onPressed: () => _editarTreino(context, workout),
+                        onPressed: isDeleting
+                            ? null
+                            : () => _editarTreino(context, workout),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.delete_outline, color: Colors.red),
-                        onPressed: () => _deletarTreino(
-                          context,
-                          workout.id,
-                          workout.nome,
-                        ),
+                        tooltip: 'Excluir ${workout.nome}',
+                        icon: isDeleting
+                            ? const SizedBox.square(
+                                dimension: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.delete_outline,
+                                color: Colors.red,
+                              ),
+                        onPressed: isDeleting
+                            ? null
+                            : () => _deletarTreino(
+                                workout.id,
+                                workout.nome,
+                              ),
                       ),
                     ],
                   ),
