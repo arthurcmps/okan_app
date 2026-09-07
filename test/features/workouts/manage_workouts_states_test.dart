@@ -111,7 +111,8 @@ void main() {
     expect(find.byTooltip('Editar Treino de costas'), findsOneWidget);
     expect(find.byTooltip('Excluir Treino de costas'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Excluir Treino de costas'));
+    const deleteAction = ValueKey('delete-workout-workout-1');
+    await tester.tap(find.byKey(deleteAction));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Excluir'));
     await tester.pump();
@@ -119,12 +120,7 @@ void main() {
     expect(deleteCount, 1);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
-    final deleteButton = tester.widget<IconButton>(
-      find.descendant(
-        of: find.byTooltip('Excluir Treino de costas'),
-        matching: find.byType(IconButton),
-      ),
-    );
+    final deleteButton = tester.widget<IconButton>(find.byKey(deleteAction));
     expect(deleteButton.onPressed, isNull);
 
     deletion.complete();

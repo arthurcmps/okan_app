@@ -177,6 +177,7 @@ class _ManageWorkoutsPageState extends State<ManageWorkoutsPage> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
+                        key: ValueKey('edit-workout-${workout.id}'),
                         tooltip: 'Editar ${workout.nome}',
                         icon: const Icon(Icons.edit, color: Colors.blue),
                         onPressed: isDeleting
@@ -184,6 +185,7 @@ class _ManageWorkoutsPageState extends State<ManageWorkoutsPage> {
                             : () => _editarTreino(context, workout),
                       ),
                       IconButton(
+                        key: ValueKey('delete-workout-${workout.id}'),
                         tooltip: 'Excluir ${workout.nome}',
                         icon: isDeleting
                             ? const SizedBox.square(
