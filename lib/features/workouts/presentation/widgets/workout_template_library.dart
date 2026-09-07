@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/widgets/okan_async_state.dart';
 import '../../domain/entities/weekly_workout_plan.dart';
 
 class WorkoutTemplateLibrary extends StatelessWidget {
@@ -9,10 +10,12 @@ class WorkoutTemplateLibrary extends StatelessWidget {
     required this.templates,
     required this.onImport,
     required this.onDelete,
+    this.hasError = false,
     this.scrollController,
   });
 
   final bool isLoading;
+  final bool hasError;
   final List<WorkoutTemplate> templates;
   final ValueChanged<WorkoutTemplate> onImport;
   final ValueChanged<WorkoutTemplate> onDelete;
@@ -56,39 +59,26 @@ class WorkoutTemplateLibrary extends StatelessWidget {
         ),
         Expanded(
           child: isLoading
-              ? Center(
-                  child: CircularProgressIndicator(
-                    color: colorScheme.secondary,
-                  ),
+              ? const OkanLoadingState(
+                  label: 'Carregando biblioteca de templates',
+                )
+              : hasError
+              ? const OkanMessageState(
+                  key: ValueKey('workout-template-library-error'),
+                  icon: Icons.cloud_off_outlined,
+                  title: 'Não foi possível carregar a biblioteca',
+                  description:
+                      'Feche esta janela e tente novamente em alguns instantes.',
+                  isError: true,
+                  announce: true,
                 )
               : templates.isEmpty
-              ? Center(
-                  key: const ValueKey('workout-template-library-empty'),
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.library_books_outlined,
-                          size: 48,
-                          color: colorScheme.secondary,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Nenhum template salvo.',
-                          textAlign: TextAlign.center,
-                          style: textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Salve um dia de treino para encontrá-lo aqui.',
-                          textAlign: TextAlign.center,
-                          style: textTheme.bodyMedium,
-                        ),
-                      ],
-                    ),
-                  ),
+              ? const OkanMessageState(
+                  key: ValueKey('workout-template-library-empty'),
+                  icon: Icons.library_books_outlined,
+                  title: 'Nenhum template salvo.',
+                  description:
+                      'Salve um dia de treino para encontrá-lo aqui.',
                 )
               : ListView.builder(
                   key: const ValueKey('workout-template-library-list'),

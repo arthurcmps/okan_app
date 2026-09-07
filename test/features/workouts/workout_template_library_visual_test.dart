@@ -114,4 +114,37 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('shows a safe error state without technical details', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: testTheme(),
+        home: Scaffold(
+          body: WorkoutTemplateLibrary(
+            isLoading: false,
+            hasError: true,
+            templates: const [],
+            onImport: (_) {},
+            onDelete: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('workout-template-library-error')),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Não foi possível carregar a biblioteca'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Feche esta janela e tente novamente em alguns instantes.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('FirebaseException'), findsNothing);
+  });
 }
