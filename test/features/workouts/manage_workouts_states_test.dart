@@ -120,7 +120,10 @@ void main() {
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
     final deleteButton = tester.widget<IconButton>(
-      find.byTooltip('Excluir Treino de costas'),
+      find.descendant(
+        of: find.byTooltip('Excluir Treino de costas'),
+        matching: find.byType(IconButton),
+      ),
     );
     expect(deleteButton.onPressed, isNull);
 
