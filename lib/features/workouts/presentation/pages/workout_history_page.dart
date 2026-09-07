@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/okan_async_state.dart';
 import '../../../auth/presentation/pages/evolution_charts_page.dart';
 import '../../data/repositories/firebase_workouts_repository.dart';
 import '../../domain/entities/workout_exercise.dart';
 import '../../domain/entities/workout_history.dart';
 import '../../domain/repositories/workouts_repository.dart';
 
-class WorkoutHistoryPage extends StatelessWidget {
+class WorkoutHistoryPage extends StatefulWidget {
   WorkoutHistoryPage({
     super.key,
     required this.studentId,
@@ -19,6 +20,27 @@ class WorkoutHistoryPage extends StatelessWidget {
   final String studentId;
   final String studentName;
   final WorkoutsRepository _repository;
+
+  @override
+  State<WorkoutHistoryPage> createState() => _WorkoutHistoryPageState();
+}
+
+class _WorkoutHistoryPageState extends State<WorkoutHistoryPage> {
+  late Stream<List<WorkoutHistory>> _historyStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _historyStream = widget._repository.watchWorkoutHistory(widget.studentId);
+  }
+
+  void _retryLoading() {
+    setState(() {
+      _historyStream = widget._repository.watchWorkoutHistory(
+        widget.studentId,
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,8 +63,8 @@ class WorkoutHistoryPage extends StatelessWidget {
                   context,
                   MaterialPageRoute(
                     builder: (context) => EvolutionChartsPage(
-                      studentId: studentId,
-                      studentName: studentName,
+                      studentId: widget.studentId,
+                      studentName: widget.studentName,
                     ),
                   ),
                 );
@@ -66,21 +88,37 @@ class WorkoutHistoryPage extends StatelessWidget {
         ],
       ),
       body: StreamBuilder<List<WorkoutHistory>>(
-        stream: _repository.watchWorkoutHistory(studentId),
+        stream: _historyStream,
         builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(
-              child: CircularProgressIndicator(color: AppColors.secondary),
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
+            return const OkanLoadingState(
+              label: 'Carregando histórico de treinos',
             );
           }
 
-          final historyList = snapshot.data!;
+          if (snapshot.hasError) {
+            return OkanMessageState(
+              key: const ValueKey('workout-history-error'),
+              icon: Icons.cloud_off_outlined,
+              title: 'Não foi possível carregar o histórico',
+              description:
+                  'Verifique sua conexão e tente novamente em alguns instantes.',
+              actionLabel: 'Tentar novamente',
+              onAction: _retryLoading,
+              isError: true,
+              announce: true,
+            );
+          }
+
+          final historyList = snapshot.data ?? const <WorkoutHistory>[];
           if (historyList.isEmpty) {
-            return const Center(
-              child: Text(
-                'Nenhum treino finalizado ainda.',
-                style: TextStyle(color: Colors.white54),
-              ),
+            return const OkanMessageState(
+              key: ValueKey('workout-history-empty'),
+              icon: Icons.history_outlined,
+              title: 'Nenhum treino finalizado ainda',
+              description:
+                  'Os treinos concluídos pelo aluno aparecerão aqui.',
             );
           }
 
