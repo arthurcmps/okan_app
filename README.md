@@ -2,7 +2,7 @@
 
 Okan é um ecossistema digital de acompanhamento de treino que conecta alunos, profissionais de educação física e academias. O produto combina prescrição e execução de treinos, acompanhamento de evolução, relacionamento profissional, comunicação, comunidade e monetização em uma única experiência.
 
-> **Estado da documentação:** este README e os documentos em `docs/` descrevem o estado consolidado do código em **1º de setembro de 2026**. Quando uma capacidade existe apenas como destino arquitetural, ela é identificada como planejada ou dívida técnica.
+> **Estado da documentação:** este README e os documentos em `docs/` descrevem o estado consolidado do código em **8 de setembro de 2026**. Quando uma capacidade existe apenas como destino arquitetural, ela é identificada como planejada ou dívida técnica.
 
 ## Problema que o Okan resolve
 
@@ -140,6 +140,7 @@ npm test
 - [Autorização e Segurança](docs/SECURITY.md)
 - [Ambientes](docs/ENVIRONMENTS.md)
 - [Roadmap Técnico](docs/ROADMAP.md)
+- [Execução do Plano Visual e de UX](docs/UI-UX-EXECUTION-STATUS.md)
 
 Os documentos de ticket existentes permanecem como histórico de implementação. Os documentos mestres representam o estado atual e devem ser atualizados quando um ticket alterar um contrato neles descrito.
 
