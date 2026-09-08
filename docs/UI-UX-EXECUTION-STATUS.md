@@ -110,11 +110,11 @@ Não registrar exceções, UID, e-mail, senha, token, payload ou dado de saúde 
 | Item | Estado | Evidência integrada | Pendência para `done` |
 |---|---|---|---|
 | UX-01 Baseline | in progress | este documento, SHA e fluxos registrados | capturas sanitizadas nos tamanhos da matriz e baseline equivalente do web |
-| UX-02 Web STAGING | blocked | não há entrega dedicada | o web ainda possui configuração PROD fixa; criar configuração e Hosting separados, banner e fail-closed |
+| UX-02 Web STAGING | done | PR web 11, Hosting isolado e smoke autenticado em `okan-staging-24829.web.app` | — |
 | UX-03 Tokens | in progress | tema do app e cores semânticas nas PRs 23 e 37 | criar tokens CSS canônicos no web e concluir a auditoria gradual de cores no app |
 | UX-04 Auth | planned | telas preexistentes, sem pacote de aceite completo | executar PRs separados para web e app; manter contratos de autenticação e User v2 |
 | UX-05 Telas antigas | in progress | PRs 23, 25 e 26 | concluir gestão de treinos, avaliações restantes e widgets compartilhados; repetir matriz completa |
-| UX-06 Dashboard | in progress | PRs web 8, 9 e 10 | STAGING seguro continua pendente; arquitetura do menu móvel e smoke autenticado completo ainda precisam de gate |
+| UX-06 Dashboard | in progress | PRs web 8, 9 e 10; smoke autenticado executado em STAGING após a PR 11 | concluir a arquitetura do menu móvel e repetir a matriz de acessibilidade em celular e desktop |
 | UX-07 Home | done | PRs 28 e 29 | manter cobertura nas próximas regressões |
 | UX-08 Onboarding | done | PR 30 | manter cobertura nas próximas regressões |
 | UX-09 Estados/acessibilidade | in progress | PRs 31, 32, 33, 34 e 35 | continuar auditoria dos fluxos críticos, inclusive offline, sessão expirada e telas ainda não migradas |
@@ -141,20 +141,36 @@ Não registrar exceções, UID, e-mail, senha, token, payload ou dado de saúde 
 - [PR 8 - navegação e controles acessíveis](https://github.com/arthurcmps/okan_web/pull/8)
 - [PR 9 - tabelas responsivas e detalhes do professor](https://github.com/arthurcmps/okan_web/pull/9)
 - [PR 10 - controles de ícone acessíveis](https://github.com/arthurcmps/okan_web/pull/10)
+- [PR 11 - ambiente STAGING isolado e fail-closed](https://github.com/arthurcmps/okan_web/pull/11)
 
-## 7. Próxima ordem segura
+## 7. Encerramento da UX-02
 
-1. finalizar UX-01 com capturas sanitizadas e baseline do web;
-2. implementar UX-02 no `okan_web` antes de nova mudança estrutural no dashboard;
-3. consolidar UX-03 web e app em PRs separados;
-4. executar UX-04 web e app;
+A UX-02 foi validada em 8 de setembro de 2026 e está concluída no escopo do plano visual:
+
+- merge da [PR web 11](https://github.com/arthurcmps/okan_web/pull/11), SHA `687fadddf78a27b39f2bb3dfdea66a005736be95`;
+- Hosting isolado em `https://okan-staging-24829.web.app`;
+- banner `STAGING • DADOS SINTÉTICOS` visível;
+- App Check com reCAPTCHA Enterprise sem novos erros 400/403 no roteiro final;
+- cadastro de academia, login, sessão, dashboard e logout validados com dados sintéticos;
+- pagamentos externos bloqueados;
+- 50 testes automatizados aprovados;
+- nenhuma alteração ou implantação realizada em PROD.
+
+A configuração dos secrets do workflow manual de STAGING no GitHub Actions, quando ainda pendente, é melhoria operacional de CI/CD. O caminho manual validado continua explícito e fail-closed e, por isso, essa automação não bloqueia o encerramento funcional da UX-02.
+
+## 8. Próxima ordem segura
+
+1. finalizar UX-01 com capturas sanitizadas e baseline equivalente do web;
+2. executar UX-03 web, consolidando os tokens CSS canônicos sem alterar IDs ou handlers;
+3. concluir a auditoria gradual da UX-03 no app em PR separado;
+4. executar UX-04 web e app em PRs separados;
 5. concluir as lacunas selecionadas de UX-05 e UX-09;
-6. repetir a matriz mínima em STAGING;
+6. concluir a arquitetura móvel da UX-06 e repetir a matriz mínima em STAGING;
 7. iniciar UX-10 somente com os gates anteriores registrados.
 
-Enquanto UX-02 estiver bloqueado, mudanças pequenas e isoladas no Flutter podem continuar, desde que não haja regressão P0/P1 aberta e que cada PR preserve os contratos funcionais.
+A UX-02 removeu o bloqueio de ambiente para o dashboard. Toda próxima mudança estrutural do web ainda deve passar por build, verificação, deploy explícito e smoke autenticado no projeto STAGING antes de qualquer promoção para PROD.
 
-## 8. Capturas pendentes para concluir UX-01
+## 9. Capturas pendentes para concluir UX-01
 
 As imagens devem usar somente dados sintéticos e o mesmo estado antes/depois.
 
@@ -168,6 +184,6 @@ As imagens devem usar somente dados sintéticos e o mesmo estado antes/depois.
 
 Não incluir credenciais, endereços de e-mail reais, nomes reais, dados médicos ou identificadores internos.
 
-## 9. Rollback documental
+## 10. Rollback documental
 
 Este arquivo não altera execução, dados ou configuração. Se alguma referência estiver incorreta, corrigir o registro em nova PR preservando o histórico; não reescrever evidências de forma silenciosa.
