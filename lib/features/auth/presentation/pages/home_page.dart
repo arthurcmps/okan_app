@@ -421,7 +421,7 @@ class _HomePageState extends State<HomePage> {
                       cardsSecao.add(
                         _buildMenuCard(
                           icon: Icons.support_agent,
-                          color: Colors.blueAccent,
+                          color: AppColors.info,
                           title: "Meu Personal",
                           subtitle:
                               "Falar com ${data['personalName'] ?? 'Treinador'}",
@@ -445,7 +445,7 @@ class _HomePageState extends State<HomePage> {
                     cardsSecao.add(
                       _buildMenuCard(
                         icon: Icons.sports_martial_arts,
-                        color: Colors.deepOrangeAccent,
+                        color: AppColors.competition,
                         title: "Arena Okan ⚔️",
                         subtitle: "Busque e desafie amigos!",
                         onTap: () => Navigator.push(
@@ -512,14 +512,14 @@ class _HomePageState extends State<HomePage> {
               "FASE DE TESTES",
               style: TextStyle(
                 fontWeight: FontWeight.bold,
-                color: Colors.amber,
+                color: AppColors.beta,
                 letterSpacing: 1.2,
               ),
             ),
             const SizedBox(height: 10),
             _buildMenuCard(
               icon: Icons.bug_report,
-              color: Colors.amber,
+              color: AppColors.beta,
               title: "Deixar Feedback (Beta)",
               subtitle: "Ajude a melhorar o Okan!",
               onTap: () => mostrarFormularioFeedbackBeta(context),
@@ -650,7 +650,7 @@ class _HomePageState extends State<HomePage> {
                   const SizedBox(height: 20),
                   const Row(
                     children: [
-                      Icon(Icons.bug_report, color: Colors.amber),
+                      Icon(Icons.bug_report, color: AppColors.beta),
                       SizedBox(width: 10),
                       Text(
                         "Feedback de Teste (Beta)",
@@ -743,7 +743,7 @@ class _HomePageState extends State<HomePage> {
                     height: 50,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.amber,
+                        backgroundColor: AppColors.beta,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -773,7 +773,7 @@ class _HomePageState extends State<HomePage> {
                                       content: Text(
                                         "Feedback enviado! Muito obrigado! 💙",
                                       ),
-                                      backgroundColor: Colors.amber,
+                                      backgroundColor: AppColors.beta,
                                     ),
                                   );
                                 }
