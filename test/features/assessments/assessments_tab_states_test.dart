@@ -69,11 +69,16 @@ void main() {
     await tester.enterText(fields.at(0), '80');
     await tester.enterText(fields.at(1), '180');
 
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('assessment-save')),
-      500,
-      scrollable: find.byType(Scrollable).last,
-    );
+    final formList = find.byType(ListView).last;
+    for (var attempt = 0; attempt < 8; attempt++) {
+      if (find.byKey(const ValueKey('assessment-save')).evaluate().isNotEmpty) {
+        break;
+      }
+      await tester.drag(formList, const Offset(0, -500));
+      await tester.pump();
+    }
+
+    expect(find.byKey(const ValueKey('assessment-save')), findsOneWidget);
   }
 
   testWidgets('shows a safe list error and retries', (tester) async {
