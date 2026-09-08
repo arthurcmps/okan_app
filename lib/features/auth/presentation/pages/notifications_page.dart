@@ -11,7 +11,7 @@ import 'chat_page.dart';
 import 'student_detail_page.dart';
 import 'weekly_plan_page.dart';
 
-class NotificationsPage extends StatelessWidget {
+class NotificationsPage extends StatefulWidget {
   const NotificationsPage({
     super.key,
     this.repository,
@@ -22,17 +22,82 @@ class NotificationsPage extends StatelessWidget {
   final String? userId;
 
   @override
+  State<NotificationsPage> createState() => _NotificationsPageState();
+}
+
+class _NotificationsPageState extends State<NotificationsPage> {
+  late final NotificationsRepository _repository;
+  late final String? _currentUserId;
+  Stream<List<PendingTrainerInvite>>? _pendingInvitesStream;
+  Stream<List<OkanNotification>>? _recentNotificationsStream;
+  final Map<String, bool> _processingInvites = <String, bool>{};
+  bool _isMarkingAllRead = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _repository = widget.repository ?? FirebaseNotificationsRepository();
+    _currentUserId =
+        widget.userId ?? FirebaseAuth.instance.currentUser?.uid;
+
+    final currentUserId = _currentUserId;
+    if (currentUserId != null) {
+      _pendingInvitesStream = _repository.watchPendingInvites(currentUserId);
+      _recentNotificationsStream =
+          _repository.watchRecentNotifications(currentUserId);
+    }
+  }
+
+  void _retryPendingInvites() {
+    final currentUserId = _currentUserId;
+    if (currentUserId == null) return;
+    setState(() {
+      _pendingInvitesStream = _repository.watchPendingInvites(currentUserId);
+    });
+  }
+
+  void _retryRecentNotifications() {
+    final currentUserId = _currentUserId;
+    if (currentUserId == null) return;
+    setState(() {
+      _recentNotificationsStream =
+          _repository.watchRecentNotifications(currentUserId);
+    });
+  }
+
+  Future<void> _markAllRead() async {
+    final currentUserId = _currentUserId;
+    if (currentUserId == null || _isMarkingAllRead) return;
+
+    setState(() => _isMarkingAllRead = true);
+    try {
+      await _repository.markAllNotificationsRead(currentUserId);
+    } catch (error) {
+      debugPrint('NotificationsPage/markAllRead: ${error.runtimeType}');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Não foi possível marcar as notificações. Tente novamente.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isMarkingAllRead = false);
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final currentUserId = userId ?? FirebaseAuth.instance.currentUser?.uid;
+    final currentUserId = _currentUserId;
 
     if (currentUserId == null) {
       return const Scaffold(
         body: Center(child: Text('Não logado')),
       );
     }
-
-    final notificationsRepository =
-        repository ?? FirebaseNotificationsRepository();
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -47,9 +112,17 @@ class NotificationsPage extends StatelessWidget {
         foregroundColor: Colors.white,
         actions: [
           IconButton(
-            icon: const Icon(Icons.done_all, color: AppColors.textSub),
-            onPressed: () => notificationsRepository
-                .markAllNotificationsRead(currentUserId),
+            key: const ValueKey('notifications-mark-all-read'),
+            icon: _isMarkingAllRead
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.textSub,
+                    ),
+                  )
+                : const Icon(Icons.done_all, color: AppColors.textSub),
+            onPressed: _isMarkingAllRead ? null : _markAllRead,
             tooltip: 'Marcar todas como lidas',
           ),
         ],
@@ -72,7 +145,7 @@ class NotificationsPage extends StatelessWidget {
               ),
             ),
             _buildInvitesStream(
-              notificationsRepository,
+              _repository,
               currentUserId,
             ),
             const SizedBox(height: 24),
@@ -90,7 +163,7 @@ class NotificationsPage extends StatelessWidget {
             ),
             _buildGeneralNotificationsStream(
               context,
-              notificationsRepository,
+              _repository,
               currentUserId,
             ),
           ],
@@ -104,15 +177,32 @@ class NotificationsPage extends StatelessWidget {
     String userId,
   ) {
     return StreamBuilder<List<PendingTrainerInvite>>(
-      stream: repository.watchPendingInvites(userId),
+      stream: _pendingInvitesStream,
       builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return _buildInlineLoading('Carregando convites pendentes');
+        }
+
+        if (snapshot.hasError) {
+          return _buildInlineError(
+            key: const ValueKey('pending-invites-error'),
+            message: 'Não foi possível carregar os convites.',
+            onRetry: _retryPendingInvites,
+          );
+        }
+
+        final invites = snapshot.data ?? const <PendingTrainerInvite>[];
+        if (invites.isEmpty) {
           return _buildEmptyState('Nenhum convite pendente.');
         }
 
         return Column(
-          children: snapshot.data!.map((invite) {
+          children: invites.map((invite) {
+            final processingDecision = _processingInvites[invite.id];
+            final isProcessing = processingDecision != null;
             return Container(
+              key: ValueKey('pending-invite-${invite.id}'),
               margin: const EdgeInsets.only(bottom: 12),
               decoration: BoxDecoration(
                 color: AppColors.surface,
@@ -152,42 +242,64 @@ class NotificationsPage extends StatelessWidget {
                       children: [
                         Expanded(
                           child: OutlinedButton(
-                            onPressed: () => _responderConvite(
-                              context,
-                              repository,
-                              invite.id,
-                              false,
-                            ),
+                            key: ValueKey('decline-invite-${invite.id}'),
+                            onPressed: isProcessing
+                                ? null
+                                : () => _responderConvite(
+                                    context,
+                                    repository,
+                                    invite.id,
+                                    false,
+                                  ),
                             style: OutlinedButton.styleFrom(
                               side: const BorderSide(
                                 color: AppColors.error,
                               ),
                             ),
-                            child: const Text(
-                              'Recusar',
-                              style: TextStyle(color: AppColors.error),
-                            ),
+                            child: processingDecision == false
+                                ? const SizedBox.square(
+                                    dimension: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: AppColors.error,
+                                    ),
+                                  )
+                                : const Text(
+                                    'Recusar',
+                                    style: TextStyle(color: AppColors.error),
+                                  ),
                           ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: ElevatedButton(
-                            onPressed: () => _responderConvite(
-                              context,
-                              repository,
-                              invite.id,
-                              true,
-                            ),
+                            key: ValueKey('accept-invite-${invite.id}'),
+                            onPressed: isProcessing
+                                ? null
+                                : () => _responderConvite(
+                                    context,
+                                    repository,
+                                    invite.id,
+                                    true,
+                                  ),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.primary,
                             ),
-                            child: const Text(
-                              'Aceitar',
-                              style: TextStyle(
-                                color: Colors.black,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
+                            child: processingDecision == true
+                                ? const SizedBox.square(
+                                    dimension: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.black,
+                                    ),
+                                  )
+                                : const Text(
+                                    'Aceitar',
+                                    style: TextStyle(
+                                      color: Colors.black,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                           ),
                         ),
                       ],
@@ -208,19 +320,25 @@ class NotificationsPage extends StatelessWidget {
     String userId,
   ) {
     return StreamBuilder<List<OkanNotification>>(
-      stream: repository.watchRecentNotifications(userId),
+      stream: _recentNotificationsStream,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(color: AppColors.secondary),
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return _buildInlineLoading('Carregando notificações recentes');
+        }
+
+        if (snapshot.hasError) {
+          return _buildInlineError(
+            key: const ValueKey('recent-notifications-error'),
+            message: 'Não foi possível carregar as notificações.',
+            onRetry: _retryRecentNotifications,
           );
         }
 
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+        final notifications = snapshot.data ?? const <OkanNotification>[];
+        if (notifications.isEmpty) {
           return _buildEmptyState('Nenhuma notificação recente.');
         }
-
-        final notifications = snapshot.data!;
 
         return ListView.builder(
           shrinkWrap: true,
@@ -516,9 +634,14 @@ class NotificationsPage extends StatelessWidget {
         ),
       );
     } catch (error) {
+      debugPrint('NotificationsPage/loadPendingInvite: ${error.runtimeType}');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro: $error')),
+          const SnackBar(
+            content: Text(
+              'Não foi possível abrir o convite. Tente novamente.',
+            ),
+          ),
         );
       }
     }
@@ -619,12 +742,70 @@ class NotificationsPage extends StatelessWidget {
     );
   }
 
+  Widget _buildInlineLoading(String label) {
+    return SizedBox(
+      height: 88,
+      child: Center(
+        child: Semantics(
+          container: true,
+          liveRegion: true,
+          label: label,
+          child: const ExcludeSemantics(
+            child: CircularProgressIndicator(
+              color: AppColors.secondary,
+              strokeWidth: 2,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInlineError({
+    required Key key,
+    required String message,
+    required VoidCallback onRetry,
+  }) {
+    return Semantics(
+      key: key,
+      container: true,
+      liveRegion: true,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.error.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.error.withOpacity(0.35)),
+        ),
+        child: Column(
+          children: [
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.textSub),
+            ),
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Tentar novamente'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _responderConvite(
     BuildContext context,
     NotificationsRepository repository,
     String inviteId,
     bool aceitar,
   ) async {
+    if (_processingInvites.containsKey(inviteId)) return;
+    setState(() => _processingInvites[inviteId] = aceitar);
+
     try {
       await repository.respondStudentInvite(
         inviteId: inviteId,
@@ -646,6 +827,7 @@ class NotificationsPage extends StatelessWidget {
         );
       }
     } catch (error) {
+      debugPrint('NotificationsPage/respondInvite: ${error.runtimeType}');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -655,6 +837,10 @@ class NotificationsPage extends StatelessWidget {
             backgroundColor: AppColors.error,
           ),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _processingInvites.remove(inviteId));
       }
     }
   }
