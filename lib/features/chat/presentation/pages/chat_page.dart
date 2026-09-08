@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/okan_async_state.dart';
 import '../../../../core/widgets/user_avatar.dart';
 import '../../data/repositories/firebase_chat_repository.dart';
 import '../../domain/chat_id.dart';
@@ -32,8 +33,11 @@ class _ChatPageState extends State<ChatPage> {
   late final ChatRepository _chatRepository;
   late final String _chatId;
   late final String _currentUserId;
+  late final Stream<String?> _otherUserPhotoStream;
+  late Stream<List<ChatMessage>> _messagesStream;
 
   String _currentUserName = 'Usuário';
+  bool _isSending = false;
 
   @override
   void initState() {
@@ -47,6 +51,10 @@ class _ChatPageState extends State<ChatPage> {
 
     _currentUserId = currentUserId;
     _chatId = buildDeterministicChatId(_currentUserId, widget.otherUserId);
+    _otherUserPhotoStream = _chatRepository.watchUserPhotoUrl(
+      widget.otherUserId,
+    );
+    _messagesStream = _chatRepository.watchMessages(_chatId);
     _carregarNomeUsuarioAtual();
   }
 
@@ -58,30 +66,62 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Future<void> _carregarNomeUsuarioAtual() async {
-    final name = await _chatRepository.loadUserDisplayName(_currentUserId);
-    if (!mounted) return;
-    setState(() => _currentUserName = name);
+    try {
+      final name = await _chatRepository.loadUserDisplayName(_currentUserId);
+      if (!mounted) return;
+      setState(() => _currentUserName = name);
+    } catch (error) {
+      debugPrint('ChatPage/loadUserDisplayName: ${error.runtimeType}');
+    }
+  }
+
+  void _retryMessages() {
+    setState(() {
+      _messagesStream = _chatRepository.watchMessages(_chatId);
+    });
   }
 
   Future<void> _enviarMensagem() async {
+    if (_isSending) return;
+
     final message = _messageController.text.trim();
     if (message.isEmpty) return;
 
-    _messageController.clear();
-    await _chatRepository.sendMessage(
-      chatId: _chatId,
-      currentUserId: _currentUserId,
-      otherUserId: widget.otherUserId,
-      currentUserName: _currentUserName,
-      text: message,
-    );
+    setState(() => _isSending = true);
 
-    if (_scrollController.hasClients) {
-      await _scrollController.animateTo(
-        0,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
+    try {
+      await _chatRepository.sendMessage(
+        chatId: _chatId,
+        currentUserId: _currentUserId,
+        otherUserId: widget.otherUserId,
+        currentUserName: _currentUserName,
+        text: message,
       );
+
+      if (!mounted) return;
+      _messageController.clear();
+
+      if (_scrollController.hasClients) {
+        await _scrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    } catch (error) {
+      debugPrint('ChatPage/sendMessage: ${error.runtimeType}');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Não foi possível enviar a mensagem. Tente novamente.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSending = false);
+      }
     }
   }
 
@@ -95,7 +135,7 @@ class _ChatPageState extends State<ChatPage> {
         elevation: 0,
         foregroundColor: Colors.white,
         title: StreamBuilder<String?>(
-          stream: _chatRepository.watchUserPhotoUrl(widget.otherUserId),
+          stream: _otherUserPhotoStream,
           builder: (context, snapshot) {
             final photoUrl = snapshot.data ?? '';
             return Row(
@@ -125,15 +165,40 @@ class _ChatPageState extends State<ChatPage> {
         children: [
           Expanded(
             child: StreamBuilder<List<ChatMessage>>(
-              stream: _chatRepository.watchMessages(_chatId),
+              stream: _messagesStream,
               builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const Center(
-                    child: CircularProgressIndicator(color: AppColors.secondary),
+                if (snapshot.connectionState == ConnectionState.waiting &&
+                    !snapshot.hasData) {
+                  return const OkanLoadingState(
+                    label: 'Carregando conversa',
                   );
                 }
 
-                final messages = snapshot.data!;
+                if (snapshot.hasError) {
+                  return OkanMessageState(
+                    key: const ValueKey('chat-messages-error'),
+                    icon: Icons.cloud_off_outlined,
+                    title: 'Não foi possível carregar a conversa',
+                    description:
+                        'Verifique sua conexão e tente novamente em alguns instantes.',
+                    actionLabel: 'Tentar novamente',
+                    onAction: _retryMessages,
+                    isError: true,
+                    announce: true,
+                  );
+                }
+
+                final messages = snapshot.data ?? const <ChatMessage>[];
+                if (messages.isEmpty) {
+                  return const OkanMessageState(
+                    key: ValueKey('chat-messages-empty'),
+                    icon: Icons.chat_bubble_outline,
+                    title: 'Nenhuma mensagem ainda',
+                    description:
+                        'Envie uma mensagem para iniciar esta conversa.',
+                  );
+                }
+
                 return ListView.builder(
                   reverse: true,
                   controller: _scrollController,
@@ -202,6 +267,7 @@ class _ChatPageState extends State<ChatPage> {
                 Expanded(
                   child: TextField(
                     controller: _messageController,
+                    enabled: !_isSending,
                     style: const TextStyle(color: Colors.white),
                     textCapitalization: TextCapitalization.sentences,
                     decoration: InputDecoration(
@@ -218,16 +284,32 @@ class _ChatPageState extends State<ChatPage> {
                         vertical: 12,
                       ),
                     ),
-                    onSubmitted: (_) => _enviarMensagem(),
+                    onSubmitted: _isSending ? null : (_) => _enviarMensagem(),
                   ),
                 ),
                 const SizedBox(width: 8),
                 CircleAvatar(
-                  backgroundColor: AppColors.primary,
+                  backgroundColor: _isSending
+                      ? AppColors.primary.withOpacity(0.6)
+                      : AppColors.primary,
                   radius: 24,
                   child: IconButton(
-                    icon: const Icon(Icons.send, color: Colors.black, size: 20),
-                    onPressed: _enviarMensagem,
+                    key: const ValueKey('chat-send-message'),
+                    tooltip: 'Enviar mensagem',
+                    icon: _isSending
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.black,
+                            ),
+                          )
+                        : const Icon(
+                            Icons.send,
+                            color: Colors.black,
+                            size: 20,
+                          ),
+                    onPressed: _isSending ? null : _enviarMensagem,
                   ),
                 ),
               ],
