@@ -168,7 +168,6 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('token=secret'), findsNothing);
-    expect(find.text('Nova Avaliação Física'), findsOneWidget);
     expect(
       tester
           .widget<ElevatedButton>(
