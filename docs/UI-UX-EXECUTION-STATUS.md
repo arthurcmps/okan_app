@@ -111,7 +111,7 @@ Não registrar exceções, UID, e-mail, senha, token, payload ou dado de saúde 
 |---|---|---|---|
 | UX-01 Baseline | in progress | este documento, SHA e fluxos registrados | capturas sanitizadas nos tamanhos da matriz e baseline equivalente do web |
 | UX-02 Web STAGING | blocked | não há entrega dedicada | o web ainda possui configuração PROD fixa; criar configuração e Hosting separados, banner e fail-closed |
-| UX-03 Tokens | in progress | adoção pontual do tema no app, inclusive PR 23 | criar tokens CSS canônicos no web e concluir tokens semânticos/auditoria de cores no app |
+| UX-03 Tokens | in progress | tema do app e cores semânticas nas PRs 23 e 37 | criar tokens CSS canônicos no web e concluir a auditoria gradual de cores no app |
 | UX-04 Auth | planned | telas preexistentes, sem pacote de aceite completo | executar PRs separados para web e app; manter contratos de autenticação e User v2 |
 | UX-05 Telas antigas | in progress | PRs 23, 25 e 26 | concluir gestão de treinos, avaliações restantes e widgets compartilhados; repetir matriz completa |
 | UX-06 Dashboard | in progress | PRs web 8, 9 e 10 | STAGING seguro continua pendente; arquitetura do menu móvel e smoke autenticado completo ainda precisam de gate |
@@ -134,6 +134,7 @@ Não registrar exceções, UID, e-mail, senha, token, payload ou dado de saúde 
 - [PR 33 - estados e envio do chat](https://github.com/arthurcmps/okan_app/pull/33)
 - [PR 34 - estados e salvamento das avaliações](https://github.com/arthurcmps/okan_app/pull/34)
 - [PR 35 - estados e ações das notificações](https://github.com/arthurcmps/okan_app/pull/35)
+- [PR 37 - cores semânticas do produto](https://github.com/arthurcmps/okan_app/pull/37)
 
 ### Painel web
 

@@ -650,24 +650,24 @@ class _NotificationsPageState extends State<NotificationsPage> {
   Color _getColorByNotification(OkanNotification notification) {
     final title = notification.title.toLowerCase();
 
-    if (title.contains('vencido')) return Colors.redAccent;
+    if (title.contains('vencido')) return AppColors.error;
     if (title.contains('vencendo') || title.contains('alteração')) {
-      return Colors.amber;
+      return AppColors.warning;
     }
-    if (title.contains('feedback')) return Colors.blueAccent;
+    if (title.contains('feedback')) return AppColors.info;
 
     switch (notification.type) {
       case 'message':
-        return Colors.blueAccent;
+        return AppColors.info;
       case 'workout':
       case 'workout_update':
         return AppColors.primary;
       case 'assessment':
         return AppColors.secondary;
       case 'invite':
-        return Colors.amber;
+        return AppColors.warning;
       default:
-        return Colors.grey;
+        return AppColors.neutral;
     }
   }
 
@@ -822,7 +822,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
             ),
             backgroundColor: aceitar
                 ? AppColors.success
-                : Colors.grey,
+                : AppColors.neutral,
           ),
         );
       }
