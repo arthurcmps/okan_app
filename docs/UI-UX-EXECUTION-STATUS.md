@@ -111,7 +111,7 @@ Não registrar exceções, UID, e-mail, senha, token, payload ou dado de saúde 
 |---|---|---|---|
 | UX-01 Baseline | in progress | este documento, SHA e fluxos registrados | capturas sanitizadas nos tamanhos da matriz e baseline equivalente do web |
 | UX-02 Web STAGING | done | PR web 11, Hosting isolado e smoke autenticado em `okan-staging-24829.web.app` | — |
-| UX-03 Tokens | in progress | tema do app e cores semânticas nas PRs 23 e 37 | criar tokens CSS canônicos no web e concluir a auditoria gradual de cores no app |
+| UX-03 Tokens | in progress | tema do app nas PRs 23 e 37; tokens CSS e contraste protegidos na PR web 13 | migrar cores inline/dinâmicas restantes no web e concluir a auditoria gradual no app |
 | UX-04 Auth | planned | telas preexistentes, sem pacote de aceite completo | executar PRs separados para web e app; manter contratos de autenticação e User v2 |
 | UX-05 Telas antigas | in progress | PRs 23, 25 e 26 | concluir gestão de treinos, avaliações restantes e widgets compartilhados; repetir matriz completa |
 | UX-06 Dashboard | in progress | PRs web 8, 9 e 10; smoke autenticado executado em STAGING após a PR 11 | concluir a arquitetura do menu móvel e repetir a matriz de acessibilidade em celular e desktop |
@@ -142,6 +142,7 @@ Não registrar exceções, UID, e-mail, senha, token, payload ou dado de saúde 
 - [PR 9 - tabelas responsivas e detalhes do professor](https://github.com/arthurcmps/okan_web/pull/9)
 - [PR 10 - controles de ícone acessíveis](https://github.com/arthurcmps/okan_web/pull/10)
 - [PR 11 - ambiente STAGING isolado e fail-closed](https://github.com/arthurcmps/okan_web/pull/11)
+- [PR 13 - tokens visuais canônicos do painel](https://github.com/arthurcmps/okan_web/pull/13)
 
 ## 7. Encerramento da UX-02
 
@@ -161,7 +162,7 @@ A configuração dos secrets do workflow manual de STAGING no GitHub Actions, qu
 ## 8. Próxima ordem segura
 
 1. finalizar UX-01 com capturas sanitizadas e baseline equivalente do web;
-2. executar UX-03 web, consolidando os tokens CSS canônicos sem alterar IDs ou handlers;
+2. concluir a migração gradual das cores inline e dinâmicas da UX-03 web, sem alterar IDs ou handlers;
 3. concluir a auditoria gradual da UX-03 no app em PR separado;
 4. executar UX-04 web e app em PRs separados;
 5. concluir as lacunas selecionadas de UX-05 e UX-09;
