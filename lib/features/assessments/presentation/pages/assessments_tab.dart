@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/okan_async_state.dart';
 import '../../data/repositories/firebase_assessments_repository.dart';
 import '../../domain/entities/physical_assessment.dart';
 import '../../domain/repositories/assessments_repository.dart';
 import '../widgets/professor_notes_widget.dart';
 
-class AssessmentsTab extends StatelessWidget {
+class AssessmentsTab extends StatefulWidget {
   const AssessmentsTab({
     super.key,
     required this.studentId,
@@ -18,9 +19,28 @@ class AssessmentsTab extends StatelessWidget {
   final AssessmentsRepository? repository;
 
   @override
-  Widget build(BuildContext context) {
-    final assessmentsRepository = repository ?? FirebaseAssessmentsRepository();
+  State<AssessmentsTab> createState() => _AssessmentsTabState();
+}
 
+class _AssessmentsTabState extends State<AssessmentsTab> {
+  late final AssessmentsRepository _repository;
+  late Stream<List<PhysicalAssessment>> _assessmentsStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _repository = widget.repository ?? FirebaseAssessmentsRepository();
+    _assessmentsStream = _repository.watchAssessments(widget.studentId);
+  }
+
+  void _retryLoading() {
+    setState(() {
+      _assessmentsStream = _repository.watchAssessments(widget.studentId);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
       floatingActionButton: FloatingActionButton.extended(
@@ -30,35 +50,51 @@ class AssessmentsTab extends StatelessWidget {
           'Nova Avaliação',
           style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
         ),
-        onPressed: () => _showAddAssessmentModal(
-          context,
-          assessmentsRepository,
-        ),
+        onPressed: () => _showAddAssessmentModal(context),
       ),
       body: Column(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: ProfessorNotesWidget(
-              studentId: studentId,
-              repository: assessmentsRepository,
+              studentId: widget.studentId,
+              repository: _repository,
             ),
           ),
           Expanded(
             child: StreamBuilder<List<PhysicalAssessment>>(
-              stream: assessmentsRepository.watchAssessments(studentId),
+              stream: _assessmentsStream,
               builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
+                if (snapshot.connectionState == ConnectionState.waiting &&
+                    !snapshot.hasData) {
+                  return const OkanLoadingState(
+                    label: 'Carregando avaliações físicas',
+                  );
                 }
 
-                final assessments = snapshot.data!;
+                if (snapshot.hasError) {
+                  return OkanMessageState(
+                    key: const ValueKey('assessments-error'),
+                    icon: Icons.cloud_off_outlined,
+                    title: 'Não foi possível carregar as avaliações',
+                    description:
+                        'Verifique sua conexão e tente novamente em alguns instantes.',
+                    actionLabel: 'Tentar novamente',
+                    onAction: _retryLoading,
+                    isError: true,
+                    announce: true,
+                  );
+                }
+
+                final assessments =
+                    snapshot.data ?? const <PhysicalAssessment>[];
                 if (assessments.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      'Nenhuma avaliação registrada.',
-                      style: TextStyle(color: Colors.white54),
-                    ),
+                  return const OkanMessageState(
+                    key: ValueKey('assessments-empty'),
+                    icon: Icons.add_chart_outlined,
+                    title: 'Nenhuma avaliação registrada',
+                    description:
+                        'Use “Nova Avaliação” para registrar os primeiros dados.',
                   );
                 }
 
@@ -224,7 +260,6 @@ class AssessmentsTab extends StatelessWidget {
 
   void _showAddAssessmentModal(
     BuildContext context,
-    AssessmentsRepository assessmentsRepository,
   ) {
     showModalBottomSheet<void>(
       context: context,
@@ -235,9 +270,9 @@ class AssessmentsTab extends StatelessWidget {
         minChildSize: 0.5,
         maxChildSize: 0.95,
         builder: (_, controller) => _AssessmentForm(
-          studentId: studentId,
+          studentId: widget.studentId,
           scrollController: controller,
-          repository: assessmentsRepository,
+          repository: _repository,
         ),
       ),
     );
@@ -262,10 +297,14 @@ class _AssessmentForm extends StatefulWidget {
 class _AssessmentFormState extends State<_AssessmentForm> {
   final _formKey = GlobalKey<FormState>();
   final Map<String, String> _values = {};
+  bool _isSaving = false;
 
   Future<void> _submit() async {
+    if (_isSaving) return;
     if (!(_formKey.currentState?.validate() ?? false)) return;
     _formKey.currentState?.save();
+
+    setState(() => _isSaving = true);
 
     final data = <String, dynamic>{
       'generalRating': _values['generalRating'],
@@ -290,18 +329,28 @@ class _AssessmentFormState extends State<_AssessmentForm> {
       );
 
       if (!mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(
           content: Text('Avaliação salva!'),
           backgroundColor: Colors.green,
         ),
       );
     } catch (error) {
+      debugPrint('AssessmentForm/addAssessment: ${error.runtimeType}');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro: $error')),
+        const SnackBar(
+          content: Text(
+            'Não foi possível salvar a avaliação. Tente novamente.',
+          ),
+        ),
       );
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
     }
   }
 
@@ -385,13 +434,18 @@ class _AssessmentFormState extends State<_AssessmentForm> {
                   ),
                 )
                 .toList(),
-            onChanged: (value) {
-              setState(() => _values['generalRating'] = value ?? '');
-            },
+            onChanged: _isSaving
+                ? null
+                : (value) {
+                    setState(
+                      () => _values['generalRating'] = value ?? '',
+                    );
+                  },
           ),
           const SizedBox(height: 30),
           ElevatedButton(
-            onPressed: _submit,
+            key: const ValueKey('assessment-save'),
+            onPressed: _isSaving ? null : _submit,
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.secondary,
               padding: const EdgeInsets.symmetric(vertical: 16),
@@ -399,14 +453,22 @@ class _AssessmentFormState extends State<_AssessmentForm> {
                 borderRadius: BorderRadius.circular(10),
               ),
             ),
-            child: const Text(
-              'SALVAR AVALIAÇÃO COMPLETA',
-              style: TextStyle(
-                color: Colors.black,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
+            child: _isSaving
+                ? const SizedBox.square(
+                    dimension: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.black,
+                    ),
+                  )
+                : const Text(
+                    'SALVAR AVALIAÇÃO COMPLETA',
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
           ),
           const SizedBox(height: 40),
         ],
@@ -456,6 +518,7 @@ class _AssessmentFormState extends State<_AssessmentForm> {
       padding: const EdgeInsets.only(bottom: 12),
       child: TextFormField(
         initialValue: _values[key],
+        enabled: !_isSaving,
         onChanged: (value) => _values[key] = value,
         style: const TextStyle(color: Colors.white),
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
