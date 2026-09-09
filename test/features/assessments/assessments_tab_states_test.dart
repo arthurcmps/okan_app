@@ -8,9 +8,13 @@ import 'package:okan_app/features/assessments/domain/repositories/assessments_re
 import 'package:okan_app/features/assessments/presentation/pages/assessments_tab.dart';
 
 class _FakeAssessmentsRepository implements AssessmentsRepository {
-  _FakeAssessmentsRepository({required this.assessmentsStreamFactory});
+  _FakeAssessmentsRepository({
+    required this.assessmentsStreamFactory,
+    this.noteState = const ProfessorNoteState.hidden(),
+  });
 
   final Stream<List<PhysicalAssessment>> Function() assessmentsStreamFactory;
+  final ProfessorNoteState noteState;
   Completer<void>? saveCompleter;
   Object? saveError;
   int watchCount = 0;
@@ -27,7 +31,7 @@ class _FakeAssessmentsRepository implements AssessmentsRepository {
 
   @override
   Stream<ProfessorNoteState> watchProfessorNote(String studentId) {
-    return Stream.value(const ProfessorNoteState.hidden());
+    return Stream.value(noteState);
   }
 
   @override
@@ -46,12 +50,18 @@ class _FakeAssessmentsRepository implements AssessmentsRepository {
 }
 
 void main() {
-  Widget testApp(_FakeAssessmentsRepository repository) {
+  Widget testApp(
+    _FakeAssessmentsRepository repository, {
+    double textScale = 1,
+  }) {
     return MaterialApp(
       theme: ThemeData.dark(useMaterial3: true),
-      home: AssessmentsTab(
-        studentId: 'student-1',
-        repository: repository,
+      home: MediaQuery(
+        data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
+        child: AssessmentsTab(
+          studentId: 'student-1',
+          repository: repository,
+        ),
       ),
     );
   }
@@ -176,5 +186,103 @@ void main() {
           .onPressed,
       isNotNull,
     );
+  });
+
+  testWidgets('stacks paired fields on a narrow screen with enlarged text', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _FakeAssessmentsRepository(
+      assessmentsStreamFactory: () =>
+          Stream.value(const <PhysicalAssessment>[]),
+    );
+
+    await tester.pumpWidget(testApp(repository, textScale: 2));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Nova Avaliação'));
+    await tester.pumpAndSettle();
+
+    final fields = find.byType(TextFormField);
+    expect(fields, findsAtLeastNWidgets(2));
+    final firstBottom = tester.getBottomLeft(fields.at(0)).dy;
+    final secondTop = tester.getTopLeft(fields.at(1)).dy;
+
+    expect(secondTop, greaterThanOrEqualTo(firstBottom));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('wraps assessment details with text at 200 percent', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _FakeAssessmentsRepository(
+      assessmentsStreamFactory: () => Stream.value([
+        PhysicalAssessment(
+          id: 'assessment-1',
+          date: DateTime(2026, 9, 9),
+          values: const {
+            'weight': 80,
+            'height': 180,
+            'generalRating': 'Ótimo',
+            'bodyFatPercentage': 18,
+            'armRightContracted': 35,
+            'armLeftContracted': 34,
+          },
+        ),
+      ]),
+    );
+
+    await tester.pumpWidget(testApp(repository, textScale: 2));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('09/09/2026'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Braço Contraído'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('private note scrolls away with the assessment list', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _FakeAssessmentsRepository(
+      noteState: const ProfessorNoteState(
+        isVisible: true,
+        text: 'Anotação privada de teste',
+      ),
+      assessmentsStreamFactory: () => Stream.value(
+        List.generate(
+          8,
+          (index) => PhysicalAssessment(
+            id: 'assessment-$index',
+            date: DateTime(2026, 9, 9 - index),
+            values: const {
+              'weight': 80,
+              'height': 180,
+              'generalRating': 'Bom',
+            },
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(testApp(repository));
+    await tester.pumpAndSettle();
+
+    final noteTitle = find.text('Anotações privadas do personal');
+    expect(noteTitle, findsOneWidget);
+    expect(tester.getTopLeft(noteTitle).dy, greaterThan(0));
+
+    await tester.drag(
+      find.byKey(const ValueKey('assessments-scroll')),
+      const Offset(0, -450),
+    );
+    await tester.pumpAndSettle();
+
+    expect(noteTitle, findsNothing);
+    expect(tester.takeException(), isNull);
   });
 }
