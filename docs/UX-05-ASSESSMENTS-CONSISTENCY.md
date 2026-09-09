@@ -10,6 +10,8 @@ repositories, permissões ou o formato persistido dos dados.
 
 - formulário de nova avaliação adaptável a largura estreita e fonte ampliada;
 - linhas de detalhes capazes de quebrar texto sem overflow;
+- anotação privada integrada à mesma rolagem da lista de avaliações, liberando
+  espaço útil após o primeiro gesto de rolagem;
 - ação principal usando o token `primary` e sucesso usando `success`;
 - carregamento e erro recuperável da anamnese com tentativa novamente;
 - bloqueio contra salvamento duplicado da anamnese;
@@ -34,6 +36,7 @@ repositories, permissões ou o formato persistido dos dados.
 - tela estreita com fonte em 200% não apresenta overflow;
 - pares de campos da avaliação são empilhados quando o espaço é insuficiente;
 - detalhes da avaliação quebram texto com segurança;
+- anotação privada rola junto com os cards de avaliações;
 - erro das anotações privadas é sanitizado e permite nova tentativa;
 - anotação fica bloqueada durante o salvamento.
 
@@ -50,9 +53,11 @@ aparelho Android físico:
 6. confirmar que a ficha do aluno está somente para leitura e não possui botão
    de salvar;
 7. editar e salvar uma anotação privada do personal;
-8. abrir **Avaliações**, cadastrar peso e altura e salvar;
-9. expandir a avaliação salva e conferir os detalhes;
-10. repetir os pontos principais com fonte do Android ampliada, verificando que
+8. deslizar a lista e confirmar que a anotação privada também sai da área
+   visível, ampliando o espaço para os cards;
+9. abrir **Avaliações**, cadastrar peso e altura e salvar;
+10. expandir a avaliação salva e conferir os detalhes;
+11. repetir os pontos principais com fonte do Android ampliada, verificando que
     campos, textos e botões continuam acessíveis.
 
 Não registrar nas evidências nomes reais, medidas corporais reais, informações
