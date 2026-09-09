@@ -113,7 +113,7 @@ Não registrar exceções, UID, e-mail, senha, token, payload ou dado de saúde 
 | UX-02 Web STAGING | done | PR web 11, Hosting isolado e smoke autenticado em `okan-staging-24829.web.app` | — |
 | UX-03 Tokens | done | paleta e cores semânticas no app (PRs 23 e 37); tokens CSS operacionais no web (PRs web 13 e 14); validações manuais em DEV/STAGING | dívida residual direcionada às UX-04, UX-05 e UX-09 e às páginas estáticas do web |
 | UX-04 Auth | done | web aprovado em STAGING na PR web 15; app aprovado em DEV no aparelho físico e integrado pela PR 42 | manter login, cadastro, recuperação e verificação de e-mail na regressão contínua |
-| UX-05 Telas antigas | in progress | PRs 23, 25, 26 e onda de modelos na PR 43; administração do catálogo global em validação | concluir criação/edição interna de exercícios, avaliações restantes e widgets compartilhados; repetir matriz completa |
+| UX-05 Telas antigas | in progress | PRs 23, 25, 26 e 43; administração do catálogo global integrada na PR 44; consistência de avaliações em andamento | concluir avaliações restantes e widgets compartilhados; repetir matriz completa |
 | UX-06 Dashboard | in progress | PRs web 8, 9 e 10; smoke autenticado executado em STAGING após a PR 11 | concluir a arquitetura do menu móvel e repetir a matriz de acessibilidade em celular e desktop |
 | UX-07 Home | done | PRs 28 e 29 | manter cobertura nas próximas regressões |
 | UX-08 Onboarding | done | PR 30 | manter cobertura nas próximas regressões |
@@ -137,6 +137,7 @@ Não registrar exceções, UID, e-mail, senha, token, payload ou dado de saúde 
 - [PR 37 - cores semânticas do produto](https://github.com/arthurcmps/okan_app/pull/37)
 - [PR 42 - experiência de login, cadastro e verificação de e-mail](https://github.com/arthurcmps/okan_app/pull/42)
 - [PR 43 - gestão visual de modelos de treino](https://github.com/arthurcmps/okan_app/pull/43)
+- [PR 44 - administração segura do catálogo global](https://github.com/arthurcmps/okan_app/pull/44)
 
 ### Painel web
 
