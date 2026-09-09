@@ -109,7 +109,7 @@ Não registrar exceções, UID, e-mail, senha, token, payload ou dado de saúde 
 
 | Item | Estado | Evidência integrada | Pendência para `done` |
 |---|---|---|---|
-| UX-01 Baseline | in progress | este documento, SHA e fluxos registrados | capturas sanitizadas nos tamanhos da matriz e baseline equivalente do web |
+| UX-01 Baseline | done | baseline do app em aparelho físico e do web em STAGING; fluxos essenciais registrados com dados sintéticos | manter a matriz ampliada como regressão contínua em cada PR visual |
 | UX-02 Web STAGING | done | PR web 11, Hosting isolado e smoke autenticado em `okan-staging-24829.web.app` | — |
 | UX-03 Tokens | done | paleta e cores semânticas no app (PRs 23 e 37); tokens CSS operacionais no web (PRs web 13 e 14); validações manuais em DEV/STAGING | dívida residual direcionada às UX-04, UX-05 e UX-09 e às páginas estáticas do web |
 | UX-04 Auth | planned | telas preexistentes, sem pacote de aceite completo | executar PRs separados para web e app; manter contratos de autenticação e User v2 |
@@ -173,20 +173,31 @@ A UX-03 foi concluída em 9 de setembro de 2026 no escopo central do plano visua
 
 Cores locais ainda existentes no app devem ser tratadas dentro da tela responsável nas UX-04, UX-05 ou UX-09, distinguindo cores estruturais como transparência/contraste de cores de ação do produto. As páginas web `privacidade.html` e `404.html` permanecem como dívida estática isolada. Esses itens não desfazem a adoção da paleta canônica e não bloqueiam a próxima fase.
 
-## 9. Próxima ordem segura
+## 9. Encerramento da UX-01
 
-1. finalizar UX-01 com capturas sanitizadas e baseline equivalente do web;
-2. executar UX-04 web, preservando autenticação e deixando links legais condicionados aos textos aprovados;
-3. executar UX-04 app em PR separado, preservando User v2 e verificação de e-mail;
-4. concluir as lacunas selecionadas de UX-05 e UX-09;
-5. concluir a arquitetura móvel da UX-06 e repetir a matriz mínima em STAGING;
-6. iniciar UX-10 somente com os gates anteriores registrados.
+A UX-01 foi concluída em 9 de setembro de 2026 com evidências sanitizadas e dados exclusivamente sintéticos:
+
+- no painel web STAGING: login, cadastro, Minha Academia e assinatura com pagamentos bloqueados;
+- no app em aparelho físico: login, cadastro e escolha de persona, Home de aluno, Home de professor, Meus Alunos, criação/edição de treino e estado vazio/erro;
+- ausência de credenciais, dados médicos, tokens ou identificadores internos nas evidências;
+- comportamento funcional preservado nos fluxos utilizados como baseline;
+- nenhuma implantação ou correção direta em PROD.
+
+As capturas ficam sob guarda dos responsáveis do projeto e não são versionadas com credenciais ou dados pessoais. A matriz ampliada por resolução, fonte e teclado permanece como regressão contínua das próximas PRs visuais, sem invalidar o baseline essencial concluído.
+
+## 10. Próxima ordem segura
+
+1. executar UX-04 web, preservando autenticação e deixando links legais condicionados aos textos aprovados;
+2. executar UX-04 app em PR separado, preservando User v2 e verificação de e-mail;
+3. concluir as lacunas selecionadas de UX-05 e UX-09;
+4. concluir a arquitetura móvel da UX-06 e repetir a matriz mínima em STAGING;
+5. iniciar UX-10 somente com os gates anteriores registrados.
 
 A UX-02 removeu o bloqueio de ambiente para o dashboard. Toda próxima mudança estrutural do web ainda deve passar por build, verificação, deploy explícito e smoke autenticado no projeto STAGING antes de qualquer promoção para PROD.
 
-## 10. Capturas pendentes para concluir UX-01
+## 11. Matriz de regressão visual da UX-01
 
-As imagens devem usar somente dados sintéticos e o mesmo estado antes/depois.
+O baseline essencial está concluído. Nas próximas PRs visuais, selecionar as linhas pertinentes desta matriz e comparar o mesmo estado antes/depois usando somente dados sintéticos.
 
 | Plataforma | Dimensão/condição | Telas mínimas |
 |---|---|---|
@@ -198,6 +209,6 @@ As imagens devem usar somente dados sintéticos e o mesmo estado antes/depois.
 
 Não incluir credenciais, endereços de e-mail reais, nomes reais, dados médicos ou identificadores internos.
 
-## 10. Rollback documental
+## 12. Rollback documental
 
 Este arquivo não altera execução, dados ou configuração. Se alguma referência estiver incorreta, corrigir o registro em nova PR preservando o histórico; não reescrever evidências de forma silenciosa.
