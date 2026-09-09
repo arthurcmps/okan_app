@@ -500,14 +500,22 @@ class _ProfilePageState extends State<ProfilePage>
                 ),
               if (isProfessor || profile.isSuperAdmin)
                 _buildMenuOption(
-                  icon: Icons.library_books,
-                  color: Colors.white,
-                  title: "Gerenciar Biblioteca",
+                  icon: profile.isSuperAdmin
+                      ? Icons.admin_panel_settings
+                      : Icons.library_books,
+                  color: profile.isSuperAdmin
+                      ? AppColors.primary
+                      : Colors.white,
+                  title: profile.isSuperAdmin
+                      ? "Administrar Catálogo"
+                      : "Gerenciar Biblioteca",
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => LibraryAdminPage(
                         canManageExerciseCatalog: profile.isSuperAdmin,
+                        catalogOnly:
+                            profile.isSuperAdmin && !profile.isProfessorMember,
                       ),
                     ),
                   ),

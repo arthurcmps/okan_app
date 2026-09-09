@@ -5,16 +5,19 @@ import '../../../workouts/domain/entities/workout_exercise.dart';
 import '../../data/repositories/firebase_store_repository.dart';
 import '../../domain/entities/store_models.dart';
 import '../../domain/repositories/store_repository.dart';
+import '../widgets/exercise_catalog_view.dart';
 
 class LibraryAdminPage extends StatefulWidget {
   const LibraryAdminPage({
     super.key,
     this.repository,
     this.canManageExerciseCatalog = false,
+    this.catalogOnly = false,
   });
 
   final StoreRepository? repository;
   final bool canManageExerciseCatalog;
+  final bool catalogOnly;
 
   @override
   State<LibraryAdminPage> createState() => _LibraryAdminPageState();
@@ -27,6 +30,7 @@ class _LibraryAdminPageState extends State<LibraryAdminPage>
   final _nameCtrl = TextEditingController();
   final _videoCtrl = TextEditingController();
   final _groupCtrl = TextEditingController();
+  List<StoreExercise> _knownExercises = const <StoreExercise>[];
 
   @override
   void initState() {
@@ -49,6 +53,7 @@ class _LibraryAdminPageState extends State<LibraryAdminPage>
 
   void _exerciseDialog({StoreExercise? exercise}) {
     if (!widget.canManageExerciseCatalog) return;
+    final messenger = ScaffoldMessenger.of(context);
 
     _nameCtrl.text = exercise?.name ?? '';
     _groupCtrl.text = exercise?.group ?? '';
@@ -71,11 +76,24 @@ class _LibraryAdminPageState extends State<LibraryAdminPage>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _input(_nameCtrl, 'Nome do Exercício'),
+                  _input(
+                    _nameCtrl,
+                    'Nome do Exercício',
+                    maxLength: 80,
+                  ),
                   const SizedBox(height: 12),
-                  _input(_groupCtrl, 'Grupo Muscular'),
+                  _input(
+                    _groupCtrl,
+                    'Grupo Muscular',
+                    maxLength: 40,
+                  ),
                   const SizedBox(height: 12),
-                  _input(_videoCtrl, 'Link do Vídeo (YouTube)'),
+                  _input(
+                    _videoCtrl,
+                    'Link do vídeo (opcional)',
+                    maxLength: 500,
+                    keyboardType: TextInputType.url,
+                  ),
                   if (errorMessage != null) ...[
                     const SizedBox(height: 12),
                     Text(
@@ -99,9 +117,12 @@ class _LibraryAdminPageState extends State<LibraryAdminPage>
                 onPressed: isSaving
                     ? null
                     : () async {
-                        if (_nameCtrl.text.trim().isEmpty) {
+                        final validationMessage = _exerciseValidationMessage(
+                          editingExerciseId: exercise?.id,
+                        );
+                        if (validationMessage != null) {
                           setDialogState(() {
-                            errorMessage = 'Informe o nome do exercício.';
+                            errorMessage = validationMessage;
                           });
                           return;
                         }
@@ -121,6 +142,16 @@ class _LibraryAdminPageState extends State<LibraryAdminPage>
                           if (dialogContext.mounted) {
                             Navigator.pop(dialogContext);
                           }
+                          if (!mounted) return;
+                          messenger.showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                exercise == null
+                                    ? 'Exercício adicionado ao catálogo.'
+                                    : 'Exercício atualizado.',
+                              ),
+                            ),
+                          );
                         } catch (error) {
                           debugPrint(
                             'LibraryAdminPage/saveExercise: '
@@ -149,9 +180,48 @@ class _LibraryAdminPageState extends State<LibraryAdminPage>
     );
   }
 
-  Widget _input(TextEditingController controller, String label) {
+  String? _exerciseValidationMessage({String? editingExerciseId}) {
+    final name = _nameCtrl.text.trim();
+    final group = _groupCtrl.text.trim();
+    final videoUrl = _videoCtrl.text.trim();
+
+    if (name.isEmpty) return 'Informe o nome do exercício.';
+    if (group.isEmpty) return 'Informe o grupo muscular.';
+
+    final normalizedName = _normalizedExerciseName(name);
+    final duplicate = _knownExercises.any(
+      (item) =>
+          item.id != editingExerciseId &&
+          _normalizedExerciseName(item.name) == normalizedName,
+    );
+    if (duplicate) return 'Já existe um exercício com esse nome.';
+
+    if (videoUrl.isNotEmpty) {
+      final uri = Uri.tryParse(videoUrl);
+      final hasValidUrl = uri != null &&
+          (uri.scheme == 'http' || uri.scheme == 'https') &&
+          uri.host.isNotEmpty;
+      if (!hasValidUrl) {
+        return 'Informe um link de vídeo válido, começando com http ou https.';
+      }
+    }
+
+    return null;
+  }
+
+  String _normalizedExerciseName(String value) =>
+      value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+
+  Widget _input(
+    TextEditingController controller,
+    String label, {
+    int? maxLength,
+    TextInputType? keyboardType,
+  }) {
     return TextField(
       controller: controller,
+      maxLength: maxLength,
+      keyboardType: keyboardType,
       style: const TextStyle(color: Colors.white),
       textCapitalization: TextCapitalization.sentences,
       decoration: InputDecoration(
@@ -169,32 +239,93 @@ class _LibraryAdminPageState extends State<LibraryAdminPage>
 
   void _confirmDelete({
     required String title,
+    required String description,
     required Future<void> Function() action,
   }) {
+    final messenger = ScaffoldMessenger.of(context);
     showDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: const Text('Excluir Item?', style: TextStyle(color: Colors.white)),
-        content: Text(
-          "Tem certeza que deseja apagar '$title'?",
-          style: const TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancelar'),
+      builder: (dialogContext) {
+        var isDeleting = false;
+        String? errorMessage;
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            backgroundColor: AppColors.surface,
+            title: Text(
+              'Excluir “$title”?',
+              style: const TextStyle(color: Colors.white),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  description,
+                  style: const TextStyle(color: Colors.white70),
+                ),
+                if (errorMessage != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    errorMessage!,
+                    key: const ValueKey('catalog-delete-error'),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed:
+                    isDeleting ? null : () => Navigator.pop(dialogContext),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.error,
+                  foregroundColor: Theme.of(context).colorScheme.onError,
+                ),
+                onPressed: isDeleting
+                    ? null
+                    : () async {
+                        setDialogState(() {
+                          isDeleting = true;
+                          errorMessage = null;
+                        });
+                        try {
+                          await action();
+                          if (dialogContext.mounted) {
+                            Navigator.pop(dialogContext);
+                          }
+                          if (!mounted) return;
+                          messenger.showSnackBar(
+                            const SnackBar(content: Text('Item excluído.')),
+                          );
+                        } catch (error) {
+                          debugPrint(
+                            'LibraryAdminPage/delete: ${error.runtimeType}',
+                          );
+                          if (!dialogContext.mounted) return;
+                          setDialogState(() {
+                            isDeleting = false;
+                            errorMessage =
+                                'Não foi possível excluir. Tente novamente.';
+                          });
+                        }
+                      },
+                child: isDeleting
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Excluir'),
+              ),
+            ],
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-            onPressed: () async {
-              await action();
-              if (dialogContext.mounted) Navigator.pop(dialogContext);
-            },
-            child: const Text('Excluir'),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -205,25 +336,33 @@ class _LibraryAdminPageState extends State<LibraryAdminPage>
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         foregroundColor: Colors.white,
-        title: const Text('Gerenciar Biblioteca'),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(icon: Icon(Icons.fitness_center), text: 'Exercícios'),
-            Tab(icon: Icon(Icons.library_books), text: 'Templates'),
-          ],
+        title: Text(
+          widget.catalogOnly
+              ? 'Administrar catálogo'
+              : 'Gerenciar Biblioteca',
         ),
+        bottom: widget.catalogOnly
+            ? null
+            : TabBar(
+                controller: _tabController,
+                tabs: const [
+                  Tab(icon: Icon(Icons.fitness_center), text: 'Exercícios'),
+                  Tab(icon: Icon(Icons.library_books), text: 'Templates'),
+                ],
+              ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [_exercisesTab(), _templatesTab()],
-      ),
+      body: widget.catalogOnly
+          ? _exercisesTab()
+          : TabBarView(
+              controller: _tabController,
+              children: [_exercisesTab(), _templatesTab()],
+            ),
       floatingActionButton: _buildFloatingActionButton(),
     );
   }
 
   Widget? _buildFloatingActionButton() {
-    final isExerciseTab = _tabController.index == 0;
+    final isExerciseTab = widget.catalogOnly || _tabController.index == 0;
     if (isExerciseTab && !widget.canManageExerciseCatalog) return null;
 
     return FloatingActionButton.extended(
@@ -263,93 +402,18 @@ class _LibraryAdminPageState extends State<LibraryAdminPage>
           return const Center(child: CircularProgressIndicator());
         }
         final exercises = snapshot.data!;
-        return Column(
-          children: [
-            if (!widget.canManageExerciseCatalog)
-              Container(
-                key: const ValueKey('exercise-catalog-read-only'),
-                width: double.infinity,
-                margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  'Este é o catálogo global da Okan. Professores podem usá-lo '
-                  'nos próprios templates; somente a administração altera os '
-                  'exercícios.',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onPrimaryContainer,
-                  ),
-                ),
-              ),
-            Expanded(
-              child: exercises.isEmpty
-                  ? Center(
-                      child: Text(
-                        widget.canManageExerciseCatalog
-                            ? 'Nenhum exercício cadastrado.'
-                            : 'O catálogo global ainda está vazio.',
-                        style: const TextStyle(color: Colors.white54),
-                      ),
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 104),
-                      itemCount: exercises.length,
-                      itemBuilder: (context, index) {
-                        final exercise = exercises[index];
-                        return Card(
-                          color: AppColors.surface,
-                          child: ListTile(
-                            leading: const CircleAvatar(
-                              child: Icon(Icons.fitness_center),
-                            ),
-                            title: Text(
-                              exercise.name,
-                              style: const TextStyle(color: Colors.white),
-                            ),
-                            subtitle: Text(
-                              exercise.group,
-                              style: const TextStyle(color: Colors.white54),
-                            ),
-                            trailing: widget.canManageExerciseCatalog
-                                ? Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      IconButton(
-                                        tooltip: 'Editar ${exercise.name}',
-                                        icon: const Icon(
-                                          Icons.edit,
-                                          color: Colors.white70,
-                                        ),
-                                        onPressed: () => _exerciseDialog(
-                                          exercise: exercise,
-                                        ),
-                                      ),
-                                      IconButton(
-                                        tooltip: 'Excluir ${exercise.name}',
-                                        icon: Icon(
-                                          Icons.delete_outline,
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.error,
-                                        ),
-                                        onPressed: () => _confirmDelete(
-                                          title: exercise.name,
-                                          action: () => _repository
-                                              .deleteExercise(exercise.id),
-                                        ),
-                                      ),
-                                    ],
-                                  )
-                                : null,
-                          ),
-                        );
-                      },
-                    ),
-            ),
-          ],
+        _knownExercises = exercises;
+        return ExerciseCatalogView(
+          exercises: exercises,
+          canManage: widget.canManageExerciseCatalog,
+          onEdit: (exercise) => _exerciseDialog(exercise: exercise),
+          onDelete: (exercise) => _confirmDelete(
+            title: exercise.name,
+            description:
+                'O exercício será removido do catálogo global. Templates e '
+                'treinos já salvos manterão suas próprias cópias.',
+            action: () => _repository.deleteExercise(exercise.id),
+          ),
         );
       },
     );
@@ -415,6 +479,9 @@ class _LibraryAdminPageState extends State<LibraryAdminPage>
                       icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
                       onPressed: () => _confirmDelete(
                         title: template.name,
+                        description:
+                            'O template será removido permanentemente da sua '
+                            'biblioteca.',
                         action: () => _repository.deleteTemplate(template.id),
                       ),
                     ),
