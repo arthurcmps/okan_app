@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../../core/theme/app_colors.dart';
 import 'verify_email_page.dart';
 import '../../data/models/user_model.dart';
+import '../widgets/auth_ui.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -23,14 +24,29 @@ class _RegisterPageState extends State<RegisterPage> {
 
   String _selectedRole = UserRoles.aluno;
   bool _isLoading = false;
-  bool _obscurePassword = true;
+  bool _isPasswordVisible = false;
+  bool _isConfirmPasswordVisible = false;
+  String? _feedbackMessage;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
 
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
 
-    setState(() => _isLoading = true);
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() {
+      _isLoading = true;
+      _feedbackMessage = null;
+    });
 
     try {
       final normalizedEmail = _emailController.text.trim().toLowerCase();
@@ -99,14 +115,13 @@ class _RegisterPageState extends State<RegisterPage> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(msg), backgroundColor: Colors.red),
-        );
+        setState(() => _feedbackMessage = msg);
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Erro: $e"), backgroundColor: Colors.red),
+        setState(
+          () => _feedbackMessage =
+              'Não foi possível concluir o cadastro. Tente novamente.',
         );
       }
     } finally {
@@ -126,13 +141,13 @@ class _RegisterPageState extends State<RegisterPage> {
         elevation: 0,
         foregroundColor: Colors.white,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+      body: AuthPageFrame(
+        child: AutofillGroup(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
               const Text(
                 "Junte-se ao Okan",
                 style: TextStyle(
@@ -151,57 +166,63 @@ class _RegisterPageState extends State<RegisterPage> {
               const SizedBox(height: 30),
 
               // SELETOR DE PERFIL
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildRoleCard(
-                      "Aluno",
-                      UserRoles.aluno,
-                      Icons.fitness_center,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _buildRoleCard(
-                      "Personal",
-                      UserRoles.professor,
-                      Icons.assignment_ind,
-                    ),
-                  ),
-                ],
-              ),
+              _buildRoleSelector(context),
               const SizedBox(height: 24),
 
               // CAMPOS
               _buildTextField(
+                fieldKey: const Key('register-name-field'),
                 controller: _nameController,
                 label: "Nome Completo",
                 icon: Icons.person,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.name],
               ),
               const SizedBox(height: 16),
 
               _buildTextField(
+                fieldKey: const Key('register-email-field'),
                 controller: _emailController,
                 label: "E-mail",
                 icon: Icons.email,
                 isEmail: true,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.email],
               ),
               const SizedBox(height: 16),
 
-              _buildTextField(
+              AuthPasswordField(
+                fieldKey: const Key('register-password-field'),
+                toggleKey: const Key('register-password-toggle'),
                 controller: _passwordController,
                 label: "Senha",
-                icon: Icons.lock,
-                isPassword: true,
+                passwordVisible: _isPasswordVisible,
+                onToggleVisibility: () => setState(
+                  () => _isPasswordVisible = !_isPasswordVisible,
+                ),
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.newPassword],
+                validator: _passwordValidator,
               ),
               const SizedBox(height: 16),
 
-              _buildTextField(
+              AuthPasswordField(
+                fieldKey: const Key('register-confirm-password-field'),
+                toggleKey: const Key('register-confirm-password-toggle'),
                 controller: _confirmPasswordController,
                 label: "Confirmar Senha",
-                icon: Icons.lock_outline,
-                isPassword: true,
+                passwordVisible: _isConfirmPasswordVisible,
+                onToggleVisibility: () => setState(
+                  () => _isConfirmPasswordVisible =
+                      !_isConfirmPasswordVisible,
+                ),
+                autofillHints: const [AutofillHints.newPassword],
+                onFieldSubmitted: (_) {
+                  if (!_isLoading) _register();
+                },
                 validator: (val) {
+                  final passwordError = _passwordValidator(val);
+                  if (passwordError != null) return passwordError;
                   if (val != _passwordController.text) {
                     return "As senhas não coincidem.";
                   }
@@ -209,12 +230,16 @@ class _RegisterPageState extends State<RegisterPage> {
                 },
               ),
 
-              const SizedBox(height: 40),
+              const SizedBox(height: 24),
 
-              ElevatedButton(
+              AuthFeedbackBanner(message: _feedbackMessage),
+              if (_feedbackMessage != null) const SizedBox(height: 16),
+
+              FilledButton(
+                key: const Key('register-submit-button'),
                 onPressed: _isLoading ? null : _register,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.secondary,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -235,7 +260,8 @@ class _RegisterPageState extends State<RegisterPage> {
                         ),
                       ),
               ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -243,85 +269,125 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   Widget _buildTextField({
+    Key? fieldKey,
     required TextEditingController controller,
     required String label,
     required IconData icon,
-    bool isPassword = false,
     bool isEmail = false,
     String? Function(String?)? validator,
+    TextInputAction textInputAction = TextInputAction.next,
+    Iterable<String>? autofillHints,
   }) {
     return TextFormField(
+      key: fieldKey,
       controller: controller,
-      obscureText: isPassword ? _obscurePassword : false,
       keyboardType: isEmail ? TextInputType.emailAddress : TextInputType.text,
-      style: const TextStyle(color: Colors.white),
+      textInputAction: textInputAction,
+      autofillHints: autofillHints,
+      autocorrect: !isEmail,
+      style: const TextStyle(color: AppColors.textMain),
       validator:
           validator ??
           (v) {
             if (v == null || v.isEmpty) return "Obrigatório";
             if (isEmail && !v.contains('@')) return "E-mail inválido";
-            if (isPassword && v.length < 6) return "Mínimo 6 caracteres";
             return null;
           },
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(color: Colors.white60),
         prefixIcon: Icon(icon, color: AppColors.secondary),
-        suffixIcon: isPassword
-            ? IconButton(
-                icon: Icon(
-                  _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                  color: Colors.white30,
-                ),
-                onPressed: () =>
-                    setState(() => _obscurePassword = !_obscurePassword),
-              )
-            : null,
-        enabledBorder: OutlineInputBorder(
-          borderSide: const BorderSide(color: Colors.white24),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderSide: const BorderSide(color: AppColors.secondary),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        filled: true,
-        fillColor: AppColors.surface,
       ),
+    );
+  }
+
+  String? _passwordValidator(String? value) {
+    if (value == null || value.isEmpty) return 'Obrigatório';
+    if (value.length < 6) return 'Mínimo 6 caracteres';
+    return null;
+  }
+
+  Widget _buildRoleSelector(BuildContext context) {
+    final textScale = MediaQuery.textScalerOf(context).scale(1);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final shouldStack = constraints.maxWidth < 360 || textScale > 1.3;
+        final aluno = _buildRoleCard(
+          'Aluno',
+          UserRoles.aluno,
+          Icons.fitness_center,
+        );
+        final professor = _buildRoleCard(
+          'Personal',
+          UserRoles.professor,
+          Icons.assignment_ind,
+        );
+
+        if (shouldStack) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [aluno, const SizedBox(height: 12), professor],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(child: aluno),
+            const SizedBox(width: 16),
+            Expanded(child: professor),
+          ],
+        );
+      },
     );
   }
 
   Widget _buildRoleCard(String title, String value, IconData icon) {
     final isSelected = _selectedRole == value;
-    final color = isSelected ? AppColors.secondary : Colors.white24;
+    final color = isSelected
+        ? AppColors.secondary
+        : AppColors.textSub.withOpacity(0.45);
 
-    return GestureDetector(
-      onTap: () => setState(() => _selectedRole = value),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.secondary.withOpacity(0.1)
-              : AppColors.surface,
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label: 'Perfil $title',
+      child: Material(
+        color: isSelected
+            ? AppColors.secondary.withOpacity(0.1)
+            : AppColors.surface,
+        shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color, width: isSelected ? 2 : 1),
+          side: BorderSide(color: color, width: isSelected ? 2 : 1),
         ),
-        child: Column(
-          children: [
-            Icon(
-              icon,
-              color: isSelected ? AppColors.secondary : Colors.white60,
-              size: 30,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          key: ValueKey('register-role-$value'),
+          onTap: () => setState(() => _selectedRole = value),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Icon(
+                  icon,
+                  color: isSelected
+                      ? AppColors.secondary
+                      : AppColors.textSub,
+                  size: 30,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: isSelected
+                        ? AppColors.textMain
+                        : AppColors.textSub,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              style: TextStyle(
-                color: isSelected ? Colors.white : Colors.white60,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

@@ -112,7 +112,7 @@ Não registrar exceções, UID, e-mail, senha, token, payload ou dado de saúde 
 | UX-01 Baseline | done | baseline do app em aparelho físico e do web em STAGING; fluxos essenciais registrados com dados sintéticos | manter a matriz ampliada como regressão contínua em cada PR visual |
 | UX-02 Web STAGING | done | PR web 11, Hosting isolado e smoke autenticado em `okan-staging-24829.web.app` | — |
 | UX-03 Tokens | done | paleta e cores semânticas no app (PRs 23 e 37); tokens CSS operacionais no web (PRs web 13 e 14); validações manuais em DEV/STAGING | dívida residual direcionada às UX-04, UX-05 e UX-09 e às páginas estáticas do web |
-| UX-04 Auth | planned | telas preexistentes, sem pacote de aceite completo | executar PRs separados para web e app; manter contratos de autenticação e User v2 |
+| UX-04 Auth | in progress | web aprovado em STAGING e integrado na PR web 15; app em implementação isolada | validar login, cadastro e verificação de e-mail do Flutter em DEV; manter contratos de autenticação e User v2 |
 | UX-05 Telas antigas | in progress | PRs 23, 25 e 26 | concluir gestão de treinos, avaliações restantes e widgets compartilhados; repetir matriz completa |
 | UX-06 Dashboard | in progress | PRs web 8, 9 e 10; smoke autenticado executado em STAGING após a PR 11 | concluir a arquitetura do menu móvel e repetir a matriz de acessibilidade em celular e desktop |
 | UX-07 Home | done | PRs 28 e 29 | manter cobertura nas próximas regressões |
@@ -144,6 +144,7 @@ Não registrar exceções, UID, e-mail, senha, token, payload ou dado de saúde 
 - [PR 11 - ambiente STAGING isolado e fail-closed](https://github.com/arthurcmps/okan_web/pull/11)
 - [PR 13 - tokens visuais canônicos do painel](https://github.com/arthurcmps/okan_web/pull/13)
 - [PR 14 - cores operacionais HTML/JavaScript convertidas para tokens](https://github.com/arthurcmps/okan_web/pull/14)
+- [PR 15 - experiência de login e cadastro das academias](https://github.com/arthurcmps/okan_web/pull/15)
 
 ## 7. Encerramento da UX-02
 
@@ -187,11 +188,10 @@ As capturas ficam sob guarda dos responsáveis do projeto e não são versionada
 
 ## 10. Próxima ordem segura
 
-1. executar UX-04 web, preservando autenticação e deixando links legais condicionados aos textos aprovados;
-2. executar UX-04 app em PR separado, preservando User v2 e verificação de e-mail;
-3. concluir as lacunas selecionadas de UX-05 e UX-09;
-4. concluir a arquitetura móvel da UX-06 e repetir a matriz mínima em STAGING;
-5. iniciar UX-10 somente com os gates anteriores registrados.
+1. validar e concluir a UX-04 app, preservando User v2 e verificação de e-mail;
+2. concluir as lacunas selecionadas de UX-05 e UX-09;
+3. concluir a arquitetura móvel da UX-06 e repetir a matriz mínima em STAGING;
+4. iniciar UX-10 somente com os gates anteriores registrados.
 
 A UX-02 removeu o bloqueio de ambiente para o dashboard. Toda próxima mudança estrutural do web ainda deve passar por build, verificação, deploy explícito e smoke autenticado no projeto STAGING antes de qualquer promoção para PROD.
 
