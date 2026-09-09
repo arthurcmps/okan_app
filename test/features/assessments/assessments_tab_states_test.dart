@@ -8,9 +8,13 @@ import 'package:okan_app/features/assessments/domain/repositories/assessments_re
 import 'package:okan_app/features/assessments/presentation/pages/assessments_tab.dart';
 
 class _FakeAssessmentsRepository implements AssessmentsRepository {
-  _FakeAssessmentsRepository({required this.assessmentsStreamFactory});
+  _FakeAssessmentsRepository({
+    required this.assessmentsStreamFactory,
+    this.noteState = const ProfessorNoteState.hidden(),
+  });
 
   final Stream<List<PhysicalAssessment>> Function() assessmentsStreamFactory;
+  final ProfessorNoteState noteState;
   Completer<void>? saveCompleter;
   Object? saveError;
   int watchCount = 0;
@@ -27,7 +31,7 @@ class _FakeAssessmentsRepository implements AssessmentsRepository {
 
   @override
   Stream<ProfessorNoteState> watchProfessorNote(String studentId) {
-    return Stream.value(const ProfessorNoteState.hidden());
+    return Stream.value(noteState);
   }
 
   @override
@@ -236,6 +240,49 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Braço Contraído'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('private note scrolls away with the assessment list', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _FakeAssessmentsRepository(
+      noteState: const ProfessorNoteState(
+        isVisible: true,
+        text: 'Anotação privada de teste',
+      ),
+      assessmentsStreamFactory: () => Stream.value(
+        List.generate(
+          8,
+          (index) => PhysicalAssessment(
+            id: 'assessment-$index',
+            date: DateTime(2026, 9, 9 - index),
+            values: const {
+              'weight': 80,
+              'height': 180,
+              'generalRating': 'Bom',
+            },
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(testApp(repository));
+    await tester.pumpAndSettle();
+
+    final noteTitle = find.text('Anotações privadas do personal');
+    expect(noteTitle, findsOneWidget);
+    expect(tester.getTopLeft(noteTitle).dy, greaterThan(0));
+
+    await tester.drag(
+      find.byKey(const ValueKey('assessments-scroll')),
+      const Offset(0, -450),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.getTopLeft(noteTitle).dy, lessThan(0));
     expect(tester.takeException(), isNull);
   });
 }
