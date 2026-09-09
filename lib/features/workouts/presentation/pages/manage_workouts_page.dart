@@ -4,6 +4,7 @@ import '../../../../core/widgets/okan_async_state.dart';
 import '../../data/repositories/firebase_workouts_repository.dart';
 import '../../domain/entities/workout_model.dart';
 import '../../domain/repositories/workouts_repository.dart';
+import '../widgets/workout_model_list.dart';
 import 'create_workout_page.dart';
 
 class ManageWorkoutsPage extends StatefulWidget {
@@ -42,20 +43,29 @@ class _ManageWorkoutsPageState extends State<ManageWorkoutsPage> {
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Excluir Treino?'),
-        content: Text("Tem certeza que deseja apagar '$nomeTreino'?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
+      builder: (ctx) {
+        final colors = Theme.of(ctx).colorScheme;
+        return AlertDialog(
+          title: const Text('Excluir treino?'),
+          content: Text(
+            'O modelo “$nomeTreino” será removido permanentemente.',
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: FilledButton.styleFrom(
+                backgroundColor: colors.error,
+                foregroundColor: colors.onError,
+              ),
+              child: const Text('Excluir'),
+            ),
+          ],
+        );
+      },
     );
 
     if (confirmed != true || !mounted) return;
@@ -106,10 +116,27 @@ class _ManageWorkoutsPageState extends State<ManageWorkoutsPage> {
     );
   }
 
+  void _criarTreino() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CreateWorkoutPage(
+          repository: widget._repository,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Meus Modelos')),
+      floatingActionButton: FloatingActionButton.extended(
+        key: const ValueKey('create-workout-model'),
+        onPressed: _criarTreino,
+        icon: const Icon(Icons.add),
+        label: const Text('Novo modelo'),
+      ),
       body: StreamBuilder<List<WorkoutModel>>(
         stream: _workoutsStream,
         builder: (context, snapshot) {
@@ -135,81 +162,14 @@ class _ManageWorkoutsPageState extends State<ManageWorkoutsPage> {
           }
 
           final workouts = snapshot.data ?? const <WorkoutModel>[];
-          if (workouts.isEmpty) {
-            return const OkanMessageState(
-              key: ValueKey('workout-models-empty'),
-              icon: Icons.fitness_center_outlined,
-              title: 'Nenhum modelo criado',
-              description:
-                  'Crie um treino e salve-o como modelo para reutilizar depois.',
-            );
-          }
-
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: workouts.length,
-            itemBuilder: (context, index) {
-              final workout = workouts[index];
-              final isDeleting = _deletingWorkoutIds.contains(workout.id);
-              return Card(
-                elevation: 2,
-                margin: const EdgeInsets.only(bottom: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  leading: CircleAvatar(
-                    backgroundColor: Colors.teal.withOpacity(0.1),
-                    child: const Icon(Icons.fitness_center, color: Colors.teal),
-                  ),
-                  title: Text(
-                    workout.nome,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: Text(
-                    '${workout.grupoMuscular} • ${workout.exercicios.length} exercícios',
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        key: ValueKey('edit-workout-${workout.id}'),
-                        tooltip: 'Editar ${workout.nome}',
-                        icon: const Icon(Icons.edit, color: Colors.blue),
-                        onPressed: isDeleting
-                            ? null
-                            : () => _editarTreino(context, workout),
-                      ),
-                      IconButton(
-                        key: ValueKey('delete-workout-${workout.id}'),
-                        tooltip: 'Excluir ${workout.nome}',
-                        icon: isDeleting
-                            ? const SizedBox.square(
-                                dimension: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(
-                                Icons.delete_outline,
-                                color: Colors.red,
-                              ),
-                        onPressed: isDeleting
-                            ? null
-                            : () => _deletarTreino(
-                                workout.id,
-                                workout.nome,
-                              ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
+          return WorkoutModelList(
+            workouts: workouts,
+            deletingWorkoutIds: _deletingWorkoutIds,
+            onEdit: (workout) => _editarTreino(context, workout),
+            onDelete: (workout) => _deletarTreino(
+              workout.id,
+              workout.nome,
+            ),
           );
         },
       ),
