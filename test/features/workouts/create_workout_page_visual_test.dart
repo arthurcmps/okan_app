@@ -266,7 +266,7 @@ void main() {
 
     tester
         .widget<ReorderableListView>(find.byType(ReorderableListView))
-        .onReorder(0, 3);
+        .onReorder!(0, 3);
     await tester.pump();
     await tester.tap(find.byTooltip('Remover exercício').at(1));
     await tester.pump();
