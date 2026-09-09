@@ -128,9 +128,20 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(
+      find.byKey(const ValueKey('exercise-catalog-scroll')),
+      findsOneWidget,
+    );
+    await tester.drag(
+      find.byKey(const ValueKey('exercise-catalog-scroll')),
+      const Offset(0, -500),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
       find.byKey(const ValueKey('exercise-catalog-agachamento')),
       findsOneWidget,
     );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('professor não recebe ações administrativas', (tester) async {
