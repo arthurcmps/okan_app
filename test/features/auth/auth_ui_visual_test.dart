@@ -47,28 +47,29 @@ void main() {
       ),
     );
 
-    TextFormField passwordField() => tester.widget(
-      find.byKey(const Key('password')),
-    );
-    TextFormField confirmationField() => tester.widget(
-      find.byKey(const Key('confirmation')),
-    );
+    bool isObscured(Key fieldKey) {
+      final editableText = find.descendant(
+        of: find.byKey(fieldKey),
+        matching: find.byType(EditableText),
+      );
+      return tester.widget<EditableText>(editableText).obscureText;
+    }
 
-    expect(passwordField().obscureText, isTrue);
-    expect(confirmationField().obscureText, isTrue);
+    expect(isObscured(const Key('password')), isTrue);
+    expect(isObscured(const Key('confirmation')), isTrue);
 
     await tester.tap(find.byKey(const Key('password-toggle')));
     await tester.pump();
 
-    expect(passwordField().obscureText, isFalse);
-    expect(confirmationField().obscureText, isTrue);
+    expect(isObscured(const Key('password')), isFalse);
+    expect(isObscured(const Key('confirmation')), isTrue);
     expect(find.byTooltip('Ocultar Senha'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('confirmation-toggle')));
     await tester.pump();
 
-    expect(passwordField().obscureText, isFalse);
-    expect(confirmationField().obscureText, isFalse);
+    expect(isObscured(const Key('password')), isFalse);
+    expect(isObscured(const Key('confirmation')), isFalse);
   });
 
   testWidgets('feedback is announced as a live region', (tester) async {
