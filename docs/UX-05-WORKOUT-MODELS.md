@@ -103,3 +103,31 @@ Na biblioteca do professor:
 
 O merge exige Flutter CI aprovada e validação manual em DEV. O rollback consiste
 em reverter a PR; não há migração, alteração de dados ou mudança de ambiente.
+
+## 7. Resultado da validação — 9 de setembro de 2026
+
+Validação aprovada em aparelho Android físico, flavor `dev`, projeto
+`demo-okan-dev` e Firebase Emulator Suite:
+
+- oito exercícios sintéticos carregados no catálogo;
+- catálogo exibido ao professor sem ações administrativas;
+- novo template criado com exercício, séries e repetições;
+- template permaneceu disponível após sair e reabrir a tela;
+- Flutter CI aprovada;
+- nenhum deploy, dado real ou alteração em PROD.
+
+## 8. Follow-up — administração do catálogo
+
+Criar uma entrega separada para tornar simples o trabalho do super admin no
+catálogo global, preservando BR-060. O desenho deve considerar:
+
+- acesso administrativo explícito, sem gesto oculto ou e-mail hardcoded;
+- busca e filtro por nome e grupo muscular;
+- criação e edição com validação de duplicidade;
+- confirmação antes da exclusão e aviso quando o exercício estiver em uso;
+- validação e pré-visualização opcional do vídeo;
+- estados de carregamento, sucesso e erro;
+- teste controlado em DEV e STAGING antes de qualquer publicação.
+
+Esse follow-up não amplia permissões do professor e não faz parte do merge desta
+onda.
