@@ -282,7 +282,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(tester.getTopLeft(noteTitle).dy, lessThan(0));
+    expect(noteTitle, findsNothing);
     expect(tester.takeException(), isNull);
   });
 }
