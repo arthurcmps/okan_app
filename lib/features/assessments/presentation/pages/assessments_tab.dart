@@ -52,161 +52,174 @@ class _AssessmentsTabState extends State<AssessmentsTab> {
         ),
         onPressed: () => _showAddAssessmentModal(context),
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            child: ProfessorNotesWidget(
-              studentId: widget.studentId,
-              repository: _repository,
-            ),
-          ),
-          Expanded(
-            child: StreamBuilder<List<PhysicalAssessment>>(
-              stream: _assessmentsStream,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting &&
-                    !snapshot.hasData) {
-                  return const OkanLoadingState(
-                    label: 'Carregando avaliações físicas',
-                  );
-                }
+      body: StreamBuilder<List<PhysicalAssessment>>(
+        stream: _assessmentsStream,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
+            return _buildScrollableState(
+              const OkanLoadingState(
+                label: 'Carregando avaliações físicas',
+              ),
+            );
+          }
 
-                if (snapshot.hasError) {
-                  return OkanMessageState(
-                    key: const ValueKey('assessments-error'),
-                    icon: Icons.cloud_off_outlined,
-                    title: 'Não foi possível carregar as avaliações',
-                    description:
-                        'Verifique sua conexão e tente novamente em alguns instantes.',
-                    actionLabel: 'Tentar novamente',
-                    onAction: _retryLoading,
-                    isError: true,
-                    announce: true,
-                  );
-                }
+          if (snapshot.hasError) {
+            return _buildScrollableState(
+              OkanMessageState(
+                key: const ValueKey('assessments-error'),
+                icon: Icons.cloud_off_outlined,
+                title: 'Não foi possível carregar as avaliações',
+                description:
+                    'Verifique sua conexão e tente novamente em alguns instantes.',
+                actionLabel: 'Tentar novamente',
+                onAction: _retryLoading,
+                isError: true,
+                announce: true,
+              ),
+            );
+          }
 
-                final assessments =
-                    snapshot.data ?? const <PhysicalAssessment>[];
-                if (assessments.isEmpty) {
-                  return const OkanMessageState(
-                    key: ValueKey('assessments-empty'),
-                    icon: Icons.add_chart_outlined,
-                    title: 'Nenhuma avaliação registrada',
-                    description:
-                        'Use “Nova Avaliação” para registrar os primeiros dados.',
-                  );
-                }
+          final assessments = snapshot.data ?? const <PhysicalAssessment>[];
+          if (assessments.isEmpty) {
+            return _buildScrollableState(
+              const OkanMessageState(
+                key: ValueKey('assessments-empty'),
+                icon: Icons.add_chart_outlined,
+                title: 'Nenhuma avaliação registrada',
+                description:
+                    'Use “Nova Avaliação” para registrar os primeiros dados.',
+              ),
+            );
+          }
 
-                return ListView.builder(
+          return CustomScrollView(
+            key: const ValueKey('assessments-scroll'),
+            slivers: [
+              _buildProfessorNotesSliver(),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 90),
+                sliver: SliverList.builder(
                   itemCount: assessments.length,
-                  padding: const EdgeInsets.only(
-                    left: 16,
-                    right: 16,
-                    top: 16,
-                    bottom: 90,
-                  ),
-                  itemBuilder: (context, index) {
-                    final assessment = assessments[index];
-                    final data = assessment.values;
+                  itemBuilder: (context, index) =>
+                      _buildAssessmentCard(assessments[index]),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
 
-                    return Card(
-                      color: AppColors.surface,
-                      margin: const EdgeInsets.only(bottom: 12),
-                      child: ExpansionTile(
-                        iconColor: AppColors.secondary,
-                        collapsedIconColor: Colors.white70,
-                        title: Text(
-                          DateFormat('dd/MM/yyyy').format(assessment.date),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        subtitle: Text(
-                          "${data['weight']}kg  |  BF: ${data['bodyFatPercentage'] ?? '-'}%  |  ${data['generalRating'] ?? ''}",
-                          style: const TextStyle(color: AppColors.secondary),
-                        ),
-                        children: [
-                          _buildSectionHeader('Medidas Corporais'),
-                          _buildDetailRow('Peso', "${data['weight']} kg"),
-                          _buildDetailRow('Altura', "${data['height']} cm"),
-                          _buildDetailRow('Pescoço', "${data['neck'] ?? '-'} cm"),
-                          _buildDetailRow('Ombros', "${data['shoulders'] ?? '-'} cm"),
-                          _buildDetailRow('Tórax', "${data['chest'] ?? '-'} cm"),
-                          _buildDetailRow('Cintura', "${data['waist'] ?? '-'} cm"),
-                          _buildDetailRow('Abdômen', "${data['abdomen'] ?? '-'} cm"),
-                          _buildDetailRow('Quadril', "${data['hips'] ?? '-'} cm"),
-                          const Divider(color: Colors.white10),
-                          _buildSectionHeader('Membros (Dir / Esq)'),
-                          _buildDetailRow(
-                            'Braço Relaxado',
-                            "${data['armRightRelaxed'] ?? '-'} / ${data['armLeftRelaxed'] ?? '-'} cm",
-                          ),
-                          _buildDetailRow(
-                            'Braço Contraído',
-                            "${data['armRightContracted'] ?? '-'} / ${data['armLeftContracted'] ?? '-'} cm",
-                          ),
-                          _buildDetailRow(
-                            'Antebraço',
-                            "${data['forearmRight'] ?? '-'} / ${data['forearmLeft'] ?? '-'} cm",
-                          ),
-                          _buildDetailRow(
-                            'Coxa Medial',
-                            "${data['thighRight'] ?? '-'} / ${data['thighLeft'] ?? '-'} cm",
-                          ),
-                          _buildDetailRow(
-                            'Panturrilha',
-                            "${data['calfRight'] ?? '-'} / ${data['calfLeft'] ?? '-'} cm",
-                          ),
-                          const Divider(color: Colors.white10),
-                          _buildSectionHeader('Bioimpedância'),
-                          _buildDetailRow('IMC', _formatImc(data['imc'])),
-                          _buildDetailRow(
-                            '% Gordura',
-                            "${data['bodyFatPercentage'] ?? '-'} %",
-                          ),
-                          _buildDetailRow(
-                            'Massa Gorda',
-                            "${data['fatMassKg'] ?? '-'} kg",
-                          ),
-                          _buildDetailRow(
-                            'Massa Muscular',
-                            "${data['muscleMassKg'] ?? '-'} kg",
-                          ),
-                          _buildDetailRow(
-                            'Gordura Visceral',
-                            "${data['visceralFat'] ?? '-'} (1-9)",
-                          ),
-                          _buildDetailRow(
-                            'Metabolismo Basal',
-                            "${data['basalMetabolism'] ?? '-'} Kcal",
-                          ),
-                          _buildDetailRow(
-                            'Idade Metabólica',
-                            "${data['metabolicAge'] ?? '-'} anos",
-                          ),
-                          _buildDetailRow(
-                            'Água Corporal',
-                            "${data['bodyWaterPercentage'] ?? '-'} %",
-                          ),
-                          _buildDetailRow(
-                            'Massa Óssea',
-                            "${data['boneMass'] ?? '-'} kg",
-                          ),
-                          _buildDetailRow(
-                            'Avaliação Geral',
-                            "${data['generalRating'] ?? '-'}",
-                          ),
-                          const SizedBox(height: 10),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
+  Widget _buildScrollableState(Widget state) {
+    return CustomScrollView(
+      key: const ValueKey('assessments-scroll'),
+      slivers: [
+        _buildProfessorNotesSliver(),
+        SliverFillRemaining(hasScrollBody: false, child: state),
+      ],
+    );
+  }
+
+  Widget _buildProfessorNotesSliver() {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+        child: ProfessorNotesWidget(
+          studentId: widget.studentId,
+          repository: _repository,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAssessmentCard(PhysicalAssessment assessment) {
+    final data = assessment.values;
+
+    return Card(
+      color: AppColors.surface,
+      margin: const EdgeInsets.only(bottom: 12),
+      child: ExpansionTile(
+        iconColor: AppColors.secondary,
+        collapsedIconColor: Colors.white70,
+        title: Text(
+          DateFormat('dd/MM/yyyy').format(assessment.date),
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
           ),
+        ),
+        subtitle: Text(
+          "${data['weight']}kg  |  BF: ${data['bodyFatPercentage'] ?? '-'}%  |  ${data['generalRating'] ?? ''}",
+          style: const TextStyle(color: AppColors.secondary),
+        ),
+        children: [
+          _buildSectionHeader('Medidas Corporais'),
+          _buildDetailRow('Peso', "${data['weight']} kg"),
+          _buildDetailRow('Altura', "${data['height']} cm"),
+          _buildDetailRow('Pescoço', "${data['neck'] ?? '-'} cm"),
+          _buildDetailRow('Ombros', "${data['shoulders'] ?? '-'} cm"),
+          _buildDetailRow('Tórax', "${data['chest'] ?? '-'} cm"),
+          _buildDetailRow('Cintura', "${data['waist'] ?? '-'} cm"),
+          _buildDetailRow('Abdômen', "${data['abdomen'] ?? '-'} cm"),
+          _buildDetailRow('Quadril', "${data['hips'] ?? '-'} cm"),
+          const Divider(color: Colors.white10),
+          _buildSectionHeader('Membros (Dir / Esq)'),
+          _buildDetailRow(
+            'Braço Relaxado',
+            "${data['armRightRelaxed'] ?? '-'} / ${data['armLeftRelaxed'] ?? '-'} cm",
+          ),
+          _buildDetailRow(
+            'Braço Contraído',
+            "${data['armRightContracted'] ?? '-'} / ${data['armLeftContracted'] ?? '-'} cm",
+          ),
+          _buildDetailRow(
+            'Antebraço',
+            "${data['forearmRight'] ?? '-'} / ${data['forearmLeft'] ?? '-'} cm",
+          ),
+          _buildDetailRow(
+            'Coxa Medial',
+            "${data['thighRight'] ?? '-'} / ${data['thighLeft'] ?? '-'} cm",
+          ),
+          _buildDetailRow(
+            'Panturrilha',
+            "${data['calfRight'] ?? '-'} / ${data['calfLeft'] ?? '-'} cm",
+          ),
+          const Divider(color: Colors.white10),
+          _buildSectionHeader('Bioimpedância'),
+          _buildDetailRow('IMC', _formatImc(data['imc'])),
+          _buildDetailRow(
+            '% Gordura',
+            "${data['bodyFatPercentage'] ?? '-'} %",
+          ),
+          _buildDetailRow('Massa Gorda', "${data['fatMassKg'] ?? '-'} kg"),
+          _buildDetailRow(
+            'Massa Muscular',
+            "${data['muscleMassKg'] ?? '-'} kg",
+          ),
+          _buildDetailRow(
+            'Gordura Visceral',
+            "${data['visceralFat'] ?? '-'} (1-9)",
+          ),
+          _buildDetailRow(
+            'Metabolismo Basal',
+            "${data['basalMetabolism'] ?? '-'} Kcal",
+          ),
+          _buildDetailRow(
+            'Idade Metabólica',
+            "${data['metabolicAge'] ?? '-'} anos",
+          ),
+          _buildDetailRow(
+            'Água Corporal',
+            "${data['bodyWaterPercentage'] ?? '-'} %",
+          ),
+          _buildDetailRow('Massa Óssea', "${data['boneMass'] ?? '-'} kg"),
+          _buildDetailRow(
+            'Avaliação Geral',
+            "${data['generalRating'] ?? '-'}",
+          ),
+          const SizedBox(height: 10),
         ],
       ),
     );
