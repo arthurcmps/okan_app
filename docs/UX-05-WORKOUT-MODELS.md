@@ -42,6 +42,23 @@ Não fazem parte desta onda:
 - modificar autenticação, pagamentos ou ambientes;
 - publicar em PROD ou na Play Store.
 
+### 3.1 Correção encontrada na validação manual
+
+A validação em DEV revelou que a tela **Gerenciar Biblioteca** oferecia ao
+professor ações para criar, editar e excluir o catálogo global `exercises`. Esse
+comportamento contrariava a regra BR-060 e as Firestore Rules, que reservam a
+escrita do catálogo ao super admin. A gravação pendente aparecia por um instante
+e desaparecia depois da recusa do servidor.
+
+A correção mantém as Rules inalteradas e faz a interface respeitar o contrato:
+
+- professor consulta o catálogo global em modo somente leitura;
+- professor continua criando e administrando os próprios templates;
+- super admin recebe explicitamente os controles administrativos do catálogo;
+- falhas de exercício ou template não fecham o formulário e mostram mensagem
+  segura, sem código interno, UID ou detalhes do Firebase;
+- o catálogo vazio e os erros de carregamento possuem estados explícitos.
+
 ## 4. Testes automatizados
 
 `test/features/workouts/workout_model_list_visual_test.dart` cobre:
@@ -52,6 +69,13 @@ Não fazem parte desta onda:
 - singular/plural da quantidade;
 - bloqueio e indicador durante exclusão;
 - estado vazio instrutivo sem ação duplicada.
+
+`test/features/store/library_admin_permissions_test.dart` cobre:
+
+- catálogo somente leitura para professor;
+- controles de exercício exclusivos do super admin;
+- erro seguro sem fechar o diálogo de exercício;
+- erro seguro sem fechar o construtor de template.
 
 ## 5. Validação manual em DEV
 
@@ -65,6 +89,15 @@ Usar aparelho físico, flavor `dev`, Firebase Emulator Suite e dados sintéticos
 6. confirmar uma exclusão e observar o estado de processamento;
 7. repetir em fonte padrão e ampliada;
 8. confirmar que erros não exibem detalhes técnicos.
+
+Na biblioteca do professor:
+
+1. confirmar que o catálogo não mostra **Novo exercício**, **Editar** ou
+   **Excluir**;
+2. confirmar que a aba **Templates** mostra **Novo template**;
+3. selecionar um exercício sintético do catálogo, configurar séries/repetições e
+   salvar o template;
+4. confirmar que o template permanece após sair e abrir novamente a tela.
 
 ## 6. Gate e rollback
 

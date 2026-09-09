@@ -486,7 +486,7 @@ class _ProfilePageState extends State<ProfilePage>
               ),
 
               // Recursos exclusivos da persona professor no mobile.
-              if (isProfessor) ...[
+              if (isProfessor)
                 _buildMenuOption(
                   icon: Icons.workspace_premium,
                   color: AppColors.primary,
@@ -498,6 +498,7 @@ class _ProfilePageState extends State<ProfilePage>
                     ),
                   ),
                 ),
+              if (isProfessor || profile.isSuperAdmin)
                 _buildMenuOption(
                   icon: Icons.library_books,
                   color: Colors.white,
@@ -505,11 +506,12 @@ class _ProfilePageState extends State<ProfilePage>
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const LibraryAdminPage(),
+                      builder: (context) => LibraryAdminPage(
+                        canManageExerciseCatalog: profile.isSuperAdmin,
+                      ),
                     ),
                   ),
                 ),
-              ],
 
               _buildMenuOption(
                 icon: Icons.logout,

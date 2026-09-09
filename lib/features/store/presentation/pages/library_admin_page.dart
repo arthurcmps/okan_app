@@ -7,9 +7,14 @@ import '../../domain/entities/store_models.dart';
 import '../../domain/repositories/store_repository.dart';
 
 class LibraryAdminPage extends StatefulWidget {
-  const LibraryAdminPage({super.key, this.repository});
+  const LibraryAdminPage({
+    super.key,
+    this.repository,
+    this.canManageExerciseCatalog = false,
+  });
 
   final StoreRepository? repository;
+  final bool canManageExerciseCatalog;
 
   @override
   State<LibraryAdminPage> createState() => _LibraryAdminPageState();
@@ -43,50 +48,104 @@ class _LibraryAdminPageState extends State<LibraryAdminPage>
   }
 
   void _exerciseDialog({StoreExercise? exercise}) {
+    if (!widget.canManageExerciseCatalog) return;
+
     _nameCtrl.text = exercise?.name ?? '';
     _groupCtrl.text = exercise?.group ?? '';
     _videoCtrl.text = exercise?.videoUrl ?? '';
 
     showDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: Text(
-          exercise == null ? 'Novo Exercício' : 'Editar Exercício',
-          style: const TextStyle(color: Colors.white),
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _input(_nameCtrl, 'Nome do Exercício'),
-              const SizedBox(height: 12),
-              _input(_groupCtrl, 'Grupo Muscular'),
-              const SizedBox(height: 12),
-              _input(_videoCtrl, 'Link do Vídeo (YouTube)'),
+      builder: (dialogContext) {
+        var isSaving = false;
+        String? errorMessage;
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            backgroundColor: AppColors.surface,
+            title: Text(
+              exercise == null ? 'Novo Exercício' : 'Editar Exercício',
+              style: const TextStyle(color: Colors.white),
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _input(_nameCtrl, 'Nome do Exercício'),
+                  const SizedBox(height: 12),
+                  _input(_groupCtrl, 'Grupo Muscular'),
+                  const SizedBox(height: 12),
+                  _input(_videoCtrl, 'Link do Vídeo (YouTube)'),
+                  if (errorMessage != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      errorMessage!,
+                      key: const ValueKey('exercise-save-error'),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed:
+                    isSaving ? null : () => Navigator.pop(dialogContext),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: isSaving
+                    ? null
+                    : () async {
+                        if (_nameCtrl.text.trim().isEmpty) {
+                          setDialogState(() {
+                            errorMessage = 'Informe o nome do exercício.';
+                          });
+                          return;
+                        }
+
+                        setDialogState(() {
+                          isSaving = true;
+                          errorMessage = null;
+                        });
+
+                        try {
+                          await _repository.saveExercise(
+                            exerciseId: exercise?.id,
+                            name: _nameCtrl.text,
+                            group: _groupCtrl.text,
+                            videoUrl: _videoCtrl.text,
+                          );
+                          if (dialogContext.mounted) {
+                            Navigator.pop(dialogContext);
+                          }
+                        } catch (error) {
+                          debugPrint(
+                            'LibraryAdminPage/saveExercise: '
+                            '${error.runtimeType}',
+                          );
+                          if (!dialogContext.mounted) return;
+                          setDialogState(() {
+                            isSaving = false;
+                            errorMessage =
+                                'Não foi possível salvar o exercício. '
+                                'Tente novamente.';
+                          });
+                        }
+                      },
+                child: isSaving
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Salvar'),
+              ),
             ],
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (_nameCtrl.text.trim().isEmpty) return;
-              await _repository.saveExercise(
-                exerciseId: exercise?.id,
-                name: _nameCtrl.text,
-                group: _groupCtrl.text,
-                videoUrl: _videoCtrl.text,
-              );
-              if (dialogContext.mounted) Navigator.pop(dialogContext);
-            },
-            child: const Text('Salvar'),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -159,25 +218,32 @@ class _LibraryAdminPageState extends State<LibraryAdminPage>
         controller: _tabController,
         children: [_exercisesTab(), _templatesTab()],
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: AppColors.primary,
-        onPressed: () {
-          if (_tabController.index == 0) {
-            _exerciseDialog();
-          } else {
-            Navigator.push(
-              context,
-              MaterialPageRoute<void>(
-                builder: (_) => TemplateBuilderScreen(repository: _repository),
-              ),
-            );
-          }
-        },
-        child: Icon(
-          _tabController.index == 0 ? Icons.add : Icons.post_add,
-          color: Colors.black,
-        ),
-      ),
+      floatingActionButton: _buildFloatingActionButton(),
+    );
+  }
+
+  Widget? _buildFloatingActionButton() {
+    final isExerciseTab = _tabController.index == 0;
+    if (isExerciseTab && !widget.canManageExerciseCatalog) return null;
+
+    return FloatingActionButton.extended(
+      backgroundColor: AppColors.primary,
+      foregroundColor: Colors.black,
+      onPressed: () {
+        if (isExerciseTab) {
+          _exerciseDialog();
+          return;
+        }
+
+        Navigator.push(
+          context,
+          MaterialPageRoute<void>(
+            builder: (_) => TemplateBuilderScreen(repository: _repository),
+          ),
+        );
+      },
+      icon: Icon(isExerciseTab ? Icons.add : Icons.post_add),
+      label: Text(isExerciseTab ? 'Novo exercício' : 'Novo template'),
     );
   }
 
@@ -185,56 +251,105 @@ class _LibraryAdminPageState extends State<LibraryAdminPage>
     return StreamBuilder<List<StoreExercise>>(
       stream: _repository.watchExercises(),
       builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return const Center(
+            child: Text(
+              'Não foi possível carregar o catálogo.',
+              style: TextStyle(color: Colors.white70),
+            ),
+          );
+        }
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
         final exercises = snapshot.data!;
-        if (exercises.isEmpty) {
-          return const Center(
-            child: Text(
-              'Nenhum exercício cadastrado.',
-              style: TextStyle(color: Colors.white54),
-            ),
-          );
-        }
-        return ListView.builder(
-          padding: const EdgeInsets.all(12),
-          itemCount: exercises.length,
-          itemBuilder: (context, index) {
-            final exercise = exercises[index];
-            return Card(
-              color: AppColors.surface,
-              child: ListTile(
-                leading: const CircleAvatar(
-                  child: Icon(Icons.fitness_center),
+        return Column(
+          children: [
+            if (!widget.canManageExerciseCatalog)
+              Container(
+                key: const ValueKey('exercise-catalog-read-only'),
+                width: double.infinity,
+                margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                title: Text(
-                  exercise.name,
-                  style: const TextStyle(color: Colors.white),
-                ),
-                subtitle: Text(
-                  exercise.group,
-                  style: const TextStyle(color: Colors.white54),
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit, color: Colors.white70),
-                      onPressed: () => _exerciseDialog(exercise: exercise),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-                      onPressed: () => _confirmDelete(
-                        title: exercise.name,
-                        action: () => _repository.deleteExercise(exercise.id),
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  'Este é o catálogo global da Okan. Professores podem usá-lo '
+                  'nos próprios templates; somente a administração altera os '
+                  'exercícios.',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                  ),
                 ),
               ),
-            );
-          },
+            Expanded(
+              child: exercises.isEmpty
+                  ? Center(
+                      child: Text(
+                        widget.canManageExerciseCatalog
+                            ? 'Nenhum exercício cadastrado.'
+                            : 'O catálogo global ainda está vazio.',
+                        style: const TextStyle(color: Colors.white54),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 104),
+                      itemCount: exercises.length,
+                      itemBuilder: (context, index) {
+                        final exercise = exercises[index];
+                        return Card(
+                          color: AppColors.surface,
+                          child: ListTile(
+                            leading: const CircleAvatar(
+                              child: Icon(Icons.fitness_center),
+                            ),
+                            title: Text(
+                              exercise.name,
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                            subtitle: Text(
+                              exercise.group,
+                              style: const TextStyle(color: Colors.white54),
+                            ),
+                            trailing: widget.canManageExerciseCatalog
+                                ? Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        tooltip: 'Editar ${exercise.name}',
+                                        icon: const Icon(
+                                          Icons.edit,
+                                          color: Colors.white70,
+                                        ),
+                                        onPressed: () => _exerciseDialog(
+                                          exercise: exercise,
+                                        ),
+                                      ),
+                                      IconButton(
+                                        tooltip: 'Excluir ${exercise.name}',
+                                        icon: Icon(
+                                          Icons.delete_outline,
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.error,
+                                        ),
+                                        onPressed: () => _confirmDelete(
+                                          title: exercise.name,
+                                          action: () => _repository
+                                              .deleteExercise(exercise.id),
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                : null,
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
         );
       },
     );
@@ -244,6 +359,14 @@ class _LibraryAdminPageState extends State<LibraryAdminPage>
     return StreamBuilder<List<StoreTemplate>>(
       stream: _repository.watchCurrentProfessionalTemplates(),
       builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return const Center(
+            child: Text(
+              'Não foi possível carregar seus templates.',
+              style: TextStyle(color: Colors.white70),
+            ),
+          );
+        }
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
@@ -257,7 +380,7 @@ class _LibraryAdminPageState extends State<LibraryAdminPage>
           );
         }
         return ListView.builder(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 104),
           itemCount: templates.length,
           itemBuilder: (context, index) {
             final template = templates[index];
@@ -323,6 +446,7 @@ class TemplateBuilderScreen extends StatefulWidget {
 class _TemplateBuilderScreenState extends State<TemplateBuilderScreen> {
   final _nameCtrl = TextEditingController();
   final List<WorkoutExercise> _exercises = [];
+  bool _isSaving = false;
 
   bool get _editing => widget.existingTemplate != null;
 
@@ -355,7 +479,31 @@ class _TemplateBuilderScreenState extends State<TemplateBuilderScreen> {
         builder: (context, scrollController) => StreamBuilder<List<StoreExercise>>(
           stream: widget.repository.watchExercises(),
           builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return const Center(
+                child: Text(
+                  'Não foi possível carregar o catálogo.',
+                  style: TextStyle(color: Colors.white70),
+                ),
+              );
+            }
+            if (!snapshot.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
             final exercises = snapshot.data ?? const <StoreExercise>[];
+            if (exercises.isEmpty) {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text(
+                    'O catálogo global ainda está vazio. Cadastre os exercícios '
+                    'administrativos antes de criar um template.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                ),
+              );
+            }
             return ListView.builder(
               controller: scrollController,
               itemCount: exercises.length,
@@ -424,18 +572,37 @@ class _TemplateBuilderScreenState extends State<TemplateBuilderScreen> {
   }
 
   Future<void> _save() async {
+    if (_isSaving) return;
     if (_nameCtrl.text.trim().isEmpty || _exercises.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Dê um nome e adicione exercícios.')),
       );
       return;
     }
-    await widget.repository.saveProfessionalTemplate(
-      templateId: widget.existingTemplate?.id,
-      name: _nameCtrl.text,
-      exercises: _exercises.map((exercise) => exercise.toMap()).toList(),
-    );
-    if (mounted) Navigator.pop(context);
+    setState(() => _isSaving = true);
+    try {
+      await widget.repository.saveProfessionalTemplate(
+        templateId: widget.existingTemplate?.id,
+        name: _nameCtrl.text,
+        exercises: _exercises.map((exercise) => exercise.toMap()).toList(),
+      );
+      if (mounted) Navigator.pop(context);
+    } catch (error) {
+      debugPrint(
+        'TemplateBuilderScreen/saveProfessionalTemplate: '
+        '${error.runtimeType}',
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Não foi possível salvar o template. Tente novamente.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
@@ -445,7 +612,20 @@ class _TemplateBuilderScreenState extends State<TemplateBuilderScreen> {
       appBar: AppBar(
         title: Text(_editing ? 'Editar Template' : 'Criar Novo Template'),
         actions: [
-          IconButton(icon: const Icon(Icons.check_circle), onPressed: _save),
+          if (_isSaving)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: SizedBox.square(
+                dimension: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else
+            IconButton(
+              tooltip: 'Salvar template',
+              icon: const Icon(Icons.check_circle),
+              onPressed: _save,
+            ),
         ],
       ),
       body: Column(
