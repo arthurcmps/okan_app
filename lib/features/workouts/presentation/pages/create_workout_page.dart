@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../core/widgets/okan_async_state.dart';
 import '../../data/repositories/firebase_workouts_repository.dart';
 import '../../domain/entities/workout_exercise.dart';
 import '../../domain/entities/workout_model.dart';
@@ -12,11 +13,13 @@ class CreateWorkoutPage extends StatefulWidget {
     this.treinoId,
     this.treinoDados,
     this.repository,
+    this.personalId,
   });
 
   final String? treinoId;
   final Map<String, dynamic>? treinoDados;
   final WorkoutsRepository? repository;
+  final String? personalId;
 
   @override
   State<CreateWorkoutPage> createState() => _CreateWorkoutPageState();
@@ -57,7 +60,8 @@ class _CreateWorkoutPageState extends State<CreateWorkoutPage> {
   }
 
   Future<void> _salvarTreino() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (_isLoading) return;
+    if (!(_formKey.currentState?.validate() ?? false)) return;
     if (_exerciciosSelecionados.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Adicione exercícios!')),
@@ -70,10 +74,10 @@ class _CreateWorkoutPageState extends State<CreateWorkoutPage> {
     try {
       await _repository.saveWorkoutModel(
         workoutId: widget.treinoId,
-        nome: _nomeTreinoController.text,
-        grupoMuscular: _grupoMuscularController.text,
-        exercicios: _exerciciosSelecionados,
-        personalId: FirebaseAuth.instance.currentUser?.uid,
+        nome: _nomeTreinoController.text.trim(),
+        grupoMuscular: _grupoMuscularController.text.trim(),
+        exercicios: List<WorkoutExercise>.from(_exerciciosSelecionados),
+        personalId: widget.personalId ?? FirebaseAuth.instance.currentUser?.uid,
       );
 
       if (!mounted) return;
@@ -86,9 +90,12 @@ class _CreateWorkoutPageState extends State<CreateWorkoutPage> {
       );
       Navigator.pop(context);
     } catch (error) {
+      debugPrint('CreateWorkoutPage/save: ${error.runtimeType}');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro: $error')),
+        const SnackBar(
+          content: Text('Não foi possível salvar o treino. Tente novamente.'),
+        ),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -96,9 +103,10 @@ class _CreateWorkoutPageState extends State<CreateWorkoutPage> {
   }
 
   void _adicionarExercicioModal() {
-    showModalBottomSheet(
+    showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -108,47 +116,10 @@ class _CreateWorkoutPageState extends State<CreateWorkoutPage> {
           maxChildSize: 0.9,
           expand: false,
           builder: (context, scrollController) {
-            return Column(
-              children: [
-                const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text(
-                    'Selecione da Biblioteca',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                ),
-                Expanded(
-                  child: StreamBuilder<List<WorkoutCatalogExercise>>(
-                    stream: _repository.watchExerciseCatalog(),
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-
-                      final exercises = snapshot.data!;
-                      return ListView.builder(
-                        controller: scrollController,
-                        itemCount: exercises.length,
-                        itemBuilder: (context, index) {
-                          final exercise = exercises[index];
-                          return ListTile(
-                            title: Text(exercise.nome),
-                            subtitle: Text(exercise.grupo),
-                            trailing: Icon(
-                              Icons.add_circle_outline,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                            onTap: () {
-                              Navigator.pop(context);
-                              _configurarSeries(exercise);
-                            },
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
+            return _ExerciseCatalogPicker(
+              repository: _repository,
+              scrollController: scrollController,
+              onSelected: _configurarSeries,
             );
           },
         );
@@ -156,14 +127,14 @@ class _CreateWorkoutPageState extends State<CreateWorkoutPage> {
     );
   }
 
-  void _configurarSeries(WorkoutCatalogExercise exercise) {
+  Future<void> _configurarSeries(WorkoutCatalogExercise exercise) async {
     final seriesCtrl = TextEditingController(text: '3');
     final repsCtrl = TextEditingController(text: '12');
     final obsCtrl = TextEditingController();
 
-    showDialog(
+    await showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: Text('Configurar ${exercise.nome}'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -180,13 +151,15 @@ class _CreateWorkoutPageState extends State<CreateWorkoutPage> {
             ),
             TextField(
               controller: obsCtrl,
-              decoration: const InputDecoration(labelText: 'Observação (Opcional)'),
+              decoration: const InputDecoration(
+                labelText: 'Observação (Opcional)',
+              ),
             ),
           ],
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
@@ -203,7 +176,7 @@ class _CreateWorkoutPageState extends State<CreateWorkoutPage> {
                   ),
                 );
               });
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
             },
             child: const Text('Adicionar'),
           ),
@@ -227,12 +200,16 @@ class _CreateWorkoutPageState extends State<CreateWorkoutPage> {
             children: [
               TextFormField(
                 controller: _nomeTreinoController,
+                enabled: !_isLoading,
                 decoration: const InputDecoration(labelText: 'Nome do Treino'),
-                validator: (value) => value == null || value.isEmpty ? 'Obrigatório' : null,
+                validator: (value) => value == null || value.trim().isEmpty
+                    ? 'Obrigatório'
+                    : null,
               ),
               const SizedBox(height: 10),
               TextFormField(
                 controller: _grupoMuscularController,
+                enabled: !_isLoading,
                 decoration: const InputDecoration(
                   labelText: 'Grupo Muscular (Ex: Costas)',
                 ),
@@ -253,64 +230,87 @@ class _CreateWorkoutPageState extends State<CreateWorkoutPage> {
                       size: 30,
                       color: colorScheme.primary,
                     ),
-                    onPressed: _adicionarExercicioModal,
+                    onPressed: _isLoading ? null : _adicionarExercicioModal,
                   ),
                 ],
               ),
               const Divider(),
               Expanded(
-                child: ReorderableListView(
-                  onReorder: (oldIndex, newIndex) {
-                    setState(() {
-                      if (newIndex > oldIndex) newIndex -= 1;
-                      final item = _exerciciosSelecionados.removeAt(oldIndex);
-                      _exerciciosSelecionados.insert(newIndex, item);
-                    });
-                  },
-                  children: [
-                    for (var i = 0; i < _exerciciosSelecionados.length; i++)
-                      ListTile(
-                        key: ValueKey('ex_$i${_exerciciosSelecionados[i].nome}'),
-                        tileColor: colorScheme.surface,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        leading: CircleAvatar(
-                          backgroundColor: colorScheme.primary.withOpacity(0.14),
-                          foregroundColor: colorScheme.primary,
-                          child: Text('${i + 1}'),
-                        ),
-                        title: Text(_exerciciosSelecionados[i].nome),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${_exerciciosSelecionados[i].series}x ${_exerciciosSelecionados[i].repeticoes}',
-                            ),
-                            if ((_exerciciosSelecionados[i].observacao ?? '').trim().isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Text(
-                                  'Obs: ${_exerciciosSelecionados[i].observacao}',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: colorScheme.secondary,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
+                child: _exerciciosSelecionados.isEmpty
+                    ? const _EmptyWorkoutExercises()
+                    : ReorderableListView(
+                        onReorder: (oldIndex, newIndex) {
+                          if (_isLoading) return;
+                          setState(() {
+                            if (newIndex > oldIndex) newIndex -= 1;
+                            final item = _exerciciosSelecionados.removeAt(
+                              oldIndex,
+                            );
+                            _exerciciosSelecionados.insert(newIndex, item);
+                          });
+                        },
+                        children: [
+                          for (
+                            var i = 0;
+                            i < _exerciciosSelecionados.length;
+                            i++
+                          )
+                            ListTile(
+                              key: ObjectKey(_exerciciosSelecionados[i]),
+                              tileColor: colorScheme.surface,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                          ],
-                        ),
-                        trailing: IconButton(
-                          tooltip: 'Remover exercício',
-                          icon: Icon(Icons.delete, color: colorScheme.error),
-                          onPressed: () => setState(
-                            () => _exerciciosSelecionados.removeAt(i),
-                          ),
-                        ),
+                              leading: CircleAvatar(
+                                backgroundColor: colorScheme.primary
+                                    .withOpacity(0.14),
+                                foregroundColor: colorScheme.primary,
+                                child: Text('${i + 1}'),
+                              ),
+                              title: Text(_exerciciosSelecionados[i].nome),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${_exerciciosSelecionados[i].series}x '
+                                    '${_exerciciosSelecionados[i].repeticoes}',
+                                  ),
+                                  if ((_exerciciosSelecionados[i]
+                                              .observacao ??
+                                          '')
+                                      .trim()
+                                      .isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: Text(
+                                        'Obs: '
+                                        '${_exerciciosSelecionados[i].observacao}',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: colorScheme.secondary,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              trailing: IconButton(
+                                tooltip: 'Remover exercício',
+                                icon: Icon(
+                                  Icons.delete,
+                                  color: colorScheme.error,
+                                ),
+                                onPressed: _isLoading
+                                    ? null
+                                    : () => setState(
+                                        () => _exerciciosSelecionados.removeAt(
+                                          i,
+                                        ),
+                                      ),
+                              ),
+                            ),
+                        ],
                       ),
-                  ],
-                ),
               ),
               SizedBox(
                 width: double.infinity,
@@ -321,18 +321,140 @@ class _CreateWorkoutPageState extends State<CreateWorkoutPage> {
                     backgroundColor: colorScheme.primary,
                     foregroundColor: colorScheme.onPrimary,
                   ),
-                  child: Text(
-                    isEditing ? 'ATUALIZAR TREINO' : 'SALVAR TREINO',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  child: _isLoading
+                      ? const SizedBox.square(
+                          dimension: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(
+                          isEditing ? 'ATUALIZAR TREINO' : 'SALVAR TREINO',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
                 ),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _EmptyWorkoutExercises extends StatelessWidget {
+  const _EmptyWorkoutExercises();
+
+  @override
+  Widget build(BuildContext context) {
+    return const OkanMessageState(
+      key: ValueKey('create-workout-empty'),
+      icon: Icons.fitness_center,
+      title: 'Nenhum exercício adicionado',
+      description: 'Use o botão de adicionar para montar este treino.',
+    );
+  }
+}
+
+class _ExerciseCatalogPicker extends StatefulWidget {
+  const _ExerciseCatalogPicker({
+    required this.repository,
+    required this.scrollController,
+    required this.onSelected,
+  });
+
+  final WorkoutsRepository repository;
+  final ScrollController scrollController;
+  final ValueChanged<WorkoutCatalogExercise> onSelected;
+
+  @override
+  State<_ExerciseCatalogPicker> createState() => _ExerciseCatalogPickerState();
+}
+
+class _ExerciseCatalogPickerState extends State<_ExerciseCatalogPicker> {
+  late Stream<List<WorkoutCatalogExercise>> _catalogStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _catalogStream = widget.repository.watchExerciseCatalog();
+  }
+
+  void _retry() {
+    setState(() {
+      _catalogStream = widget.repository.watchExerciseCatalog();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        const Padding(
+          padding: EdgeInsets.all(16),
+          child: Text(
+            'Selecione da Biblioteca',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+        ),
+        Expanded(
+          child: StreamBuilder<List<WorkoutCatalogExercise>>(
+            stream: _catalogStream,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  !snapshot.hasData) {
+                return const OkanLoadingState(
+                  label: 'Carregando biblioteca de exercícios',
+                );
+              }
+
+              if (snapshot.hasError) {
+                return OkanMessageState(
+                  key: const ValueKey('create-workout-catalog-error'),
+                  icon: Icons.cloud_off_outlined,
+                  title: 'Não foi possível carregar a biblioteca',
+                  description:
+                      'Verifique sua conexão e tente novamente em alguns instantes.',
+                  actionLabel: 'Tentar novamente',
+                  onAction: _retry,
+                  isError: true,
+                  announce: true,
+                );
+              }
+
+              final exercises =
+                  snapshot.data ?? const <WorkoutCatalogExercise>[];
+              if (exercises.isEmpty) {
+                return const OkanMessageState(
+                  key: ValueKey('create-workout-catalog-empty'),
+                  icon: Icons.library_books_outlined,
+                  title: 'Biblioteca vazia',
+                  description:
+                      'A administração ainda não cadastrou exercícios.',
+                );
+              }
+
+              return ListView.builder(
+                controller: widget.scrollController,
+                itemCount: exercises.length,
+                itemBuilder: (context, index) {
+                  final exercise = exercises[index];
+                  return ListTile(
+                    title: Text(exercise.nome),
+                    subtitle: Text(exercise.grupo),
+                    trailing: Icon(
+                      Icons.add_circle_outline,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      widget.onSelected(exercise);
+                    },
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
