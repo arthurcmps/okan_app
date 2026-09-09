@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'home_page.dart';
 import 'register_page.dart';
-import '../../../../../core/theme/app_colors.dart';
-import '../../../../../core/services/auth_service.dart';
+import '../widgets/auth_ui.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/services/auth_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -18,10 +17,11 @@ class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _authService = AuthService();
-  
+
   final _formKey = GlobalKey<FormState>();
   bool _isPasswordVisible = false;
   bool _isLoading = false;
+  String? _feedbackMessage;
 
   @override
   void dispose() {
@@ -32,8 +32,12 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _fazerLogin() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
-    
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() {
+      _isLoading = true;
+      _feedbackMessage = null;
+    });
+
     final erro = await _authService.loginUsuario(
       email: _emailController.text.trim(),
       password: _passwordController.text.trim(),
@@ -42,24 +46,40 @@ class _LoginPageState extends State<LoginPage> {
     if (mounted) {
       setState(() => _isLoading = false);
       if (erro == null) {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const HomePage()));
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomePage()),
+        );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(erro), backgroundColor: AppColors.error));
+        setState(
+          () => _feedbackMessage = erro == 'E-mail ou senha incorretos.'
+              ? erro
+              : 'Não foi possível entrar agora. Tente novamente.',
+        );
       }
     }
   }
 
   Future<void> _fazerLoginGoogle() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _feedbackMessage = null;
+    });
     final erro = await _authService.entrarComGoogle();
 
     if (mounted) {
       setState(() => _isLoading = false);
       if (erro == null) {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const HomePage()));
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomePage()),
+        );
       } else {
-        if (erro != "Login cancelado.") {
-           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(erro), backgroundColor: AppColors.error));
+        if (!erro.toLowerCase().contains('cancelado')) {
+          setState(
+            () => _feedbackMessage =
+                'Não foi possível entrar com Google. Tente novamente.',
+          );
         }
       }
     }
@@ -68,31 +88,42 @@ class _LoginPageState extends State<LoginPage> {
   // --- NOVA FUNÇÃO: RECUPERAR SENHA ---
   Future<void> _recuperarSenha() async {
     // Aproveita o email que a pessoa já possa ter começado a digitar
-    final TextEditingController emailRecuperacaoCtrl = TextEditingController(text: _emailController.text);
+    final TextEditingController emailRecuperacaoCtrl = TextEditingController(
+      text: _emailController.text,
+    );
 
-    showDialog(
+    await showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.surface, // Usando o tema escuro da aplicação
-        title: const Text("Recuperar Senha", style: TextStyle(color: Colors.white)),
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text(
+          "Recuperar senha",
+          style: TextStyle(color: AppColors.textMain),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
               "Digite o seu email abaixo. Enviaremos um link para redefinir a sua senha.",
-              style: TextStyle(color: Colors.white70, fontSize: 14),
+              style: TextStyle(color: AppColors.textSub, fontSize: 14),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: emailRecuperacaoCtrl,
               keyboardType: TextInputType.emailAddress,
-              style: const TextStyle(color: Colors.white),
+              textInputAction: TextInputAction.done,
+              autofillHints: const [AutofillHints.email],
+              autocorrect: false,
+              style: const TextStyle(color: AppColors.textMain),
               decoration: InputDecoration(
                 labelText: "Email",
                 labelStyle: const TextStyle(color: Colors.white54),
                 filled: true,
                 fillColor: Colors.black26,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
                 prefixIcon: const Icon(Icons.email_outlined, color: Colors.white54),
               ),
             ),
@@ -100,15 +131,23 @@ class _LoginPageState extends State<LoginPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context), 
-            child: const Text("Cancelar", style: TextStyle(color: Colors.grey))
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text(
+              "Cancelar",
+              style: TextStyle(color: AppColors.textSub),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
             onPressed: () async {
               final email = emailRecuperacaoCtrl.text.trim();
               if (email.isEmpty || !email.contains('@')) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Digite um email válido."), backgroundColor: AppColors.error));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text("Digite um e-mail válido."),
+                    backgroundColor: AppColors.error,
+                  ),
+                );
                 return;
               }
 
@@ -117,34 +156,50 @@ class _LoginPageState extends State<LoginPage> {
                 await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
                 
                 if (mounted) {
-                  Navigator.pop(context);
+                  Navigator.pop(dialogContext);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text("Email enviado para $email! Verifique a sua caixa de entrada."), backgroundColor: AppColors.success)
+                    const SnackBar(
+                      content: Text(
+                        "Link enviado. Verifique sua caixa de entrada e a pasta de spam.",
+                      ),
+                      backgroundColor: AppColors.success,
+                    ),
                   );
                 }
-              } on FirebaseAuthException catch (e) {
-                String mensagemErro = "Erro ao enviar email.";
-                if (e.code == 'user-not-found') mensagemErro = "Nenhum utilizador encontrado com este email.";
-                
+              } on FirebaseAuthException {
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(mensagemErro), backgroundColor: AppColors.error));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        "Não foi possível enviar agora. Confira o endereço e tente novamente.",
+                      ),
+                      backgroundColor: AppColors.error,
+                    ),
+                  );
                 }
               }
             },
-            child: const Text("Enviar Link", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+            child: const Text(
+              "Enviar link",
+              style: TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           )
         ],
       ),
     );
+
+    emailRecuperacaoCtrl.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
+      body: AuthPageFrame(
+        child: AutofillGroup(
           child: Form(
             key: _formKey,
             child: Column(
@@ -154,15 +209,19 @@ class _LoginPageState extends State<LoginPage> {
                 // ÍCONE LOGO
                 Image.asset(
                   'assets/images/logo_okan.png',
-                  height: 120, // Altura balanceada
+                  height: 104,
                   fit: BoxFit.contain,
                   errorBuilder: (context, error, stackTrace) {
-                    return const Icon(Icons.fitness_center, size: 80, color: AppColors.primary);
+                    return const Icon(
+                      Icons.fitness_center,
+                      size: 80,
+                      color: AppColors.primary,
+                    );
                   },
                 ),
-                
+
                 const SizedBox(height: 24),
-                
+
                 Text(
                   'Bem-vindo ao Okan',
                   textAlign: TextAlign.center,
@@ -175,46 +234,61 @@ class _LoginPageState extends State<LoginPage> {
                 const Text(
                   'Sua essência, sua força.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.textSub, letterSpacing: 1.0),
+                  style: TextStyle(
+                    color: AppColors.textSub,
+                    letterSpacing: 1.0,
+                  ),
                 ),
-                const SizedBox(height: 48),
+                const SizedBox(height: 36),
 
                 // EMAIL
                 TextFormField(
+                  key: const Key('login-email-field'),
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
-                  style: const TextStyle(color: Colors.white),
+                  textInputAction: TextInputAction.next,
+                  autofillHints: const [
+                    AutofillHints.username,
+                    AutofillHints.email,
+                  ],
+                  autocorrect: false,
+                  style: const TextStyle(color: AppColors.textMain),
                   decoration: const InputDecoration(
                     labelText: 'E-mail',
                     prefixIcon: Icon(Icons.email_outlined),
                   ),
-                  validator: (val) => (val == null || !val.contains('@')) ? 'E-mail inválido' : null,
+                  validator: (val) => (val == null || !val.contains('@'))
+                      ? 'E-mail inválido'
+                      : null,
                 ),
                 const SizedBox(height: 16),
-                
+
                 // SENHA
-                TextFormField(
+                AuthPasswordField(
+                  fieldKey: const Key('login-password-field'),
+                  toggleKey: const Key('login-password-toggle'),
                   controller: _passwordController,
-                  obscureText: !_isPasswordVisible,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    labelText: 'Senha',
-                    prefixIcon: const Icon(Icons.lock_outline),
-                    suffixIcon: IconButton(
-                      icon: Icon(_isPasswordVisible ? Icons.visibility_off : Icons.visibility, color: AppColors.textSub),
-                      onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
-                    ),
+                  label: 'Senha',
+                  passwordVisible: _isPasswordVisible,
+                  onToggleVisibility: () => setState(
+                    () => _isPasswordVisible = !_isPasswordVisible,
                   ),
-                  validator: (val) => (val == null || val.length < 6) ? 'Senha curta' : null,
+                  autofillHints: const [AutofillHints.password],
+                  onFieldSubmitted: (_) {
+                    if (!_isLoading) _fazerLogin();
+                  },
+                  validator: (val) => (val == null || val.length < 6)
+                      ? 'Senha curta'
+                      : null,
                 ),
-                
+
                 // --- NOVO: BOTÃO ESQUECI A SENHA ---
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
                     onPressed: _recuperarSenha,
                     child: const Text(
-                      "Esqueci-me da senha",
+                      "Esqueci minha senha",
                       style: TextStyle(
                         color: AppColors.secondary,
                         fontWeight: FontWeight.bold,
@@ -225,25 +299,52 @@ class _LoginPageState extends State<LoginPage> {
 
                 const SizedBox(height: 16),
 
+                AuthFeedbackBanner(message: _feedbackMessage),
+                if (_feedbackMessage != null) const SizedBox(height: 16),
+
                 // BOTÃO ENTRAR (Neon com texto preto)
                 FilledButton(
+                  key: const Key('login-submit-button'),
                   onPressed: _isLoading ? null : _fazerLogin,
                   style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primary, 
+                    backgroundColor: AppColors.primary,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
-                  child: _isLoading 
-                    ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 3)) 
-                    : const Text('ENTRAR', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black)),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            color: Colors.black,
+                            strokeWidth: 3,
+                          ),
+                        )
+                      : const Text(
+                          'ENTRAR',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black,
+                          ),
+                        ),
                 ),
-                
+
                 const SizedBox(height: 20),
-                
+
                 // DIVISOR
                 const Row(
                   children: [
                     Expanded(child: Divider(color: Colors.white10)),
-                    Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Text("OU", style: TextStyle(color: AppColors.textSub, fontSize: 12))),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        "OU",
+                        style: TextStyle(
+                          color: AppColors.textSub,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
                     Expanded(child: Divider(color: Colors.white10)),
                   ],
                 ),
@@ -257,20 +358,42 @@ class _LoginPageState extends State<LoginPage> {
                     side: const BorderSide(color: Colors.white24),
                     foregroundColor: Colors.white,
                   ),
-                  icon: const Icon(Icons.g_mobiledata, size: 28, color: Colors.white), 
-                  label: const Text("Entrar com Google", style: TextStyle(fontSize: 15)),
+                  icon: const Icon(
+                    Icons.g_mobiledata,
+                    size: 28,
+                    color: AppColors.textMain,
+                  ),
+                  label: const Text(
+                    "Entrar com Google",
+                    style: TextStyle(fontSize: 15),
+                  ),
                 ),
 
                 const SizedBox(height: 32),
 
                 // LINK CADASTRO
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    const Text('Ainda não tem conta?', style: TextStyle(color: AppColors.textSub)),
+                    const Text(
+                      'Ainda não tem conta?',
+                      style: TextStyle(color: AppColors.textSub),
+                    ),
                     TextButton(
-                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const RegisterPage())),
-                      child: const Text('Crie a sua', style: TextStyle(color: AppColors.secondary, fontWeight: FontWeight.bold)), 
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const RegisterPage(),
+                        ),
+                      ),
+                      child: const Text(
+                        'Crie a sua',
+                        style: TextStyle(
+                          color: AppColors.secondary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ],
                 ),
