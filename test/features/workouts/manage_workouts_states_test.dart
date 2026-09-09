@@ -118,7 +118,12 @@ void main() {
     const deleteAction = ValueKey('delete-workout-workout-1');
     await tester.tap(find.byKey(deleteAction));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Excluir'));
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('Excluir'),
+      ),
+    );
     await tester.pump();
 
     expect(deleteCount, 1);
