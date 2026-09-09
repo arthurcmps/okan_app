@@ -25,7 +25,7 @@ class WorkoutModelList extends StatelessWidget {
         icon: Icons.fitness_center_outlined,
         title: 'Nenhum modelo criado',
         description:
-            'Use “Novo modelo” para criar um treino que poderá ser reutilizado.',
+            'Crie um treino e salve-o como modelo para reutilizar depois.',
       );
     }
 
@@ -118,26 +118,32 @@ class WorkoutModelCard extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
-                OutlinedButton.icon(
-                  key: ValueKey('edit-workout-${workout.id}'),
-                  onPressed: isDeleting ? null : onEdit,
-                  icon: const Icon(Icons.edit_outlined),
-                  label: const Text('Editar'),
+                Tooltip(
+                  message: 'Editar ${workout.nome}',
+                  child: OutlinedButton.icon(
+                    key: ValueKey('edit-workout-${workout.id}'),
+                    onPressed: isDeleting ? null : onEdit,
+                    icon: const Icon(Icons.edit_outlined),
+                    label: const Text('Editar'),
+                  ),
                 ),
-                TextButton.icon(
-                  key: ValueKey('delete-workout-${workout.id}'),
-                  onPressed: isDeleting ? null : onDelete,
-                  style: TextButton.styleFrom(foregroundColor: colors.error),
-                  icon: isDeleting
-                      ? SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: colors.error,
-                          ),
-                        )
-                      : const Icon(Icons.delete_outline),
-                  label: Text(isDeleting ? 'Excluindo...' : 'Excluir'),
+                Tooltip(
+                  message: 'Excluir ${workout.nome}',
+                  child: TextButton.icon(
+                    key: ValueKey('delete-workout-${workout.id}'),
+                    onPressed: isDeleting ? null : onDelete,
+                    style: TextButton.styleFrom(foregroundColor: colors.error),
+                    icon: isDeleting
+                        ? SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: colors.error,
+                            ),
+                          )
+                        : const Icon(Icons.delete_outline),
+                    label: Text(isDeleting ? 'Excluindo...' : 'Excluir'),
+                  ),
                 ),
               ],
             ),

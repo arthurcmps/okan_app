@@ -180,7 +180,10 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Nenhum modelo criado'), findsOneWidget);
-    expect(find.textContaining('Novo modelo'), findsOneWidget);
+    expect(
+      find.text('Crie um treino e salve-o como modelo para reutilizar depois.'),
+      findsOneWidget,
+    );
     expect(find.byType(FloatingActionButton), findsNothing);
   });
 }

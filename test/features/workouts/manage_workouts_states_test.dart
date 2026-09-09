@@ -86,6 +86,10 @@ void main() {
       ),
       findsOneWidget,
     );
+    expect(
+      find.byKey(const ValueKey('create-workout-model')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('labels actions and blocks them while deleting', (tester) async {
@@ -120,7 +124,7 @@ void main() {
     expect(deleteCount, 1);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
-    final deleteButton = tester.widget<IconButton>(find.byKey(deleteAction));
+    final deleteButton = tester.widget<TextButton>(find.byKey(deleteAction));
     expect(deleteButton.onPressed, isNull);
 
     deletion.complete();
