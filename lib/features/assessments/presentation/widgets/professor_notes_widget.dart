@@ -22,12 +22,14 @@ class ProfessorNotesWidget extends StatefulWidget {
 class _ProfessorNotesWidgetState extends State<ProfessorNotesWidget> {
   final TextEditingController _controller = TextEditingController();
   late final AssessmentsRepository _repository;
+  late Stream<ProfessorNoteState> _noteStream;
   bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
     _repository = widget.repository ?? FirebaseAssessmentsRepository();
+    _noteStream = _repository.watchProfessorNote(widget.studentId);
   }
 
   @override
@@ -37,6 +39,7 @@ class _ProfessorNotesWidgetState extends State<ProfessorNotesWidget> {
   }
 
   Future<void> _save() async {
+    if (_isSaving) return;
     setState(() => _isSaving = true);
 
     try {
@@ -49,12 +52,12 @@ class _ProfessorNotesWidgetState extends State<ProfessorNotesWidget> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Anotação atualizada!'),
-          backgroundColor: Colors.green,
+          backgroundColor: AppColors.success,
         ),
       );
       FocusScope.of(context).unfocus();
     } catch (error) {
-      debugPrint('Erro ao salvar anotação privada: $error');
+      debugPrint('ProfessorNotesWidget/save: ${error.runtimeType}');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Não foi possível salvar a anotação.')),
@@ -64,11 +67,64 @@ class _ProfessorNotesWidgetState extends State<ProfessorNotesWidget> {
     }
   }
 
+  void _retryLoading() {
+    setState(() {
+      _noteStream = _repository.watchProfessorNote(widget.studentId);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<ProfessorNoteState>(
-      stream: _repository.watchProfessorNote(widget.studentId),
+      stream: _noteStream,
       builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return _buildStatusCard(
+            key: const ValueKey('professor-notes-loading'),
+            child: const Row(
+              children: [
+                SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: 12),
+                Expanded(child: Text('Carregando anotações privadas')),
+              ],
+            ),
+            announce: true,
+          );
+        }
+
+        if (snapshot.hasError) {
+          return _buildStatusCard(
+            key: const ValueKey('professor-notes-error'),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.cloud_off_outlined, color: AppColors.error),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text('Não foi possível carregar as anotações.'),
+                    ),
+                  ],
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    key: const ValueKey('professor-notes-retry'),
+                    onPressed: _retryLoading,
+                    child: const Text('Tentar novamente'),
+                  ),
+                ),
+              ],
+            ),
+            announce: true,
+          );
+        }
+
         final state = snapshot.data;
         if (state == null || !state.isVisible) {
           return const SizedBox.shrink();
@@ -81,7 +137,7 @@ class _ProfessorNotesWidgetState extends State<ProfessorNotesWidget> {
         }
 
         return Card(
-          color: const Color(0xFF2A273A),
+          color: AppColors.surface,
           margin: const EdgeInsets.only(bottom: 20),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -122,6 +178,7 @@ class _ProfessorNotesWidgetState extends State<ProfessorNotesWidget> {
                       )
                     else
                       IconButton(
+                        key: const ValueKey('professor-notes-save'),
                         icon: const Icon(Icons.save, color: Colors.white),
                         tooltip: 'Salvar anotação',
                         onPressed: _save,
@@ -131,6 +188,7 @@ class _ProfessorNotesWidgetState extends State<ProfessorNotesWidget> {
                 const SizedBox(height: 10),
                 TextField(
                   controller: _controller,
+                  enabled: !_isSaving,
                   maxLines: 4,
                   style: const TextStyle(color: Colors.white),
                   decoration: const InputDecoration(
@@ -146,6 +204,26 @@ class _ProfessorNotesWidgetState extends State<ProfessorNotesWidget> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildStatusCard({
+    required Key key,
+    required Widget child,
+    bool announce = false,
+  }) {
+    return Card(
+      key: key,
+      color: AppColors.surface,
+      margin: const EdgeInsets.only(bottom: 20),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Semantics(
+          container: true,
+          liveRegion: announce,
+          child: child,
+        ),
+      ),
     );
   }
 }
