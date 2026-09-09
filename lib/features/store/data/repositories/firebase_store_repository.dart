@@ -204,11 +204,12 @@ class FirebaseStoreRepository implements StoreRepository {
       'nome': name.trim(),
       'grupo': group.trim(),
       'videoUrl': videoUrl.trim(),
-      'criadoEm': FieldValue.serverTimestamp(),
     };
     if (exerciseId == null) {
+      payload['criadoEm'] = FieldValue.serverTimestamp();
       await _firestore.collection('exercises').add(payload);
     } else {
+      payload['atualizadoEm'] = FieldValue.serverTimestamp();
       await _firestore.collection('exercises').doc(exerciseId).update(payload);
     }
   }

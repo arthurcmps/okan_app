@@ -9,6 +9,7 @@ class _FakeStoreRepository implements StoreRepository {
   bool failTemplateSave = false;
   int exerciseSaveCalls = 0;
   int templateSaveCalls = 0;
+  int exerciseDeleteCalls = 0;
 
   final exercises = const <StoreExercise>[
     StoreExercise(
@@ -72,8 +73,9 @@ class _FakeStoreRepository implements StoreRepository {
       throw UnimplementedError();
 
   @override
-  Future<void> deleteExercise(String exerciseId) =>
-      throw UnimplementedError();
+  Future<void> deleteExercise(String exerciseId) async {
+    exerciseDeleteCalls++;
+  }
 
   @override
   Stream<List<StoreTemplate>> watchSystemTemplates() =>
@@ -93,12 +95,17 @@ class _FakeStoreRepository implements StoreRepository {
       throw UnimplementedError();
 }
 
-Widget _app(StoreRepository repository, {bool canManageCatalog = false}) {
+Widget _app(
+  StoreRepository repository, {
+  bool canManageCatalog = false,
+  bool catalogOnly = false,
+}) {
   return MaterialApp(
     theme: ThemeData.dark(useMaterial3: true),
     home: LibraryAdminPage(
       repository: repository,
       canManageExerciseCatalog: canManageCatalog,
+      catalogOnly: catalogOnly,
     ),
   );
 }
@@ -141,6 +148,10 @@ void main() {
       find.widgetWithText(TextField, 'Nome do Exercício'),
       'Supino reto',
     );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Grupo Muscular'),
+      'Peito',
+    );
     await tester.tap(find.widgetWithText(ElevatedButton, 'Salvar'));
     await tester.pumpAndSettle();
 
@@ -151,6 +162,52 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('permission-denied'), findsNothing);
+  });
+
+  testWidgets('super admin tem catálogo explícito sem aba de templates', (
+    tester,
+  ) async {
+    final repository = _FakeStoreRepository();
+
+    await tester.pumpWidget(
+      _app(repository, canManageCatalog: true, catalogOnly: true),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Administrar catálogo'), findsOneWidget);
+    expect(find.text('Novo exercício'), findsOneWidget);
+    expect(find.text('Templates'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('exercise-catalog-admin')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('cadastro bloqueia nome duplicado antes do repositório', (
+    tester,
+  ) async {
+    final repository = _FakeStoreRepository();
+
+    await tester.pumpWidget(_app(repository, canManageCatalog: true));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Novo exercício'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Nome do Exercício'),
+      '  AGACHAMENTO   LIVRE ',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Grupo Muscular'),
+      'Pernas',
+    );
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Salvar'));
+    await tester.pumpAndSettle();
+
+    expect(repository.exerciseSaveCalls, 0);
+    expect(
+      find.text('Já existe um exercício com esse nome.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('falha ao salvar template não fecha o construtor', (
