@@ -86,6 +86,10 @@ void main() {
       ),
       findsOneWidget,
     );
+    expect(
+      find.byKey(const ValueKey('create-workout-model')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('labels actions and blocks them while deleting', (tester) async {
@@ -114,13 +118,18 @@ void main() {
     const deleteAction = ValueKey('delete-workout-workout-1');
     await tester.tap(find.byKey(deleteAction));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Excluir'));
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('Excluir'),
+      ),
+    );
     await tester.pump();
 
     expect(deleteCount, 1);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
-    final deleteButton = tester.widget<IconButton>(find.byKey(deleteAction));
+    final deleteButton = tester.widget<TextButton>(find.byKey(deleteAction));
     expect(deleteButton.onPressed, isNull);
 
     deletion.complete();
