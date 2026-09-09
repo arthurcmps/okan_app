@@ -19,12 +19,12 @@ Estados permitidos:
 |---|---|
 | Repositório | `arthurcmps/okan_app` |
 | Branch canônica | `main` |
-| SHA do baseline | `1e1952a13f4cc88f3f892db08ca0a8af591d1973` |
-| Data do baseline | 8 de setembro de 2026 |
+| SHA do baseline | `13da601235d95794897bf664617bb831938101eb` |
+| Data do baseline | 9 de setembro de 2026 |
 | Versão declarada | `1.0.1+10` |
 | Flutter do CI | `3.47.0`, canal stable |
 | Ambiente manual | DEV local, projeto sintético `demo-okan-dev` |
-| Última suíte observada | GitHub Actions, execução 83, aprovada na PR 37 |
+| Última suíte observada | GitHub Actions, execução 110, aprovada na PR 45 |
 | Referência de distribuição | build `1.0.1+10`; confirmar o estado da revisão na Play Console antes de promover novas mudanças |
 
 Este SHA foi escolhido depois da integração da quinta onda da UX-09. Ele é a referência para comparar as próximas mudanças visuais do aplicativo.
@@ -61,6 +61,7 @@ $okanAdb = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
 & $okanAdb reverse tcp:9199 tcp:9199
 
 flutter run `
+  --flavor dev `
   --dart-define=OKAN_ENV=dev `
   --dart-define=OKAN_EMULATOR_HOST=127.0.0.1
 ```
@@ -82,7 +83,7 @@ O app deve exibir `DEV • LOCAL`. Dados criados neste teste devem existir somen
 | Histórico, chat, avaliações e notificações | validado | PRs 32 a 35, CI e roteiros manuais |
 | Login incorreto e recuperação de senha | validado | UX-04 concluída na PR 42 com teste manual em DEV |
 | Cadastro de aluno e professor com fonte ampliada | validado | UX-04 concluída na PR 42 com teste manual em DEV |
-| Treino: editar, reordenar e excluir exercício | pendente no baseline consolidado | repetir matriz completa da UX-05 |
+| Treino: editar, reordenar e excluir exercício | em validação | cobertura automatizada ampliada na branch `test/ux-05-workout-regression`; falta roteiro manual em DEV |
 | Sessão expirada e offline | pendente | cobrir na continuação da UX-09 |
 
 “Validado” significa que o fluxo foi exercitado sem regressão conhecida na rodada indicada. Não substitui a matriz completa do release nem autoriza promoção automática para PROD.
@@ -113,7 +114,7 @@ Não registrar exceções, UID, e-mail, senha, token, payload ou dado de saúde 
 | UX-02 Web STAGING | done | PR web 11, Hosting isolado e smoke autenticado em `okan-staging-24829.web.app` | — |
 | UX-03 Tokens | done | paleta e cores semânticas no app (PRs 23 e 37); tokens CSS operacionais no web (PRs web 13 e 14); validações manuais em DEV/STAGING | dívida residual direcionada às UX-04, UX-05 e UX-09 e às páginas estáticas do web |
 | UX-04 Auth | done | web aprovado em STAGING na PR web 15; app aprovado em DEV no aparelho físico e integrado pela PR 42 | manter login, cadastro, recuperação e verificação de e-mail na regressão contínua |
-| UX-05 Telas antigas | in progress | PRs 23, 25, 26 e 43; administração do catálogo global integrada na PR 44; consistência de avaliações em andamento | concluir avaliações restantes e widgets compartilhados; repetir matriz completa |
+| UX-05 Telas antigas | in progress | PRs 23, 25, 26, 43, 44 e 45; regressão da criação/edição de treinos em validação | aprovar criação/edição de treinos em DEV; auditar widgets compartilhados e repetir a matriz completa |
 | UX-06 Dashboard | in progress | PRs web 8, 9 e 10; smoke autenticado executado em STAGING após a PR 11 | concluir a arquitetura do menu móvel e repetir a matriz de acessibilidade em celular e desktop |
 | UX-07 Home | done | PRs 28 e 29 | manter cobertura nas próximas regressões |
 | UX-08 Onboarding | done | PR 30 | manter cobertura nas próximas regressões |
@@ -138,6 +139,7 @@ Não registrar exceções, UID, e-mail, senha, token, payload ou dado de saúde 
 - [PR 42 - experiência de login, cadastro e verificação de e-mail](https://github.com/arthurcmps/okan_app/pull/42)
 - [PR 43 - gestão visual de modelos de treino](https://github.com/arthurcmps/okan_app/pull/43)
 - [PR 44 - administração segura do catálogo global](https://github.com/arthurcmps/okan_app/pull/44)
+- [PR 45 - consistência de avaliações, anamnese e anotação privada](https://github.com/arthurcmps/okan_app/pull/45)
 
 ### Painel web
 
