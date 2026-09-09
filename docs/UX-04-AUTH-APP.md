@@ -92,3 +92,21 @@ Usar somente emuladores Firebase e dados sintéticos.
 O merge depende de CI aprovada e validação manual em DEV. O rollback consiste em
 reverter a PR; não há migração de dados, alteração de Rules ou efeito em
 pagamentos.
+
+## 7. Resultado da validação
+
+A UX-04 do aplicativo foi aprovada em DEV em 9 de setembro de 2026:
+
+- execução em aparelho Android físico com flavor `dev`;
+- banner `DEV • LOCAL` e Firebase Emulator Suite preservados;
+- login válido e inválido exercitados;
+- recuperação de senha revisada;
+- cadastro de Aluno e Personal revisado com dados sintéticos;
+- controles de senha e confirmação exercitados separadamente;
+- tela de verificação e reenvio de e-mail revisada;
+- comportamento com teclado e fonte ampliada aprovado;
+- Flutter CI aprovada;
+- nenhuma mudança ou implantação realizada em PROD.
+
+O fluxo de Super Admin não integra o escopo desta etapa e continua sujeito a
+validação dedicada de autorização.
