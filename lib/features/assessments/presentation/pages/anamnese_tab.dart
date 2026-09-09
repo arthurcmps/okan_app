@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/okan_async_state.dart';
 import '../../data/repositories/firebase_assessments_repository.dart';
 import '../../domain/repositories/assessments_repository.dart';
 import '../widgets/professor_notes_widget.dart';
@@ -27,6 +28,8 @@ class _AnamneseTabState extends State<AnamneseTab> {
   final Map<String, dynamic> _formData = {};
   late final AssessmentsRepository _repository;
   bool _isLoading = true;
+  bool _hasLoadError = false;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -49,6 +52,7 @@ class _AnamneseTabState extends State<AnamneseTab> {
       if (!mounted) return;
 
       setState(() {
+        _hasLoadError = false;
         _formData
           ..clear()
           ..addAll(record.values);
@@ -61,19 +65,33 @@ class _AnamneseTabState extends State<AnamneseTab> {
         }
       });
     } catch (error) {
-      debugPrint('Erro ao carregar anamnese: $error');
+      debugPrint('AnamneseTab/load: ${error.runtimeType}');
+      if (mounted) {
+        setState(() => _hasLoadError = true);
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
+  void _retryLoading() {
+    setState(() {
+      _isLoading = true;
+      _hasLoadError = false;
+    });
+    _loadData();
+  }
+
   Future<void> _saveAnamnese() async {
+    if (!widget.isEditable || _isSaving) return;
     if (!(_formKey.currentState?.validate() ?? false)) return;
     _formKey.currentState?.save();
 
     for (final entry in _controllers.entries) {
       _formData[entry.key] = entry.value.text;
     }
+
+    setState(() => _isSaving = true);
 
     try {
       await _repository.saveAnamnese(
@@ -84,25 +102,39 @@ class _AnamneseTabState extends State<AnamneseTab> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Ficha salva com sucesso! ✅'),
+          content: Text('Ficha salva com sucesso!'),
           backgroundColor: AppColors.success,
         ),
       );
       FocusScope.of(context).unfocus();
     } catch (error) {
-      debugPrint('Erro ao salvar anamnese: $error');
+      debugPrint('AnamneseTab/save: ${error.runtimeType}');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Não foi possível salvar a ficha.')),
       );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.secondary),
+      return const OkanLoadingState(label: 'Carregando ficha de anamnese');
+    }
+
+    if (_hasLoadError) {
+      return OkanMessageState(
+        key: const ValueKey('anamnese-load-error'),
+        icon: Icons.cloud_off_outlined,
+        title: 'Não foi possível carregar a ficha',
+        description:
+            'Verifique sua conexão e tente novamente em alguns instantes.',
+        actionLabel: 'Tentar novamente',
+        onAction: _retryLoading,
+        isError: true,
+        announce: true,
       );
     }
 
@@ -184,25 +216,36 @@ class _AnamneseTabState extends State<AnamneseTab> {
             _buildTextField('O que MAIS gosta na academia?', 'gosta_fazer'),
             _buildTextField('O que DETESTA fazer?', 'detesta_fazer'),
           ]),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: _saveAnamnese,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.secondary,
-              padding: const EdgeInsets.all(16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+          if (widget.isEditable) ...[
+            const SizedBox(height: 20),
+            ElevatedButton(
+              key: const ValueKey('anamnese-save'),
+              onPressed: _isSaving ? null : _saveAnamnese,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.all(16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
+              child: _isSaving
+                  ? const SizedBox.square(
+                      dimension: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.black,
+                      ),
+                    )
+                  : const Text(
+                      'SALVAR FICHA',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
             ),
-            child: const Text(
-              'SALVAR FICHA',
-              style: TextStyle(
-                color: Colors.black,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
-          ),
+          ],
           const SizedBox(height: 40),
         ],
       ),
@@ -250,7 +293,8 @@ class _AnamneseTabState extends State<AnamneseTab> {
       padding: const EdgeInsets.only(bottom: 12),
       child: TextFormField(
         controller: controller,
-        enabled: widget.isEditable,
+        enabled: !_isSaving,
+        readOnly: !widget.isEditable,
         style: const TextStyle(color: Colors.white),
         decoration: InputDecoration(
           labelText: label,
@@ -299,7 +343,7 @@ class _AnamneseTabState extends State<AnamneseTab> {
           value: value,
           groupValue: _formData[key],
           activeColor: AppColors.secondary,
-          onChanged: widget.isEditable
+          onChanged: widget.isEditable && !_isSaving
               ? (selected) => setState(() => _formData[key] = selected)
               : null,
         ),
@@ -337,7 +381,7 @@ class _AnamneseTabState extends State<AnamneseTab> {
                 color: isSelected ? Colors.black : Colors.white70,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
               ),
-              onSelected: widget.isEditable
+              onSelected: widget.isEditable && !_isSaving
                   ? (selected) => setState(
                       () => _formData[key] = selected ? option : null,
                     )
@@ -373,7 +417,7 @@ class _AnamneseTabState extends State<AnamneseTab> {
               labelStyle: TextStyle(
                 color: isSelected ? Colors.black : Colors.white70,
               ),
-              onSelected: widget.isEditable
+              onSelected: widget.isEditable && !_isSaving
                   ? (selected) => setState(() => _formData[key] = selected)
                   : null,
             );
