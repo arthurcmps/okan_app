@@ -239,18 +239,24 @@ class _AssessmentsTabState extends State<AssessmentsTab> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: const TextStyle(color: Colors.white70, fontSize: 13),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(color: Colors.white70, fontSize: 13),
+            ),
           ),
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 13,
+          const SizedBox(width: 16),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
             ),
           ),
         ],
@@ -264,6 +270,7 @@ class _AssessmentsTabState extends State<AssessmentsTab> {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: AppColors.background,
       builder: (context) => DraggableScrollableSheet(
         initialChildSize: 0.9,
@@ -334,7 +341,7 @@ class _AssessmentFormState extends State<_AssessmentForm> {
       messenger.showSnackBar(
         const SnackBar(
           content: Text('Avaliação salva!'),
-          backgroundColor: Colors.green,
+          backgroundColor: AppColors.success,
         ),
       );
     } catch (error) {
@@ -413,6 +420,7 @@ class _AssessmentFormState extends State<_AssessmentForm> {
           _inputRow('Água Corporal %', 'bodyWaterPercentage', 'Massa Óssea (kg)', 'boneMass'),
           const SizedBox(height: 10),
           DropdownButtonFormField<String>(
+            isExpanded: true,
             initialValue: _values['generalRating']?.isNotEmpty == true
                 ? _values['generalRating']
                 : null,
@@ -447,7 +455,8 @@ class _AssessmentFormState extends State<_AssessmentForm> {
             key: const ValueKey('assessment-save'),
             onPressed: _isSaving ? null : _submit,
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.secondary,
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.black,
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
@@ -464,7 +473,6 @@ class _AssessmentFormState extends State<_AssessmentForm> {
                 : const Text(
                     'SALVAR AVALIAÇÃO COMPLETA',
                     style: TextStyle(
-                      color: Colors.black,
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
                     ),
@@ -483,12 +491,30 @@ class _AssessmentFormState extends State<_AssessmentForm> {
     String rightKey, {
     bool required = false,
   }) {
-    return Row(
-      children: [
-        Expanded(child: _input(leftLabel, leftKey, required: required)),
-        const SizedBox(width: 10),
-        Expanded(child: _input(rightLabel, rightKey, required: required)),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final scaledBodySize = MediaQuery.textScalerOf(context).scale(16);
+        final useVerticalLayout =
+            constraints.maxWidth < 480 || scaledBodySize >= 24;
+
+        if (useVerticalLayout) {
+          return Column(
+            children: [
+              _input(leftLabel, leftKey, required: required),
+              _input(rightLabel, rightKey, required: required),
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: _input(leftLabel, leftKey, required: required)),
+            const SizedBox(width: 10),
+            Expanded(child: _input(rightLabel, rightKey, required: required)),
+          ],
+        );
+      },
     );
   }
 
