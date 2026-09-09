@@ -89,12 +89,29 @@ void main() {
       ),
     );
 
-    await tester.tap(
-      find.byKey(const ValueKey('exercise-catalog-edit-supino')),
+    await tester.enterText(
+      find.byKey(const ValueKey('exercise-catalog-search')),
+      'supino',
     );
-    await tester.tap(
-      find.byKey(const ValueKey('exercise-catalog-delete-remada')),
+    await tester.pump();
+    tester
+        .widget<TextButton>(
+          find.byKey(const ValueKey('exercise-catalog-edit-supino')),
+        )
+        .onPressed
+        ?.call();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('exercise-catalog-search')),
+      'remada',
     );
+    await tester.pump();
+    tester
+        .widget<TextButton>(
+          find.byKey(const ValueKey('exercise-catalog-delete-remada')),
+        )
+        .onPressed
+        ?.call();
 
     expect(edited?.id, 'supino');
     expect(deleted?.id, 'remada');

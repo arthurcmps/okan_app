@@ -73,138 +73,157 @@ class _ExerciseCatalogViewState extends State<ExerciseCatalogView> {
     final hasFilters =
         _searchController.text.trim().isNotEmpty || _selectedGroup != null;
 
-    return Column(
-      children: [
-        Container(
-          key: ValueKey(
-            widget.canManage
-                ? 'exercise-catalog-admin'
-                : 'exercise-catalog-read-only',
+    return CustomScrollView(
+      key: const ValueKey('exercise-catalog-scroll'),
+      slivers: [
+        SliverToBoxAdapter(
+          child: Container(
+            key: ValueKey(
+              widget.canManage
+                  ? 'exercise-catalog-admin'
+                  : 'exercise-catalog-read-only',
+            ),
+            width: double.infinity,
+            margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  widget.canManage ? Icons.admin_panel_settings : Icons.info,
+                  color: colorScheme.onPrimaryContainer,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    widget.canManage
+                        ? 'Catálogo global. As alterações ficam disponíveis '
+                            'para todos os usuários autenticados.'
+                        : 'Este é o catálogo global da Okan. Professores podem '
+                            'usá-lo nos próprios templates; somente a '
+                            'administração altera os exercícios.',
+                    style: TextStyle(color: colorScheme.onPrimaryContainer),
+                  ),
+                ),
+              ],
+            ),
           ),
-          width: double.infinity,
-          margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: colorScheme.primaryContainer,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                widget.canManage ? Icons.admin_panel_settings : Icons.info,
-                color: colorScheme.onPrimaryContainer,
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+            child: TextField(
+              key: const ValueKey('exercise-catalog-search'),
+              controller: _searchController,
+              textInputAction: TextInputAction.search,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                labelText: 'Buscar exercício',
+                hintText: 'Nome ou grupo muscular',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchController.text.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: 'Limpar busca',
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() {});
+                        },
+                        icon: const Icon(Icons.close),
+                      ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  widget.canManage
-                      ? 'Catálogo global. As alterações ficam disponíveis para '
-                          'todos os usuários autenticados.'
-                      : 'Este é o catálogo global da Okan. Professores podem '
-                          'usá-lo nos próprios templates; somente a '
-                          'administração altera os exercícios.',
-                  style: TextStyle(color: colorScheme.onPrimaryContainer),
+            ),
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+            child: InputDecorator(
+              decoration: const InputDecoration(
+                labelText: 'Grupo muscular',
+                prefixIcon: Icon(Icons.filter_list),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  key: const ValueKey('exercise-catalog-group-filter'),
+                  value: _selectedGroup ?? _allGroups,
+                  isExpanded: true,
+                  items: [
+                    const DropdownMenuItem<String>(
+                      value: _allGroups,
+                      child: Text('Todos os grupos'),
+                    ),
+                    ..._groups.map(
+                      (group) => DropdownMenuItem<String>(
+                        value: group,
+                        child: Text(group),
+                      ),
+                    ),
+                  ],
+                  onChanged: (value) => setState(
+                    () => _selectedGroup =
+                        value == _allGroups ? null : value,
+                  ),
                 ),
               ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-          child: TextField(
-            key: const ValueKey('exercise-catalog-search'),
-            controller: _searchController,
-            textInputAction: TextInputAction.search,
-            onChanged: (_) => setState(() {}),
-            decoration: InputDecoration(
-              labelText: 'Buscar exercício',
-              hintText: 'Nome ou grupo muscular',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: _searchController.text.isEmpty
-                  ? null
-                  : IconButton(
-                      tooltip: 'Limpar busca',
-                      onPressed: () {
-                        _searchController.clear();
-                        setState(() {});
-                      },
-                      icon: const Icon(Icons.close),
-                    ),
             ),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-          child: InputDecorator(
-            decoration: const InputDecoration(
-              labelText: 'Grupo muscular',
-              prefixIcon: Icon(Icons.filter_list),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                key: const ValueKey('exercise-catalog-group-filter'),
-                value: _selectedGroup ?? _allGroups,
-                isExpanded: true,
-                items: [
-                  const DropdownMenuItem<String>(
-                    value: _allGroups,
-                    child: Text('Todos os grupos'),
-                  ),
-                  ..._groups.map(
-                    (group) => DropdownMenuItem<String>(
-                      value: group,
-                      child: Text(group),
-                    ),
-                  ),
-                ],
-                onChanged: (value) => setState(
-                  () => _selectedGroup = value == _allGroups ? null : value,
-                ),
-              ),
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 12, 0),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 12, 4),
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(
                   '${filtered.length} de ${widget.exercises.length} exercícios',
                   key: const ValueKey('exercise-catalog-result-count'),
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
-              ),
-              if (hasFilters)
-                TextButton(
-                  key: const ValueKey('exercise-catalog-clear-filters'),
-                  onPressed: _clearFilters,
-                  child: const Text('Limpar filtros'),
-                ),
-            ],
+                if (hasFilters)
+                  TextButton(
+                    key: const ValueKey('exercise-catalog-clear-filters'),
+                    onPressed: _clearFilters,
+                    child: const Text('Limpar filtros'),
+                  ),
+              ],
+            ),
           ),
         ),
-        Expanded(
-          child: widget.exercises.isEmpty
-              ? _EmptyCatalog(canManage: widget.canManage)
-              : filtered.isEmpty
-                  ? _FilteredEmpty(onClear: _clearFilters)
-                  : ListView.builder(
-                      key: const ValueKey('exercise-catalog-list'),
-                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 104),
-                      itemCount: filtered.length,
-                      itemBuilder: (context, index) {
-                        final exercise = filtered[index];
-                        return _ExerciseCatalogCard(
-                          exercise: exercise,
-                          canManage: widget.canManage,
-                          onEdit: () => widget.onEdit(exercise),
-                          onDelete: () => widget.onDelete(exercise),
-                        );
-                      },
-                    ),
-        ),
+        if (widget.exercises.isEmpty)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: _EmptyCatalog(canManage: widget.canManage),
+          )
+        else if (filtered.isEmpty)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: _FilteredEmpty(onClear: _clearFilters),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 104),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final exercise = filtered[index];
+                  return _ExerciseCatalogCard(
+                    exercise: exercise,
+                    canManage: widget.canManage,
+                    onEdit: () => widget.onEdit(exercise),
+                    onDelete: () => widget.onDelete(exercise),
+                  );
+                },
+                childCount: filtered.length,
+              ),
+            ),
+          ),
       ],
     );
   }
