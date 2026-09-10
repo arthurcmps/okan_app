@@ -687,35 +687,38 @@ class _ProfilePageState extends State<ProfilePage>
     required VoidCallback onTap,
     bool isDestructive = false,
   }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Material(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
-      ),
-      child: ListTile(
-        leading: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: Colors.white.withOpacity(0.05)),
+        ),
+        child: ListTile(
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: color),
           ),
-          child: Icon(icon, color: color),
-        ),
-        title: Text(
-          title,
-          style: TextStyle(
-            color: isDestructive ? AppColors.error : Colors.white,
-            fontWeight: isDestructive ? FontWeight.bold : FontWeight.normal,
+          title: Text(
+            title,
+            style: TextStyle(
+              color: isDestructive ? AppColors.error : Colors.white,
+              fontWeight: isDestructive ? FontWeight.bold : FontWeight.normal,
+            ),
           ),
+          trailing: const Icon(
+            Icons.arrow_forward_ios,
+            size: 16,
+            color: Colors.white30,
+          ),
+          onTap: onTap,
         ),
-        trailing: const Icon(
-          Icons.arrow_forward_ios,
-          size: 16,
-          color: Colors.white30,
-        ),
-        onTap: onTap,
       ),
     );
   }
