@@ -510,6 +510,16 @@ class TemplateBuilderScreen extends StatefulWidget {
   State<TemplateBuilderScreen> createState() => _TemplateBuilderScreenState();
 }
 
+class _ExerciseConfiguration {
+  const _ExerciseConfiguration({
+    required this.series,
+    required this.repetitions,
+  });
+
+  final String series;
+  final String repetitions;
+}
+
 class _TemplateBuilderScreenState extends State<TemplateBuilderScreen> {
   final _nameCtrl = TextEditingController();
   final List<WorkoutExercise> _exercises = [];
@@ -535,12 +545,12 @@ class _TemplateBuilderScreenState extends State<TemplateBuilderScreen> {
     super.dispose();
   }
 
-  void _openCatalog() {
-    showModalBottomSheet<void>(
+  Future<void> _openCatalog() async {
+    final selectedExercise = await showModalBottomSheet<StoreExercise>(
       context: context,
       backgroundColor: AppColors.surface,
       isScrollControlled: true,
-      builder: (context) => DraggableScrollableSheet(
+      builder: (sheetContext) => DraggableScrollableSheet(
         expand: false,
         initialChildSize: 0.7,
         builder: (context, scrollController) => StreamBuilder<List<StoreExercise>>(
@@ -581,10 +591,7 @@ class _TemplateBuilderScreenState extends State<TemplateBuilderScreen> {
                     exercise.name,
                     style: const TextStyle(color: Colors.white),
                   ),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _configureExercise(exercise);
-                  },
+                  onTap: () => Navigator.pop(sheetContext, exercise),
                 );
               },
             );
@@ -592,12 +599,16 @@ class _TemplateBuilderScreenState extends State<TemplateBuilderScreen> {
         ),
       ),
     );
+
+    if (!mounted || selectedExercise == null) return;
+    await _configureExercise(selectedExercise);
   }
 
-  void _configureExercise(StoreExercise exercise) {
-    final seriesCtrl = TextEditingController(text: '3');
-    final repsCtrl = TextEditingController(text: '12');
-    showDialog<void>(
+  Future<void> _configureExercise(StoreExercise exercise) async {
+    var series = '3';
+    var repetitions = '12';
+
+    final configuration = await showDialog<_ExerciseConfiguration>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         backgroundColor: AppColors.surface,
@@ -607,34 +618,51 @@ class _TemplateBuilderScreenState extends State<TemplateBuilderScreen> {
         ),
         content: Row(
           children: [
-            Expanded(child: TextField(controller: seriesCtrl)),
+            Expanded(
+              child: TextFormField(
+                initialValue: series,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Séries'),
+                onChanged: (value) => series = value,
+              ),
+            ),
             const SizedBox(width: 12),
-            Expanded(child: TextField(controller: repsCtrl)),
+            Expanded(
+              child: TextFormField(
+                initialValue: repetitions,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Repetições'),
+                onChanged: (value) => repetitions = value,
+              ),
+            ),
           ],
         ),
         actions: [
           ElevatedButton(
-            onPressed: () {
-              setState(() {
-                _exercises.add(
-                  WorkoutExercise(
-                    id: DateTime.now().millisecondsSinceEpoch.toString(),
-                    nome: exercise.name,
-                    series: seriesCtrl.text,
-                    repeticoes: repsCtrl.text,
-                    videoUrl: exercise.videoUrl,
-                  ),
-                );
-              });
-              Navigator.pop(dialogContext);
-            },
+            onPressed: () => Navigator.pop(
+              dialogContext,
+              _ExerciseConfiguration(
+                series: series.trim(),
+                repetitions: repetitions.trim(),
+              ),
+            ),
             child: const Text('Adicionar'),
           ),
         ],
       ),
-    ).whenComplete(() {
-      seriesCtrl.dispose();
-      repsCtrl.dispose();
+    );
+
+    if (!mounted || configuration == null) return;
+    setState(() {
+      _exercises.add(
+        WorkoutExercise(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          nome: exercise.name,
+          series: configuration.series,
+          repeticoes: configuration.repetitions,
+          videoUrl: exercise.videoUrl,
+        ),
+      );
     });
   }
 
