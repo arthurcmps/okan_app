@@ -86,7 +86,7 @@ O app deve exibir `DEV • LOCAL`. Dados criados neste teste devem existir somen
 | Treino: editar, reordenar e excluir exercício | validado | PR 46, Flutter CI 113 e roteiro manual aprovado em DEV |
 | Matriz integrada da UX-05 | validado | catálogo, templates, treinos, avaliações, vídeo, fonte 200% e TalkBack aprovados no `main` após a PR 50 |
 | Offline | validado | cache, rascunho e reconexão automática aprovados em Android físico com emuladores locais |
-| Sessão expirada | em andamento | gate reativo de autenticação em implementação na continuação da UX-09 |
+| Sessão expirada | validado | gate reativo, mensagem segura, Flutter CI 132 e smoke manual aprovados na PR 52 |
 
 “Validado” significa que o fluxo foi exercitado sem regressão conhecida na rodada indicada. Não substitui a matriz completa do release nem autoriza promoção automática para PROD.
 
@@ -120,7 +120,7 @@ Não registrar exceções, UID, e-mail, senha, token, payload ou dado de saúde 
 | UX-06 Dashboard | in progress | PRs web 8, 9 e 10; smoke autenticado executado em STAGING após a PR 11 | concluir a arquitetura do menu móvel e repetir a matriz de acessibilidade em celular e desktop |
 | UX-07 Home | done | PRs 28 e 29 | manter cobertura nas próximas regressões |
 | UX-08 Onboarding | done | PR 30 | manter cobertura nas próximas regressões |
-| UX-09 Estados/acessibilidade | in progress | PRs 31, 32, 33, 34 e 35; offline aprovado em DEV | concluir sessão expirada e telas ainda não migradas |
+| UX-09 Estados/acessibilidade | in progress | PRs 31 a 35 e 52; offline e sessão expirada aprovados em DEV | concluir a auditoria das telas residuais ainda não migradas |
 | UX-10 Piloto/rollout | blocked | validações internas pontuais | concluir itens selecionados em STAGING, preparar roteiro, participantes, evidências e métricas |
 
 ## 6. Evidências por Pull Request
@@ -147,6 +147,7 @@ Não registrar exceções, UID, e-mail, senha, token, payload ou dado de saúde 
 - [PR 48 - página compartilhada de vídeo](https://github.com/arthurcmps/okan_app/pull/48)
 - [PR 49 - remoção do player de vídeo sem consumidores](https://github.com/arthurcmps/okan_app/pull/49)
 - [PR 50 - ciclo de vida ao adicionar exercício ao template](https://github.com/arthurcmps/okan_app/pull/50)
+- [PR 52 - offline e gate reativo de sessão](https://github.com/arthurcmps/okan_app/pull/52)
 
 ### Painel web
 
@@ -217,7 +218,7 @@ UX-09.
 
 ## 11. Próxima ordem segura
 
-1. concluir offline e sessão expirada na UX-09;
+1. concluir a auditoria das telas residuais da UX-09;
 2. concluir a arquitetura móvel da UX-06 e repetir a matriz mínima em STAGING;
 3. iniciar UX-10 somente com os gates anteriores registrados.
 
