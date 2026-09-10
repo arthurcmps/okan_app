@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -9,9 +8,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter/foundation.dart';
-import 'features/auth/presentation/pages/login_page.dart';
-import 'features/auth/presentation/pages/home_page.dart';
-import 'features/auth/presentation/pages/onboarding_page.dart';
+import 'features/auth/presentation/pages/auth_check.dart';
 import 'core/config/app_environment.dart';
 import 'core/services/firebase_environment_service.dart';
 import 'core/services/crash_reporting_service.dart';
@@ -325,43 +322,6 @@ class OkanApp extends StatelessWidget {
         }
 
         return root;
-      },
-    );
-  }
-}
-
-// --- AUTH CHECK COM LÓGICA DE ONBOARDING BLINDADA ---
-class AuthCheck extends StatelessWidget {
-  final bool showOnboarding;
-  const AuthCheck({super.key, required this.showOnboarding});
-
-  @override
-  Widget build(BuildContext context) {
-    if (FirebaseAuth.instance.currentUser != null) {
-      return const HomePage();
-    }
-
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            backgroundColor: AppColors.background,
-            body: Center(
-              child: CircularProgressIndicator(color: AppColors.primary),
-            ),
-          );
-        }
-
-        if (snapshot.hasData && snapshot.data != null) {
-          return const HomePage();
-        }
-
-        if (showOnboarding) {
-          return const OnboardingPage();
-        }
-
-        return const LoginPage();
       },
     );
   }

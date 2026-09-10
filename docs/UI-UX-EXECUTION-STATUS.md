@@ -85,7 +85,8 @@ O app deve exibir `DEV • LOCAL`. Dados criados neste teste devem existir somen
 | Cadastro de aluno e professor com fonte ampliada | validado | UX-04 concluída na PR 42 com teste manual em DEV |
 | Treino: editar, reordenar e excluir exercício | validado | PR 46, Flutter CI 113 e roteiro manual aprovado em DEV |
 | Matriz integrada da UX-05 | validado | catálogo, templates, treinos, avaliações, vídeo, fonte 200% e TalkBack aprovados no `main` após a PR 50 |
-| Sessão expirada e offline | pendente | cobrir na continuação da UX-09 |
+| Offline | validado | cache, rascunho e reconexão automática aprovados em Android físico com emuladores locais |
+| Sessão expirada | em andamento | gate reativo de autenticação em implementação na continuação da UX-09 |
 
 “Validado” significa que o fluxo foi exercitado sem regressão conhecida na rodada indicada. Não substitui a matriz completa do release nem autoriza promoção automática para PROD.
 
@@ -119,7 +120,7 @@ Não registrar exceções, UID, e-mail, senha, token, payload ou dado de saúde 
 | UX-06 Dashboard | in progress | PRs web 8, 9 e 10; smoke autenticado executado em STAGING após a PR 11 | concluir a arquitetura do menu móvel e repetir a matriz de acessibilidade em celular e desktop |
 | UX-07 Home | done | PRs 28 e 29 | manter cobertura nas próximas regressões |
 | UX-08 Onboarding | done | PR 30 | manter cobertura nas próximas regressões |
-| UX-09 Estados/acessibilidade | in progress | PRs 31, 32, 33, 34 e 35 | continuar auditoria dos fluxos críticos, inclusive offline, sessão expirada e telas ainda não migradas |
+| UX-09 Estados/acessibilidade | in progress | PRs 31, 32, 33, 34 e 35; offline aprovado em DEV | concluir sessão expirada e telas ainda não migradas |
 | UX-10 Piloto/rollout | blocked | validações internas pontuais | concluir itens selecionados em STAGING, preparar roteiro, participantes, evidências e métricas |
 
 ## 6. Evidências por Pull Request
