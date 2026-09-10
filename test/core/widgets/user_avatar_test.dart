@@ -48,11 +48,11 @@ void main() {
 
   testWidgets('describes a static avatar as an image', (tester) async {
     final semantics = tester.ensureSemantics();
-    addTearDown(semantics.dispose);
-
     await tester.pumpWidget(testApp());
 
     expect(find.bySemanticsLabel('Avatar de Arthur'), findsOneWidget);
+
+    semantics.dispose();
   });
 
   testWidgets('exposes and executes the profile action', (tester) async {
@@ -72,15 +72,17 @@ void main() {
     await tester.pump();
 
     expect(tapCount, 1);
+
+    semantics.dispose();
   });
 
   testWidgets('uses a safe fallback when the name is blank', (tester) async {
     final semantics = tester.ensureSemantics();
-    addTearDown(semantics.dispose);
-
     await tester.pumpWidget(testApp(name: '   '));
 
     expect(find.text('?'), findsOneWidget);
     expect(find.bySemanticsLabel('Avatar de usuário'), findsOneWidget);
+
+    semantics.dispose();
   });
 }
