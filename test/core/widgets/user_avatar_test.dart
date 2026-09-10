@@ -61,7 +61,7 @@ void main() {
     );
 
     expect(semantics.properties.image, isTrue);
-    expect(semantics.properties.button, isFalse);
+    expect(semantics.properties.button, isNull);
   });
 
   testWidgets('exposes and executes the profile action', (tester) async {
