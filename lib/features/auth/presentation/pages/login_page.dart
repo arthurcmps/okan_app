@@ -7,7 +7,9 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/services/auth_service.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+  const LoginPage({super.key, this.initialFeedbackMessage});
+
+  final String? initialFeedbackMessage;
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -22,6 +24,12 @@ class _LoginPageState extends State<LoginPage> {
   bool _isPasswordVisible = false;
   bool _isLoading = false;
   String? _feedbackMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _feedbackMessage = widget.initialFeedbackMessage;
+  }
 
   @override
   void dispose() {

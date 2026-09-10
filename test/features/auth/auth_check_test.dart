@@ -18,6 +18,7 @@ void main() {
         authStateChanges: authStateChanges,
         homeBuilder: (_) => const Text('home'),
         loginBuilder: (_) => const Text('login'),
+        expiredSessionBuilder: (_) => const Text('session expired'),
         onboardingBuilder: (_) => const Text('onboarding'),
       ),
     );
@@ -38,7 +39,7 @@ void main() {
 
     controller.add(null);
     await tester.pump();
-    expect(find.text('login'), findsOneWidget);
+    expect(find.text('session expired'), findsOneWidget);
     expect(find.text('home'), findsNothing);
   });
 
