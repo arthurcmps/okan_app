@@ -243,4 +243,38 @@ void main() {
     );
     expect(find.textContaining('permission-denied'), findsNothing);
   });
+
+  testWidgets('adiciona exercícios em sequência sem sobrepor rotas', (
+    tester,
+  ) async {
+    final repository = _FakeStoreRepository();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData.dark(useMaterial3: true),
+        home: TemplateBuilderScreen(repository: repository),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    for (var index = 0; index < 2; index++) {
+      await tester.tap(find.text('Adicionar Exercício'));
+      await tester.pumpAndSettle();
+
+      final catalogExercise = find.descendant(
+        of: find.byType(DraggableScrollableSheet),
+        matching: find.text('Agachamento livre'),
+      );
+      await tester.tap(catalogExercise);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Séries para: Agachamento livre'), findsOneWidget);
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Adicionar'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+    }
+
+    expect(find.text('Agachamento livre'), findsNWidgets(2));
+  });
 }
