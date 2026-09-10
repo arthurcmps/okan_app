@@ -33,6 +33,13 @@ void main() {
     );
   }
 
+  Finder semanticsWithLabel(String label) {
+    return find.byWidgetPredicate(
+      (widget) =>
+          widget is Semantics && widget.properties.label == label,
+    );
+  }
+
   testWidgets('uses a trimmed initial and semantic theme colors', (
     tester,
   ) async {
@@ -47,42 +54,41 @@ void main() {
   });
 
   testWidgets('describes a static avatar as an image', (tester) async {
-    final semantics = tester.ensureSemantics();
     await tester.pumpWidget(testApp());
 
-    expect(find.bySemanticsLabel('Avatar de Arthur'), findsOneWidget);
+    final semantics = tester.widget<Semantics>(
+      semanticsWithLabel('Avatar de Arthur'),
+    );
 
-    semantics.dispose();
+    expect(semantics.properties.image, isTrue);
+    expect(semantics.properties.button, isNotTrue);
   });
 
   testWidgets('exposes and executes the profile action', (tester) async {
-    final semantics = tester.ensureSemantics();
-    addTearDown(semantics.dispose);
     var tapCount = 0;
 
     await tester.pumpWidget(
       testApp(onTap: () => tapCount++),
     );
 
-    final action = find.bySemanticsLabel('Abrir perfil de Arthur');
-    expect(action, findsOneWidget);
+    final semantics = tester.widget<Semantics>(
+      semanticsWithLabel('Abrir perfil de Arthur'),
+    );
+
+    expect(semantics.properties.button, isTrue);
+    expect(semantics.properties.onTap, isNotNull);
     expect(find.byTooltip('Abrir perfil de Arthur'), findsOneWidget);
 
-    await tester.tap(action);
+    await tester.tap(find.byType(InkResponse));
     await tester.pump();
 
     expect(tapCount, 1);
-
-    semantics.dispose();
   });
 
   testWidgets('uses a safe fallback when the name is blank', (tester) async {
-    final semantics = tester.ensureSemantics();
     await tester.pumpWidget(testApp(name: '   '));
 
     expect(find.text('?'), findsOneWidget);
-    expect(find.bySemanticsLabel('Avatar de usuário'), findsOneWidget);
-
-    semantics.dispose();
+    expect(semanticsWithLabel('Avatar de usuário'), findsOneWidget);
   });
 }
