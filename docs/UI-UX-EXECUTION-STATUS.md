@@ -19,15 +19,15 @@ Estados permitidos:
 |---|---|
 | Repositório | `arthurcmps/okan_app` |
 | Branch canônica | `main` |
-| SHA do baseline | `d658ce3887b3444f108d6f558aa0b201daf74adb` |
+| SHA do baseline | `9b3bbdb1456a1c1cb6a77136f77ab1ed00033647` |
 | Data do baseline | 10 de setembro de 2026 |
 | Versão declarada | `1.0.1+10` |
 | Flutter do CI | `3.47.0`, canal stable |
 | Ambiente manual | DEV local, projeto sintético `demo-okan-dev` |
-| Última suíte observada | GitHub Actions, execução 124, aprovada na PR 49 |
+| Última suíte observada | GitHub Actions, execução 126, aprovada na PR 50 |
 | Referência de distribuição | build `1.0.1+10`; confirmar o estado da revisão na Play Console antes de promover novas mudanças |
 
-Este SHA foi escolhido depois da remoção do player sem consumidores e das dependências exclusivas na UX-05. Ele é a referência para comparar as próximas mudanças visuais do aplicativo.
+Este SHA foi escolhido depois da correção do fluxo de exercícios em templates e da aprovação da matriz integrada da UX-05. Ele é a referência para comparar as próximas mudanças visuais do aplicativo.
 
 ### 2.1 Comandos reproduzíveis
 
@@ -84,6 +84,7 @@ O app deve exibir `DEV • LOCAL`. Dados criados neste teste devem existir somen
 | Login incorreto e recuperação de senha | validado | UX-04 concluída na PR 42 com teste manual em DEV |
 | Cadastro de aluno e professor com fonte ampliada | validado | UX-04 concluída na PR 42 com teste manual em DEV |
 | Treino: editar, reordenar e excluir exercício | validado | PR 46, Flutter CI 113 e roteiro manual aprovado em DEV |
+| Matriz integrada da UX-05 | validado | catálogo, templates, treinos, avaliações, vídeo, fonte 200% e TalkBack aprovados no `main` após a PR 50 |
 | Sessão expirada e offline | pendente | cobrir na continuação da UX-09 |
 
 “Validado” significa que o fluxo foi exercitado sem regressão conhecida na rodada indicada. Não substitui a matriz completa do release nem autoriza promoção automática para PROD.
@@ -114,7 +115,7 @@ Não registrar exceções, UID, e-mail, senha, token, payload ou dado de saúde 
 | UX-02 Web STAGING | done | PR web 11, Hosting isolado e smoke autenticado em `okan-staging-24829.web.app` | — |
 | UX-03 Tokens | done | paleta e cores semânticas no app (PRs 23 e 37); tokens CSS operacionais no web (PRs web 13 e 14); validações manuais em DEV/STAGING | dívida residual direcionada às UX-04, UX-05 e UX-09 e às páginas estáticas do web |
 | UX-04 Auth | done | web aprovado em STAGING na PR web 15; app aprovado em DEV no aparelho físico e integrado pela PR 42 | manter login, cadastro, recuperação e verificação de e-mail na regressão contínua |
-| UX-05 Telas antigas | in progress | PRs 23, 25, 26 e 43 a 49; criação/edição de treinos, avatar, vídeo e limpeza de dependências aprovados; regressão encontrada ao adicionar exercícios a template | corrigir o ciclo de vida catálogo/diálogo e retomar a matriz completa |
+| UX-05 Telas antigas | done | PRs 23, 25, 26 e 43 a 50; matriz integrada aprovada em Android físico com dados sintéticos, fonte 200% e TalkBack | manter esses fluxos na regressão contínua |
 | UX-06 Dashboard | in progress | PRs web 8, 9 e 10; smoke autenticado executado em STAGING após a PR 11 | concluir a arquitetura do menu móvel e repetir a matriz de acessibilidade em celular e desktop |
 | UX-07 Home | done | PRs 28 e 29 | manter cobertura nas próximas regressões |
 | UX-08 Onboarding | done | PR 30 | manter cobertura nas próximas regressões |
@@ -144,6 +145,7 @@ Não registrar exceções, UID, e-mail, senha, token, payload ou dado de saúde 
 - [PR 47 - avatar compartilhado e acessível](https://github.com/arthurcmps/okan_app/pull/47)
 - [PR 48 - página compartilhada de vídeo](https://github.com/arthurcmps/okan_app/pull/48)
 - [PR 49 - remoção do player de vídeo sem consumidores](https://github.com/arthurcmps/okan_app/pull/49)
+- [PR 50 - ciclo de vida ao adicionar exercício ao template](https://github.com/arthurcmps/okan_app/pull/50)
 
 ### Painel web
 
@@ -195,15 +197,32 @@ A UX-01 foi concluída em 9 de setembro de 2026 com evidências sanitizadas e da
 
 As capturas ficam sob guarda dos responsáveis do projeto e não são versionadas com credenciais ou dados pessoais. A matriz ampliada por resolução, fonte e teclado permanece como regressão contínua das próximas PRs visuais, sem invalidar o baseline essencial concluído.
 
-## 10. Próxima ordem segura
+## 10. Encerramento da UX-05
 
-1. concluir as lacunas selecionadas de UX-05 e UX-09;
+A UX-05 foi concluída em 10 de setembro de 2026 com código e validação integrados:
+
+- gestão de modelos e catálogo revisada nas PRs 43 e 44;
+- avaliações, anamnese e anotação privada revisadas na PR 45;
+- criação e edição de treinos cobertas pela PR 46;
+- avatar compartilhado e acessível integrado na PR 47;
+- página de vídeo consolidada e dependências mortas removidas nas PRs 48 e 49;
+- ciclo de vida catálogo/diálogo de template corrigido e validado na PR 50;
+- matriz final aprovada em Android físico com dados sintéticos, incluindo criação,
+  edição, remoção, persistência, vídeo, fonte em 200% e TalkBack;
+- nenhuma implantação ou alteração direta realizada em PROD.
+
+Offline e sessão expirada permanecem fora deste encerramento e pertencem à
+UX-09.
+
+## 11. Próxima ordem segura
+
+1. concluir offline e sessão expirada na UX-09;
 2. concluir a arquitetura móvel da UX-06 e repetir a matriz mínima em STAGING;
 3. iniciar UX-10 somente com os gates anteriores registrados.
 
 A UX-02 removeu o bloqueio de ambiente para o dashboard. Toda próxima mudança estrutural do web ainda deve passar por build, verificação, deploy explícito e smoke autenticado no projeto STAGING antes de qualquer promoção para PROD.
 
-## 11. Matriz de regressão visual da UX-01
+## 12. Matriz de regressão visual da UX-01
 
 O baseline essencial está concluído. Nas próximas PRs visuais, selecionar as linhas pertinentes desta matriz e comparar o mesmo estado antes/depois usando somente dados sintéticos.
 
@@ -217,6 +236,6 @@ O baseline essencial está concluído. Nas próximas PRs visuais, selecionar as 
 
 Não incluir credenciais, endereços de e-mail reais, nomes reais, dados médicos ou identificadores internos.
 
-## 12. Rollback documental
+## 13. Rollback documental
 
 Este arquivo não altera execução, dados ou configuração. Se alguma referência estiver incorreta, corrigir o registro em nova PR preservando o histórico; não reescrever evidências de forma silenciosa.
