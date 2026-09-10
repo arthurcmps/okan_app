@@ -418,6 +418,7 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
           _buildSectionTitle('Identidade de gênero'),
           DropdownButtonFormField<String>(
             initialValue: _selectedGender,
+            isExpanded: true,
             dropdownColor: AppColors.surface,
             style: const TextStyle(color: AppColors.textMain),
             decoration: const InputDecoration(

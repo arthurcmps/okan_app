@@ -121,6 +121,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.text('Alterar minha senha'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Alterar minha senha'));
     await tester.pumpAndSettle();
 
