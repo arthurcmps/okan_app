@@ -19,15 +19,15 @@ Estados permitidos:
 |---|---|
 | Repositório | `arthurcmps/okan_app` |
 | Branch canônica | `main` |
-| SHA do baseline | `1529981dfaf17b19d0098dfead2f0144cf46d5b2` |
+| SHA do baseline | `83fe1230861428b1f8a603afcdac8a24acde5fa4` |
 | Data do baseline | 10 de setembro de 2026 |
 | Versão declarada | `1.0.1+10` |
 | Flutter do CI | `3.47.0`, canal stable |
 | Ambiente manual | DEV local, projeto sintético `demo-okan-dev` |
-| Última suíte observada | GitHub Actions, execução 119, aprovada na PR 47 |
+| Última suíte observada | GitHub Actions, execução 121, aprovada na PR 48 |
 | Referência de distribuição | build `1.0.1+10`; confirmar o estado da revisão na Play Console antes de promover novas mudanças |
 
-Este SHA foi escolhido depois da integração do avatar compartilhado da UX-05. Ele é a referência para comparar as próximas mudanças visuais do aplicativo.
+Este SHA foi escolhido depois da integração da página compartilhada de vídeo da UX-05. Ele é a referência para comparar as próximas mudanças visuais do aplicativo.
 
 ### 2.1 Comandos reproduzíveis
 
@@ -114,7 +114,7 @@ Não registrar exceções, UID, e-mail, senha, token, payload ou dado de saúde 
 | UX-02 Web STAGING | done | PR web 11, Hosting isolado e smoke autenticado em `okan-staging-24829.web.app` | — |
 | UX-03 Tokens | done | paleta e cores semânticas no app (PRs 23 e 37); tokens CSS operacionais no web (PRs web 13 e 14); validações manuais em DEV/STAGING | dívida residual direcionada às UX-04, UX-05 e UX-09 e às páginas estáticas do web |
 | UX-04 Auth | done | web aprovado em STAGING na PR web 15; app aprovado em DEV no aparelho físico e integrado pela PR 42 | manter login, cadastro, recuperação e verificação de e-mail na regressão contínua |
-| UX-05 Telas antigas | in progress | PRs 23, 25, 26 e 43 a 47; criação/edição de treinos e avatar compartilhado aprovados; página compartilhada de vídeo em validação | validar a página de vídeo; decidir o destino do player universal sem consumidores e repetir a matriz completa |
+| UX-05 Telas antigas | in progress | PRs 23, 25, 26 e 43 a 48; criação/edição de treinos, avatar e página compartilhada de vídeo aprovados; limpeza do player sem consumidores em validação | validar a remoção das dependências sem regressão no YouTube e repetir a matriz completa |
 | UX-06 Dashboard | in progress | PRs web 8, 9 e 10; smoke autenticado executado em STAGING após a PR 11 | concluir a arquitetura do menu móvel e repetir a matriz de acessibilidade em celular e desktop |
 | UX-07 Home | done | PRs 28 e 29 | manter cobertura nas próximas regressões |
 | UX-08 Onboarding | done | PR 30 | manter cobertura nas próximas regressões |
@@ -142,6 +142,7 @@ Não registrar exceções, UID, e-mail, senha, token, payload ou dado de saúde 
 - [PR 45 - consistência de avaliações, anamnese e anotação privada](https://github.com/arthurcmps/okan_app/pull/45)
 - [PR 46 - regressão da criação e edição de treinos](https://github.com/arthurcmps/okan_app/pull/46)
 - [PR 47 - avatar compartilhado e acessível](https://github.com/arthurcmps/okan_app/pull/47)
+- [PR 48 - página compartilhada de vídeo](https://github.com/arthurcmps/okan_app/pull/48)
 
 ### Painel web
 
