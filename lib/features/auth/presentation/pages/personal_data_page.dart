@@ -417,7 +417,7 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
           const SizedBox(height: 24),
           _buildSectionTitle('Identidade de gênero'),
           DropdownButtonFormField<String>(
-            value: _selectedGender,
+            initialValue: _selectedGender,
             dropdownColor: AppColors.surface,
             style: const TextStyle(color: AppColors.textMain),
             decoration: const InputDecoration(
@@ -446,9 +446,9 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
           FilledButton(
             onPressed: _isSaving ? null : _saveGeneralData,
             child: _isSaving
-                ? const Semantics(
+                ? Semantics(
                     label: 'Salvando informações pessoais',
-                    child: SizedBox.square(
+                    child: const SizedBox.square(
                       dimension: 20,
                       child: CircularProgressIndicator(
                         color: Colors.black,
