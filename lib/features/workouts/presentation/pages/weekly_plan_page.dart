@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/services/time_service.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../auth/presentation/pages/video_player_page.dart';
+import '../../../../core/widgets/video_player_page.dart';
 import '../../data/repositories/firebase_workouts_repository.dart';
 import '../../domain/entities/weekly_workout_plan.dart';
 import '../../domain/entities/workout_exercise.dart';

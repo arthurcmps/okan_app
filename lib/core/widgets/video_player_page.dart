@@ -1,84 +1,132 @@
 import 'package:flutter/material.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
-import '../../../../core/theme/app_colors.dart'; // Ajuste o caminho das suas cores
+
+import '../theme/app_colors.dart';
 
 class VideoPlayerPage extends StatefulWidget {
+  const VideoPlayerPage({
+    super.key,
+    required this.videoUrl,
+    required this.exerciseName,
+  });
+
   final String videoUrl;
   final String exerciseName;
 
-  const VideoPlayerPage({super.key, required this.videoUrl, required this.exerciseName});
+  static String? youtubeVideoId(String videoUrl) {
+    final normalizedUrl = videoUrl.trim();
+    if (normalizedUrl.isEmpty) return null;
+    return YoutubePlayer.convertUrlToId(normalizedUrl);
+  }
 
   @override
   State<VideoPlayerPage> createState() => _VideoPlayerPageState();
 }
 
 class _VideoPlayerPageState extends State<VideoPlayerPage> {
-  late YoutubePlayerController _controller;
-  bool _isError = false;
+  static const _invalidVideoMessage =
+      'Link de vídeo inválido ou não suportado.';
+
+  YoutubePlayerController? _controller;
+
+  String get _exerciseTitle {
+    final normalizedName = widget.exerciseName.trim();
+    return normalizedName.isEmpty ? 'Vídeo do exercício' : normalizedName;
+  }
 
   @override
   void initState() {
     super.initState();
-    // A mágica: esse comando extrai o ID do vídeo a partir de qualquer link do youtube
-    final videoId = YoutubePlayer.convertUrlToId(widget.videoUrl);
+    final videoId = VideoPlayerPage.youtubeVideoId(widget.videoUrl);
 
     if (videoId != null) {
       _controller = YoutubePlayerController(
         initialVideoId: videoId,
         flags: const YoutubePlayerFlags(
-          autoPlay: true, // Já começa tocando
+          autoPlay: true,
           mute: false,
           disableDragSeek: false,
-          loop: true, // Fica repetindo a execução
+          loop: true,
           isLive: false,
           forceHD: false,
           enableCaption: false,
         ),
       );
-    } else {
-      _isError = true;
     }
   }
 
   @override
   void dispose() {
-    if (!_isError) {
-      _controller.dispose();
-    }
+    _controller?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isError) {
+    final controller = _controller;
+    if (controller == null) {
       return Scaffold(
         backgroundColor: AppColors.background,
-        appBar: AppBar(backgroundColor: Colors.transparent, title: Text(widget.exerciseName)),
-        body: const Center(child: Text("Link de vídeo inválido.", style: TextStyle(color: Colors.white))),
+        appBar: _buildAppBar(),
+        body: Center(
+          child: Semantics(
+            container: true,
+            liveRegion: true,
+            label: _invalidVideoMessage,
+            child: ExcludeSemantics(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.videocam_off_outlined,
+                      size: 48,
+                      color: AppColors.error,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      _invalidVideoMessage,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: AppColors.textMain),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
       );
     }
 
+    final colors = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: Colors.black, // Fundo preto fica mais cinemático
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        foregroundColor: Colors.white,
-        title: Text(widget.exerciseName, style: const TextStyle(fontWeight: FontWeight.bold)),
-      ),
+      backgroundColor: Colors.black,
+      appBar: _buildAppBar(),
       body: Center(
         child: YoutubePlayer(
-          controller: _controller,
+          controller: controller,
           showVideoProgressIndicator: true,
-          progressIndicatorColor: AppColors.primary, // A barrinha de progresso na sua cor neon!
-          progressColors: const ProgressBarColors(
-            playedColor: AppColors.primary,
-            handleColor: AppColors.primary,
+          progressIndicatorColor: colors.primary,
+          progressColors: ProgressBarColors(
+            playedColor: colors.primary,
+            handleColor: colors.primary,
           ),
-          onReady: () {
-            // Opcional: fazer algo quando o vídeo carrega
-          },
         ),
+      ),
+    );
+  }
+
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      foregroundColor: AppColors.textMain,
+      title: Text(
+        _exerciseTitle,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontWeight: FontWeight.bold),
       ),
     );
   }
