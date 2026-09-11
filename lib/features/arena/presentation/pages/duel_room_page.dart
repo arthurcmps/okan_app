@@ -333,8 +333,9 @@ class _DuelRoomPageState extends State<DuelRoomPage>
         ),
       ],
     );
-    final resultAndAction = Row(
-      mainAxisSize: MainAxisSize.min,
+    final resultAndAction = Wrap(
+      spacing: 4,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         Text(
           progress,
@@ -373,7 +374,33 @@ class _DuelRoomPageState extends State<DuelRoomPage>
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  identity,
+                  Row(
+                    children: [
+                      SizedBox(
+                        width: 30,
+                        child: Center(child: _position(index)),
+                      ),
+                      const SizedBox(width: 8),
+                      UserAvatar(
+                        photoUrl: athlete.photoUrl,
+                        name: athlete.name,
+                        radius: 18,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    athlete.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (index == 0 && widget.challenge.isEnded)
+                    const Text(
+                      'Guerreiro Implacável 🏅',
+                      style: TextStyle(color: Colors.amber),
+                    ),
                   const SizedBox(height: 8),
                   Align(
                     alignment: Alignment.centerRight,
@@ -599,33 +626,43 @@ class _DuelRoomPageState extends State<DuelRoomPage>
               ),
             ],
             const Divider(color: Colors.white10, height: 30),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 360 ||
+                    MediaQuery.textScalerOf(context).scale(16) >= 28;
+                final commentsAction = compact
+                    ? TextButton(
+                        onPressed: () => _openComments(post),
+                        child: Text(
+                          'Comentários (${post.commentsCount})',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.white54),
+                        ),
+                      )
+                    : TextButton.icon(
+                        onPressed: () => _openComments(post),
+                        icon: const Icon(
+                          Icons.chat_bubble_outline,
+                          color: Colors.white54,
+                        ),
+                        label: Text(
+                          '${post.commentsCount} Comentários',
+                          style: const TextStyle(color: Colors.white54),
+                        ),
+                      );
+
+                return Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     _reaction(post, '🔥'),
-                    const SizedBox(width: 8),
                     _reaction(post, '💪'),
-                    const SizedBox(width: 8),
                     _reaction(post, '🐢'),
+                    commentsAction,
                   ],
-                ),
-                TextButton.icon(
-                  onPressed: () => _openComments(post),
-                  icon: const Icon(
-                    Icons.chat_bubble_outline,
-                    color: Colors.white54,
-                  ),
-                  label: Text(
-                    '${post.commentsCount} Comentários',
-                    style: const TextStyle(color: Colors.white54),
-                  ),
-                ),
-              ],
+                );
+              },
             ),
           ],
         ),
