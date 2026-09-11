@@ -272,71 +272,11 @@ class _DuelRoomPageState extends State<DuelRoomPage>
                               ? AppColors.success
                               : Colors.white54);
 
-                    return Card(
-                      color: AppColors.surface,
-                      margin: const EdgeInsets.only(bottom: 12),
-                      child: ListTile(
-                        leading: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SizedBox(
-                              width: 30,
-                              child: Center(child: _position(index)),
-                            ),
-                            const SizedBox(width: 8),
-                            UserAvatar(
-                              photoUrl: athlete.photoUrl,
-                              name: athlete.name,
-                              radius: 18,
-                            ),
-                          ],
-                        ),
-                        title: Text(
-                          athlete.name,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        subtitle: index == 0 && widget.challenge.isEnded
-                            ? const Text(
-                                'Guerreiro Implacável 🏅',
-                                style: TextStyle(color: Colors.amber),
-                              )
-                            : null,
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              progress,
-                              style: TextStyle(
-                                color: progressColor,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            if (athlete.userId != _uid)
-                              IconButton(
-                                icon: _sendingTaunts.contains(athlete.userId)
-                                    ? const SizedBox.square(
-                                        dimension: 20,
-                                        child: CircularProgressIndicator(
-                                          color: AppColors.competition,
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : const Icon(
-                                        Icons.whatshot,
-                                        color: AppColors.competition,
-                                      ),
-                                tooltip: 'Provocar ${athlete.name}',
-                                onPressed:
-                                    _sendingTaunts.contains(athlete.userId)
-                                    ? null
-                                    : () => _sendTaunt(athlete),
-                              ),
-                          ],
-                        ),
-                      ),
+                    return _rankingCard(
+                      index: index,
+                      athlete: athlete,
+                      progress: progress,
+                      progressColor: progressColor,
                     );
                   },
                 );
@@ -344,6 +284,109 @@ class _DuelRoomPageState extends State<DuelRoomPage>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _rankingCard({
+    required int index,
+    required ArenaRankingEntry athlete,
+    required String progress,
+    required Color progressColor,
+  }) {
+    final isSendingTaunt = _sendingTaunts.contains(athlete.userId);
+    final identity = Row(
+      children: [
+        SizedBox(
+          width: 30,
+          child: Center(child: _position(index)),
+        ),
+        const SizedBox(width: 8),
+        UserAvatar(
+          photoUrl: athlete.photoUrl,
+          name: athlete.name,
+          radius: 18,
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                athlete.name,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              if (index == 0 && widget.challenge.isEnded)
+                const Text(
+                  'Guerreiro Implacável 🏅',
+                  style: TextStyle(color: Colors.amber),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+    final resultAndAction = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          progress,
+          style: TextStyle(
+            color: progressColor,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        if (athlete.userId != _uid)
+          IconButton(
+            icon: isSendingTaunt
+                ? const SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(
+                      color: AppColors.competition,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : const Icon(Icons.whatshot, color: AppColors.competition),
+            tooltip: 'Provocar ${athlete.name}',
+            onPressed: isSendingTaunt ? null : () => _sendTaunt(athlete),
+          ),
+      ],
+    );
+
+    return Card(
+      color: AppColors.surface,
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 360 ||
+                MediaQuery.textScalerOf(context).scale(16) >= 28;
+            if (compact) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  identity,
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: resultAndAction,
+                  ),
+                ],
+              );
+            }
+            return Row(
+              children: [
+                Expanded(child: identity),
+                const SizedBox(width: 12),
+                resultAndAction,
+              ],
+            );
+          },
+        ),
       ),
     );
   }

@@ -158,7 +158,14 @@ void main() {
 
     await tester.pumpWidget(testApp(repository));
 
-    expect(find.bySemanticsLabel('Carregando placar do duelo'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Semantics &&
+            widget.properties.label == 'Carregando placar do duelo',
+      ),
+      findsOneWidget,
+    );
 
     completer.complete(const <ArenaRankingEntry>[]);
     await tester.pumpAndSettle();
@@ -266,8 +273,10 @@ void main() {
     await tester.pumpWidget(testApp(repository));
     await openWall(tester);
 
-    final fireReaction = find.bySemanticsLabel(
-      'Remover reação fogo. 1 reações.',
+    final fireReaction = find.byWidgetPredicate(
+      (widget) =>
+          widget is Semantics &&
+          widget.properties.label == 'Remover reação fogo. 1 reações.',
     );
     expect(fireReaction, findsOneWidget);
     expect(tester.getSize(fireReaction).height, greaterThanOrEqualTo(48));
