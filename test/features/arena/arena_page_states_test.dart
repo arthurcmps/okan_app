@@ -265,7 +265,8 @@ void main() {
     final tabs = tester.widget<TabBar>(find.byType(TabBar)).controller!;
 
     tabs.animateTo(1);
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
     requested.add(const <ArenaFriendship>[]);
     received.add(const <ArenaFriendship>[]);
     await tester.pumpAndSettle();
@@ -274,7 +275,8 @@ void main() {
     tabs.animateTo(3);
     await tester.pumpAndSettle();
     tabs.animateTo(1);
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
     requested.add(const <ArenaFriendship>[]);
     received.add(const <ArenaFriendship>[]);
     await tester.pumpAndSettle();
