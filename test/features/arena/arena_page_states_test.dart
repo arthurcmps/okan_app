@@ -167,6 +167,8 @@ void main() {
       find.byType(TextField),
       'athlete.synthetic@example.com',
     );
+    await tester.ensureVisible(find.byTooltip('Buscar atleta'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Buscar atleta'));
     await tester.pumpAndSettle();
 
@@ -205,6 +207,8 @@ void main() {
       find.byType(TextField),
       'athlete.synthetic@example.com',
     );
+    await tester.ensureVisible(find.byTooltip('Buscar atleta'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Buscar atleta'));
     await tester.pumpAndSettle();
 
