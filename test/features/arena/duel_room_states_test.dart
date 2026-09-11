@@ -327,6 +327,23 @@ void main() {
     expect(find.text('Nenhum comentário ainda'), findsOneWidget);
   });
 
+  testWidgets('supports the header on a small screen and 200 percent text', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      testApp(_FakeArenaRepository(), textScale: 2),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Placar ainda sem resultados'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('supports ranking on a small screen and 200 percent text', (
     tester,
   ) async {
@@ -364,6 +381,8 @@ void main() {
 
     await tester.pumpWidget(testApp(repository, textScale: 2));
     await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
 
     await openWall(tester);
 
