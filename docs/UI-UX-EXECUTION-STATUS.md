@@ -19,15 +19,17 @@ Estados permitidos:
 |---|---|
 | Repositório | `arthurcmps/okan_app` |
 | Branch canônica | `main` |
-| SHA do baseline | `9b3bbdb1456a1c1cb6a77136f77ab1ed00033647` |
-| Data do baseline | 10 de setembro de 2026 |
+| SHA do baseline | `180108fa743c36205400d876539c5a7c086540da` |
+| Data do baseline | 11 de setembro de 2026 |
 | Versão declarada | `1.0.1+10` |
 | Flutter do CI | `3.47.0`, canal stable |
 | Ambiente manual | DEV local, projeto sintético `demo-okan-dev` |
-| Última suíte observada | GitHub Actions, execução 126, aprovada na PR 50 |
+| Última suíte observada | GitHub Actions, execução 149, aprovada na PR 57 |
 | Referência de distribuição | build `1.0.1+10`; confirmar o estado da revisão na Play Console antes de promover novas mudanças |
 
-Este SHA foi escolhido depois da correção do fluxo de exercícios em templates e da aprovação da matriz integrada da UX-05. Ele é a referência para comparar as próximas mudanças visuais do aplicativo.
+Este SHA foi escolhido após a aprovação da matriz integrada da UX-05 e da
+correção das regressões de amizades e saguão da Arena na PR 57. Ele é a
+referência estável para comparar as próximas mudanças visuais do aplicativo.
 
 ### 2.1 Comandos reproduzíveis
 
@@ -87,6 +89,7 @@ O app deve exibir `DEV • LOCAL`. Dados criados neste teste devem existir somen
 | Matriz integrada da UX-05 | validado | catálogo, templates, treinos, avaliações, vídeo, fonte 200% e TalkBack aprovados no `main` após a PR 50 |
 | Offline | validado | cache, rascunho e reconexão automática aprovados em Android físico com emuladores locais |
 | Sessão expirada | validado | gate reativo, mensagem segura, Flutter CI 132 e smoke manual aprovados na PR 52 |
+| Arena: amizades, convites e saguão | validado | regressões da PR 56 isoladas e corrigidas; Flutter CI 149 e roteiro manual aprovados na PR 57 |
 
 “Validado” significa que o fluxo foi exercitado sem regressão conhecida na rodada indicada. Não substitui a matriz completa do release nem autoriza promoção automática para PROD.
 
@@ -120,7 +123,7 @@ Não registrar exceções, UID, e-mail, senha, token, payload ou dado de saúde 
 | UX-06 Dashboard | in progress | PRs web 8, 9 e 10; smoke autenticado executado em STAGING após a PR 11 | concluir a arquitetura do menu móvel e repetir a matriz de acessibilidade em celular e desktop |
 | UX-07 Home | done | PRs 28 e 29 | manter cobertura nas próximas regressões |
 | UX-08 Onboarding | done | PR 30 | manter cobertura nas próximas regressões |
-| UX-09 Estados/acessibilidade | in progress | PRs 31 a 35 e 52 a 55; offline, sessão expirada, Informações Pessoais, Perfil e Assinatura aprovados em DEV | concluir o saguão e a sala do duelo da Arena |
+| UX-09 Estados/acessibilidade | in progress | PRs 31 a 35, 52 a 55 e 57; offline, sessão expirada, Informações Pessoais, Perfil, Assinatura e saguão da Arena aprovados em DEV | concluir e validar a sala do duelo da Arena |
 | UX-10 Piloto/rollout | blocked | validações internas pontuais | concluir itens selecionados em STAGING, preparar roteiro, participantes, evidências e métricas |
 
 ## 6. Evidências por Pull Request
@@ -151,6 +154,7 @@ Não registrar exceções, UID, e-mail, senha, token, payload ou dado de saúde 
 - [PR 53 - estados de Informações Pessoais](https://github.com/arthurcmps/okan_app/pull/53)
 - [PR 54 - estados de Meu Perfil](https://github.com/arthurcmps/okan_app/pull/54)
 - [PR 55 - estados de Assinatura e Planos](https://github.com/arthurcmps/okan_app/pull/55)
+- [PR 57 - regressões de amizades e saguão da Arena](https://github.com/arthurcmps/okan_app/pull/57)
 
 ### Painel web
 

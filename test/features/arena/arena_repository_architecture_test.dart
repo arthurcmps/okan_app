@@ -42,7 +42,6 @@ void main() {
       "collection('challenges')",
       "collection('posts')",
       "collection('comments')",
-      "collection('workout_history')",
       "collection('notifications')",
     ]) {
       expect(source, contains(path), reason: path);
@@ -50,6 +49,8 @@ void main() {
     expect(source, contains('StorageService'));
     expect(source, contains("where('requesterId', isEqualTo: uid)"));
     expect(source, contains("where('receiverId', isEqualTo: uid)"));
+    expect(source, contains("httpsCallable('getArenaRanking')"));
+    expect(source, isNot(contains("collection('workout_history')")));
   });
 
   test('legacy Arena path is compatibility export', () {
