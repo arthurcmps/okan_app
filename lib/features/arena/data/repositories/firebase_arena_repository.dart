@@ -3,11 +3,88 @@ import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../../../core/services/storage_service.dart';
 import '../../../auth/data/models/user_model.dart';
 import '../../domain/entities/arena_models.dart';
 import '../../domain/repositories/arena_repository.dart';
+
+@visibleForTesting
+Stream<List<ArenaFriendship>> combineArenaFriendshipStreams({
+  required Stream<List<ArenaFriendship>> requested,
+  required Stream<List<ArenaFriendship>> received,
+}) {
+  late final StreamController<List<ArenaFriendship>> controller;
+  StreamSubscription<List<ArenaFriendship>>? requestedSub;
+  StreamSubscription<List<ArenaFriendship>>? receivedSub;
+  List<ArenaFriendship>? requestedFriends;
+  List<ArenaFriendship>? receivedFriends;
+  var generation = 0;
+
+  void emitFriendships() {
+    final sent = requestedFriends;
+    final incoming = receivedFriends;
+    if (sent == null || incoming == null || controller.isClosed) return;
+
+    controller.add(
+      List<ArenaFriendship>.unmodifiable([...sent, ...incoming]),
+    );
+  }
+
+  void startListening() {
+    final currentGeneration = ++generation;
+    requestedFriends = null;
+    receivedFriends = null;
+
+    void addError(Object error, StackTrace stackTrace) {
+      if (currentGeneration == generation && !controller.isClosed) {
+        controller.addError(error, stackTrace);
+      }
+    }
+
+    requestedSub = requested.listen(
+      (friendships) {
+        if (currentGeneration != generation) return;
+        requestedFriends = friendships;
+        emitFriendships();
+      },
+      onError: addError,
+    );
+    receivedSub = received.listen(
+      (friendships) {
+        if (currentGeneration != generation) return;
+        receivedFriends = friendships;
+        emitFriendships();
+      },
+      onError: addError,
+    );
+  }
+
+  void stopListening() {
+    generation++;
+    final requestedToCancel = requestedSub;
+    final receivedToCancel = receivedSub;
+    requestedSub = null;
+    receivedSub = null;
+    requestedFriends = null;
+    receivedFriends = null;
+
+    if (requestedToCancel != null) {
+      unawaited(requestedToCancel.cancel());
+    }
+    if (receivedToCancel != null) {
+      unawaited(receivedToCancel.cancel());
+    }
+  }
+
+  controller = StreamController<List<ArenaFriendship>>.broadcast(
+    onListen: startListening,
+    onCancel: stopListening,
+  );
+
+  return controller.stream;
+}
 
 class FirebaseArenaRepository implements ArenaRepository {
   FirebaseArenaRepository({
@@ -162,68 +239,37 @@ class FirebaseArenaRepository implements ArenaRepository {
         .collection('friendships')
         .where('requesterId', isEqualTo: uid)
         .where('status', isEqualTo: 'accepted')
-        .snapshots();
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map(
+                (document) => _friendshipFromDocument(
+                  document,
+                  currentUserIsRequester: true,
+                ),
+              )
+              .toList(growable: false),
+        );
     final received = _firestore
         .collection('friendships')
         .where('receiverId', isEqualTo: uid)
         .where('status', isEqualTo: 'accepted')
-        .snapshots();
-
-    late final StreamController<List<ArenaFriendship>> controller;
-    StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? requestedSub;
-    StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? receivedSub;
-    QuerySnapshot<Map<String, dynamic>>? requestedSnapshot;
-    QuerySnapshot<Map<String, dynamic>>? receivedSnapshot;
-
-    void emitFriendships() {
-      final sent = requestedSnapshot;
-      final incoming = receivedSnapshot;
-      if (sent == null || incoming == null || controller.isClosed) return;
-
-      controller.add([
-        ...sent.docs.map(
-          (document) => _friendshipFromDocument(
-            document,
-            currentUserIsRequester: true,
-          ),
-        ),
-        ...incoming.docs.map(
-          (document) => _friendshipFromDocument(
-            document,
-            currentUserIsRequester: false,
-          ),
-        ),
-      ]);
-    }
-
-    void addError(Object error, StackTrace stackTrace) {
-      if (!controller.isClosed) controller.addError(error, stackTrace);
-    }
-
-    controller = StreamController<List<ArenaFriendship>>(
-      onListen: () {
-        requestedSub = requested.listen(
-          (snapshot) {
-            requestedSnapshot = snapshot;
-            emitFriendships();
-          },
-          onError: addError,
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map(
+                (document) => _friendshipFromDocument(
+                  document,
+                  currentUserIsRequester: false,
+                ),
+              )
+              .toList(growable: false),
         );
-        receivedSub = received.listen(
-          (snapshot) {
-            receivedSnapshot = snapshot;
-            emitFriendships();
-          },
-          onError: addError,
-        );
-      },
-      onCancel: () async {
-        await requestedSub?.cancel();
-        await receivedSub?.cancel();
-      },
+
+    return combineArenaFriendshipStreams(
+      requested: requested,
+      received: received,
     );
-
-    return controller.stream;
   }
 
   ArenaFriendship _friendshipFromDocument(

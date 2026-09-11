@@ -16,7 +16,7 @@ alterar amizades, convites, duelos, ranking ou contratos Firebase.
 - ações de convite e remoção identificadas para leitores de tela;
 - diálogos de saída e remoção roláveis com fonte ampliada;
 - busca adaptável a tela pequena e fonte a 200%;
-- streams preservados durante troca de abas e mudanças de estado locais.
+- streams preservados durante troca de abas e mudanças de estado locais;
 - notificações da Arena direcionadas para a aba correspondente, inclusive para
   registros antigos sem destino explícito;
 - amizades aceitas consultadas nos dois papéis permitidos pelas Security Rules.
@@ -37,6 +37,7 @@ alterar amizades, convites, duelos, ranking ou contratos Firebase.
 - sessão ausente explícita;
 - saguão em `320 × 480` com fonte a 200%.
 - navegação de notificações de convite e amizade aceita para a aba correta.
+- reentrada em `Meus Amigos` sem reutilizar uma assinatura encerrada.
 
 ## Roteiro manual em DEV
 
@@ -50,5 +51,7 @@ alterar amizades, convites, duelos, ranking ou contratos Firebase.
    abas, pela busca e pelos diálogos.
 8. Com TalkBack, confirmar os anúncios de busca e os rótulos de aceitar,
    recusar, remover e abandonar.
+9. Alternar de `Meus Amigos` para outra aba e voltar, confirmando que a lista
+   continua atualizando sem tela vermelha.
 
 Usar exclusivamente contas e dados sintéticos. Não criar conteúdo em PROD.

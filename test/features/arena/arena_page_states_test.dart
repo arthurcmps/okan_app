@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:okan_app/features/arena/data/repositories/firebase_arena_repository.dart';
 import 'package:okan_app/features/arena/domain/entities/arena_models.dart';
 import 'package:okan_app/features/arena/domain/repositories/arena_repository.dart';
 import 'package:okan_app/features/arena/presentation/pages/arena_page.dart';
@@ -242,5 +243,43 @@ void main() {
 
     expect(find.text('Convites de Duelo ⚔️'), findsOneWidget);
     expect(find.text('Pedidos de Amizade 🤝'), findsOneWidget);
+  });
+
+  testWidgets('re-enters the friends tab without re-listening failure', (
+    tester,
+  ) async {
+    final requested = StreamController<List<ArenaFriendship>>.broadcast();
+    final received = StreamController<List<ArenaFriendship>>.broadcast();
+    addTearDown(requested.close);
+    addTearDown(received.close);
+    final friends = combineArenaFriendshipStreams(
+      requested: requested.stream,
+      received: received.stream,
+    );
+    final repository = _FakeArenaRepository(
+      friendsStreamFactory: () => friends,
+    );
+
+    await tester.pumpWidget(testApp(repository));
+    await tester.pumpAndSettle();
+    final tabs = tester.widget<TabBar>(find.byType(TabBar)).controller!;
+
+    tabs.animateTo(1);
+    await tester.pumpAndSettle();
+    requested.add(const <ArenaFriendship>[]);
+    received.add(const <ArenaFriendship>[]);
+    await tester.pumpAndSettle();
+    expect(find.text('Nenhum amigo na Arena'), findsOneWidget);
+
+    tabs.animateTo(3);
+    await tester.pumpAndSettle();
+    tabs.animateTo(1);
+    await tester.pumpAndSettle();
+    requested.add(const <ArenaFriendship>[]);
+    received.add(const <ArenaFriendship>[]);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Nenhum amigo na Arena'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }
