@@ -48,5 +48,34 @@ jobs:
       - name: Analyze
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
-      - name: Run tests
-        run: flutter test
+      - name: Test duel loading and empty state
+        if: always()
+        run: flutter test test/features/arena/duel_room_states_test.dart --plain-name "shows loading and an instructive empty ranking state"
+
+      - name: Test duel ranking retry
+        if: always()
+        run: flutter test test/features/arena/duel_room_states_test.dart --plain-name "shows a safe ranking error and retries without rebuilding it"
+
+      - name: Test duel wall retry
+        if: always()
+        run: flutter test test/features/arena/duel_room_states_test.dart --plain-name "shows a safe wall error and retries its cached stream"
+
+      - name: Test duel text duplicate guard
+        if: always()
+        run: flutter test test/features/arena/duel_room_states_test.dart --plain-name "blocks a duplicated text post while the first one is pending"
+
+      - name: Test duel reaction guard
+        if: always()
+        run: flutter test test/features/arena/duel_room_states_test.dart --plain-name "labels reactions and prevents a repeated reaction request"
+
+      - name: Test duel comments retry
+        if: always()
+        run: flutter test test/features/arena/duel_room_states_test.dart --plain-name "shows a safe comments error and retries inside the sheet"
+
+      - name: Test duel responsive layout
+        if: always()
+        run: flutter test test/features/arena/duel_room_states_test.dart --plain-name "supports a small screen and 200 percent text"
+
+      - name: Test duel unavailable session
+        if: always()
+        run: flutter test test/features/arena/duel_room_states_test.dart --plain-name "shows an explicit state when the session is unavailable"
