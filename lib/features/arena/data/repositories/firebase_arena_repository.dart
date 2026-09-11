@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
@@ -85,17 +86,57 @@ Stream<List<ArenaFriendship>> combineArenaFriendshipStreams({
   return controller.stream;
 }
 
+@visibleForTesting
+List<ArenaRankingEntry> parseArenaRankingResponse(Object? rawResponse) {
+  if (rawResponse is! Map) {
+    throw StateError('Resposta inválida do placar da Arena.');
+  }
+
+  final response = Map<String, dynamic>.from(rawResponse);
+  final rawRanking = response['ranking'];
+  if (rawRanking is! List) {
+    throw StateError('Resposta inválida do placar da Arena.');
+  }
+
+  return rawRanking.map((rawEntry) {
+    if (rawEntry is! Map) {
+      throw StateError('Entrada inválida no placar da Arena.');
+    }
+
+    final entry = Map<String, dynamic>.from(rawEntry);
+    final userId = FirebaseArenaRepository._string(entry['userId']);
+    if (userId.isEmpty) {
+      throw StateError('Participante inválido no placar da Arena.');
+    }
+
+    return ArenaRankingEntry(
+      userId: userId,
+      name: FirebaseArenaRepository._string(
+        entry['name'],
+        fallback: 'Atleta',
+      ),
+      photoUrl: FirebaseArenaRepository._nullableString(entry['photoUrl']),
+      delta: FirebaseArenaRepository._number(entry['delta']),
+    );
+  }).toList(growable: false);
+}
+
 class FirebaseArenaRepository implements ArenaRepository {
   FirebaseArenaRepository({
     FirebaseFirestore? firestore,
     FirebaseAuth? auth,
+    FirebaseFunctions? functions,
     StorageService? storageService,
   }) : _firestore = firestore ?? FirebaseFirestore.instance,
        _auth = auth ?? FirebaseAuth.instance,
+       _functions =
+           functions ??
+           FirebaseFunctions.instanceFor(region: 'southamerica-east1'),
        _storageService = storageService ?? StorageService();
 
   final FirebaseFirestore _firestore;
   final FirebaseAuth _auth;
+  final FirebaseFunctions _functions;
   final StorageService _storageService;
 
   @override
@@ -458,68 +499,11 @@ class FirebaseArenaRepository implements ArenaRepository {
   Future<List<ArenaRankingEntry>> calculateRanking(
     ArenaChallenge challenge,
   ) async {
-    final limit = DateTime.now().isBefore(challenge.endDate)
-        ? DateTime.now()
-        : challenge.endDate;
-    final ranking = <ArenaRankingEntry>[];
-
-    for (final participant in challenge.participants.values) {
-      if (participant.status != 'accepted') continue;
-      var delta = 0.0;
-
-      if (challenge.metric == 'weight' ||
-          challenge.metric == 'bodyFatPercentage') {
-        final profile = await _loadProfile(participant.userId);
-        final current = challenge.metric == 'weight'
-            ? profile.weight
-            : profile.bodyFatPercentage;
-        delta = current - participant.startValue;
-      } else {
-        final history = await _firestore
-            .collection('workout_history')
-            .where('studentId', isEqualTo: participant.userId)
-            .get();
-        var sessions = 0;
-        var volume = 0.0;
-        for (final document in history.docs) {
-          final performedAt = _date(document.data()['dataRealizacao']);
-          if (performedAt == null ||
-              !performedAt.isAfter(challenge.startDate) ||
-              !performedAt.isBefore(limit)) {
-            continue;
-          }
-          sessions++;
-          if (challenge.metric == 'volume') {
-            final exercises = document.data()['exercicios'] as List? ?? const [];
-            for (final raw in exercises) {
-              final map = Map<String, dynamic>.from(raw as Map? ?? const {});
-              volume += double.tryParse(
-                    map['carga']?.toString().replaceAll(',', '.') ?? '0',
-                  ) ??
-                  0;
-            }
-          }
-        }
-        delta = challenge.metric == 'constancy' ? sessions.toDouble() : volume;
-      }
-
-      ranking.add(
-        ArenaRankingEntry(
-          userId: participant.userId,
-          name: participant.name,
-          photoUrl: participant.photoUrl,
-          delta: delta,
-        ),
-      );
-    }
-
-    if (challenge.metric == 'weight' ||
-        challenge.metric == 'bodyFatPercentage') {
-      ranking.sort((a, b) => a.delta.compareTo(b.delta));
-    } else {
-      ranking.sort((a, b) => b.delta.compareTo(a.delta));
-    }
-    return ranking;
+    final callable = _functions.httpsCallable('getArenaRanking');
+    final result = await callable.call(<String, dynamic>{
+      'challengeId': challenge.id,
+    });
+    return parseArenaRankingResponse(result.data);
   }
 
   @override
