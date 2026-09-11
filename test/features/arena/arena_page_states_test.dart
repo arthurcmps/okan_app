@@ -149,7 +149,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Encontre um Atleta'), findsOneWidget);
-    expect(find.bySemanticsLabel('Buscar atleta'), findsOneWidget);
+    expect(find.byTooltip('Buscar atleta'), findsOneWidget);
   });
 
   testWidgets('does not expose technical details when athlete search fails', (
@@ -167,7 +167,7 @@ void main() {
       find.byType(TextField),
       'athlete.synthetic@example.com',
     );
-    await tester.tap(find.bySemanticsLabel('Buscar atleta'));
+    await tester.tap(find.byTooltip('Buscar atleta'));
     await tester.pumpAndSettle();
 
     expect(
@@ -199,13 +199,13 @@ void main() {
     expect(find.text('Nenhum duelo ativo'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
-    await tester.tap(find.text('Buscar'));
+    tester.widget<TabBar>(find.byType(TabBar)).controller!.animateTo(2);
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byType(TextField),
       'athlete.synthetic@example.com',
     );
-    await tester.tap(find.bySemanticsLabel('Buscar atleta'));
+    await tester.tap(find.byTooltip('Buscar atleta'));
     await tester.pumpAndSettle();
 
     expect(find.text('Encontre um Atleta'), findsOneWidget);
