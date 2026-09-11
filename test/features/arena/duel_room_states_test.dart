@@ -144,7 +144,8 @@ void main() {
   }
 
   Future<void> openWall(WidgetTester tester) async {
-    await tester.tap(find.text("Mural 'Tá Pago'"));
+    final tabs = tester.widget<TabBar>(find.byType(TabBar)).controller!;
+    tabs.animateTo(1);
     await tester.pumpAndSettle();
   }
 
