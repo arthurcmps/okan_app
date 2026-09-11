@@ -29,13 +29,15 @@ duelo sem alterar contratos do Firebase, regras de negócio ou dados.
 
 Arquivo: `test/features/arena/duel_room_states_test.dart`.
 
+Dez testes cobrem:
+
 1. carregamento e vazio instrutivo do placar;
 2. erro seguro e nova tentativa do placar;
 3. erro seguro e nova tentativa do mural;
 4. bloqueio de publicação de texto duplicada;
 5. semântica, alvo mínimo e bloqueio de reação duplicada;
 6. erro seguro e nova tentativa dos comentários;
-7. tela pequena com fonte a 200%;
+7. cabeçalho, placar e mural em tela pequena com fonte a 200%;
 8. sessão indisponível.
 
 ## Roteiro manual em DEV
