@@ -585,10 +585,10 @@ class _ArenaPageState extends State<ArenaPage>
                 style: IconButton.styleFrom(backgroundColor: AppColors.primary),
                 onPressed: _searching ? null : _searchFriend,
                 icon: _searching
-                    ? const Semantics(
+                    ? Semantics(
                         liveRegion: true,
                         label: 'Buscando atleta',
-                        child: ExcludeSemantics(
+                        child: const ExcludeSemantics(
                           child: SizedBox(
                             width: 20,
                             height: 20,
@@ -645,10 +645,10 @@ class _ArenaPageState extends State<ArenaPage>
               ),
               onPressed: _sendingFriendRequest ? null : _sendFriendRequest,
               child: _sendingFriendRequest
-                  ? const Semantics(
+                  ? Semantics(
                       liveRegion: true,
                       label: 'Enviando pedido de amizade',
-                      child: ExcludeSemantics(
+                      child: const ExcludeSemantics(
                         child: SizedBox.square(
                           dimension: 20,
                           child: CircularProgressIndicator(strokeWidth: 2),
@@ -977,7 +977,7 @@ class _ArenaPageState extends State<ArenaPage>
                   stream: friendsStream,
                   builder: (context, snapshot) {
                     if (snapshot.hasError) {
-                      return OkanMessageState(
+                      return const OkanMessageState(
                         key: const ValueKey('arena-create-friends-error'),
                         icon: Icons.cloud_off_outlined,
                         title: 'Não foi possível carregar seus amigos',
