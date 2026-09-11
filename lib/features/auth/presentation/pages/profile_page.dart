@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../../core/services/storage_service.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../../core/services/auth_service.dart';
+import '../../../../core/widgets/okan_async_state.dart';
 import '../../../../core/widgets/user_avatar.dart';
 import '../../../../core/theme/app_colors.dart';
 import 'anamnese_tab.dart';
@@ -18,8 +19,34 @@ import 'professor_subscription_page.dart';
 import 'package:intl/intl.dart';
 import '../../data/models/user_model.dart';
 
+typedef ProfileDataStream = Stream<Map<String, dynamic>?> Function(String uid);
+typedef ProfileImagePicker = Future<File?> Function(ImageSource source);
+typedef ProfilePhotoUploader = Future<void> Function(File image);
+typedef ProfileBirthDateUpdater =
+    Future<void> Function(String uid, DateTime birthDate);
+typedef ProfileSignOut = Future<void> Function();
+
 class ProfilePage extends StatefulWidget {
-  const ProfilePage({super.key});
+  const ProfilePage({
+    super.key,
+    this.userId,
+    this.profileDataStream,
+    this.imagePicker,
+    this.photoUploader,
+    this.birthDateUpdater,
+    this.signOut,
+    this.anamneseBuilder,
+    this.assessmentsBuilder,
+  });
+
+  final String? userId;
+  final ProfileDataStream? profileDataStream;
+  final ProfileImagePicker? imagePicker;
+  final ProfilePhotoUploader? photoUploader;
+  final ProfileBirthDateUpdater? birthDateUpdater;
+  final ProfileSignOut? signOut;
+  final WidgetBuilder? anamneseBuilder;
+  final WidgetBuilder? assessmentsBuilder;
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
@@ -27,9 +54,8 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage>
     with SingleTickerProviderStateMixin {
-  final AuthService _authService = AuthService();
-  final StorageService _storageService = StorageService();
-  final User? user = FirebaseAuth.instance.currentUser;
+  late final String? _userId;
+  Stream<Map<String, dynamic>?>? _profileStream;
   late TabController _tabController;
   bool _isUploading = false;
 
@@ -38,7 +64,30 @@ class _ProfilePageState extends State<ProfilePage>
   @override
   void initState() {
     super.initState();
+    _userId = widget.userId ?? FirebaseAuth.instance.currentUser?.uid;
+    _subscribeToProfile();
     _tabController = TabController(length: 3, vsync: this);
+  }
+
+  void _subscribeToProfile() {
+    final uid = _userId;
+    if (uid == null) return;
+
+    _profileStream = (widget.profileDataStream ?? _defaultProfileDataStream)(
+      uid,
+    );
+  }
+
+  Stream<Map<String, dynamic>?> _defaultProfileDataStream(String uid) {
+    return FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .snapshots()
+        .map((snapshot) => snapshot.exists ? snapshot.data() : null);
+  }
+
+  void _retryProfile() {
+    setState(_subscribeToProfile);
   }
 
   @override
@@ -60,7 +109,7 @@ class _ProfilePageState extends State<ProfilePage>
         return "--/--/----";
       }
       return DateFormat('dd/MM/yyyy').format(nascimento);
-    } catch (e) {
+    } catch (_) {
       return "--/--/----";
     }
   }
@@ -84,7 +133,7 @@ class _ProfilePageState extends State<ProfilePage>
         idade--;
       }
       return "$idade anos (${DateFormat('dd/MM/yyyy').format(nascimento)})";
-    } catch (e) {
+    } catch (_) {
       return "--";
     }
   }
@@ -110,11 +159,10 @@ class _ProfilePageState extends State<ProfilePage>
       },
     );
 
-    if (picked != null) {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user!.uid)
-          .update({'birthDate': picked});
+    if (picked == null) return;
+
+    try {
+      await (widget.birthDateUpdater ?? _updateBirthDate)(_userId!, picked);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -125,7 +173,24 @@ class _ProfilePageState extends State<ProfilePage>
           ),
         );
       }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Não foi possível atualizar a data. Tente novamente.',
+            ),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     }
+  }
+
+  Future<void> _updateBirthDate(String uid, DateTime birthDate) {
+    return FirebaseFirestore.instance.collection('users').doc(uid).update({
+      'birthDate': birthDate,
+    });
   }
 
   void _mostrarOpcoesFoto() {
@@ -175,27 +240,29 @@ class _ProfilePageState extends State<ProfilePage>
   }
 
   Future<void> _atualizarFoto(ImageSource source) async {
-    final picker = ImagePicker();
-
-    final pickedFile = await picker.pickImage(source: source, imageQuality: 50);
-
-    if (pickedFile == null) return;
-
-    final imagem = File(pickedFile.path);
-
     try {
+      final imagem = await (widget.imagePicker ?? _pickImage)(source);
+      if (imagem == null) return;
+
       setState(() => _isUploading = true);
 
-      await _storageService.uploadFotoPerfil(imagem);
+      await (widget.photoUploader ?? _uploadPhoto)(imagem);
 
       if (mounted) {
         setState(() {});
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Erro ao atualizar foto: $e')));
+        ).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Não foi possível atualizar a foto. Tente novamente.',
+            ),
+            backgroundColor: AppColors.error,
+          ),
+        );
       }
     } finally {
       if (mounted) {
@@ -204,10 +271,35 @@ class _ProfilePageState extends State<ProfilePage>
     }
   }
 
+  Future<File?> _pickImage(ImageSource source) async {
+    final pickedFile = await ImagePicker().pickImage(
+      source: source,
+      imageQuality: 50,
+    );
+    return pickedFile == null ? null : File(pickedFile.path);
+  }
+
+  Future<void> _uploadPhoto(File image) async {
+    await StorageService().uploadFotoPerfil(image);
+  }
+
+  Future<void> _signOut() async {
+    await AuthService().deslogar();
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (user == null) {
-      return const Scaffold(body: Center(child: Text("Usuário não logado.")));
+    final uid = _userId;
+    if (uid == null) {
+      return const Scaffold(
+        body: OkanMessageState(
+          icon: Icons.lock_outline,
+          title: 'Sessão encerrada',
+          description: 'Entre novamente para acessar seu perfil.',
+          isError: true,
+          announce: true,
+        ),
+      );
     }
 
     return Scaffold(
@@ -239,27 +331,49 @@ class _ProfilePageState extends State<ProfilePage>
         controller: _tabController,
         children: [
           _buildAccountTab(),
-          AnamneseTab(studentId: user!.uid, isEditable: true),
-          AssessmentsTab(studentId: user!.uid),
+          (widget.anamneseBuilder ??
+              (_) => AnamneseTab(studentId: uid, isEditable: true))(context),
+          (widget.assessmentsBuilder ??
+              (_) => AssessmentsTab(studentId: uid))(context),
         ],
       ),
     );
   }
 
   Widget _buildAccountTab() {
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('users')
-          .doc(user!.uid)
-          .snapshots(),
+    return StreamBuilder<Map<String, dynamic>?>(
+      stream: _profileStream,
       builder: (context, snapshot) {
-        if (!snapshot.hasData || !snapshot.data!.exists) {
-          return const Center(child: CircularProgressIndicator());
+        if (snapshot.hasError) {
+          return OkanMessageState(
+            icon: Icons.cloud_off_outlined,
+            title: 'Não foi possível carregar seu perfil',
+            description: 'Verifique sua conexão e tente novamente.',
+            actionLabel: 'Tentar novamente',
+            onAction: _retryProfile,
+            isError: true,
+            announce: true,
+          );
         }
 
-        final data = snapshot.data!.data() as Map<String, dynamic>;
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const OkanLoadingState(label: 'Carregando perfil');
+        }
 
-        final profile = UserModel.fromMap(data, snapshot.data!.id);
+        final data = snapshot.data;
+        if (data == null) {
+          return OkanMessageState(
+            icon: Icons.person_off_outlined,
+            title: 'Perfil indisponível',
+            description: 'Não encontramos seus dados de perfil.',
+            actionLabel: 'Tentar novamente',
+            onAction: _retryProfile,
+            isError: true,
+            announce: true,
+          );
+        }
+
+        final profile = UserModel.fromMap(data, _userId!);
 
         final String nome = profile.name.isNotEmpty ? profile.name : "Usuário";
 
@@ -289,33 +403,40 @@ class _ProfilePageState extends State<ProfilePage>
           child: Column(
             children: [
               if (precisaData)
-                GestureDetector(
+                Semantics(
+                  button: true,
+                  label: 'Adicionar data de nascimento',
                   onTap: _editarDataNascimento,
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 20),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.primary),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(
-                          Icons.warning_amber_rounded,
-                          color: AppColors.primary,
+                  child: ExcludeSemantics(
+                    child: GestureDetector(
+                      onTap: _editarDataNascimento,
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 20),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.primary),
                         ),
-                        SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            "Cadastro incompleto! Toque para adicionar sua Data de Nascimento.",
-                            style: TextStyle(
+                        child: const Row(
+                          children: [
+                            Icon(
+                              Icons.warning_amber_rounded,
                               color: AppColors.primary,
-                              fontWeight: FontWeight.bold,
                             ),
-                          ),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                "Cadastro incompleto! Toque para adicionar sua Data de Nascimento.",
+                                style: TextStyle(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -355,30 +476,43 @@ class _ProfilePageState extends State<ProfilePage>
                           ),
                         ),
                         if (_isUploading)
-                          const Positioned.fill(
-                            child: CircularProgressIndicator(
-                              color: AppColors.primary,
+                          Positioned.fill(
+                            child: Semantics(
+                              liveRegion: true,
+                              label: 'Atualizando foto do perfil',
+                              child: const ExcludeSemantics(
+                                child: CircularProgressIndicator(
+                                  color: AppColors.primary,
+                                ),
+                              ),
                             ),
                           ),
                         Positioned(
                           bottom: 0,
                           right: 0,
-                          child: GestureDetector(
+                          child: Semantics(
+                            button: true,
+                            label: 'Alterar foto do perfil',
                             onTap: _mostrarOpcoesFoto,
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: AppColors.primary,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: AppColors.background,
-                                  width: 3,
+                            child: ExcludeSemantics(
+                              child: GestureDetector(
+                                onTap: _mostrarOpcoesFoto,
+                                child: Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: AppColors.background,
+                                      width: 3,
+                                    ),
+                                  ),
+                                  child: const Icon(
+                                    Icons.camera_alt,
+                                    size: 18,
+                                    color: Colors.black,
+                                  ),
                                 ),
-                              ),
-                              child: const Icon(
-                                Icons.camera_alt,
-                                size: 18,
-                                color: Colors.black,
                               ),
                             ),
                           ),
@@ -465,7 +599,7 @@ class _ProfilePageState extends State<ProfilePage>
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => PersonalDataPage(uid: user!.uid),
+                    builder: (context) => PersonalDataPage(uid: _userId!),
                   ),
                 ),
               ),
@@ -478,7 +612,7 @@ class _ProfilePageState extends State<ProfilePage>
                   context,
                   MaterialPageRoute(
                     builder: (context) => WorkoutHistoryPage(
-                      studentId: user!.uid,
+                      studentId: _userId!,
                       studentName: nome,
                     ),
                   ),
@@ -527,7 +661,7 @@ class _ProfilePageState extends State<ProfilePage>
                 title: "Sair da Conta",
                 isDestructive: true,
                 onTap: () async {
-                  await _authService.deslogar();
+                  await (widget.signOut ?? _signOut)();
                   if (mounted) {
                     Navigator.pushAndRemoveUntil(
                       context,
@@ -553,35 +687,38 @@ class _ProfilePageState extends State<ProfilePage>
     required VoidCallback onTap,
     bool isDestructive = false,
   }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Material(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
-      ),
-      child: ListTile(
-        leading: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: Colors.white.withOpacity(0.05)),
+        ),
+        child: ListTile(
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: color),
           ),
-          child: Icon(icon, color: color),
-        ),
-        title: Text(
-          title,
-          style: TextStyle(
-            color: isDestructive ? AppColors.error : Colors.white,
-            fontWeight: isDestructive ? FontWeight.bold : FontWeight.normal,
+          title: Text(
+            title,
+            style: TextStyle(
+              color: isDestructive ? AppColors.error : Colors.white,
+              fontWeight: isDestructive ? FontWeight.bold : FontWeight.normal,
+            ),
           ),
+          trailing: const Icon(
+            Icons.arrow_forward_ios,
+            size: 16,
+            color: Colors.white30,
+          ),
+          onTap: onTap,
         ),
-        trailing: const Icon(
-          Icons.arrow_forward_ios,
-          size: 16,
-          color: Colors.white30,
-        ),
-        onTap: onTap,
       ),
     );
   }
