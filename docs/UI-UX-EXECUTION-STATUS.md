@@ -19,17 +19,18 @@ Estados permitidos:
 |---|---|
 | Repositório | `arthurcmps/okan_app` |
 | Branch canônica | `main` |
-| SHA do baseline | `180108fa743c36205400d876539c5a7c086540da` |
+| SHA do baseline | `482a38f131b8758530106e2f006bae2f2809f1b6` |
 | Data do baseline | 11 de setembro de 2026 |
 | Versão declarada | `1.0.1+10` |
 | Flutter do CI | `3.47.0`, canal stable |
 | Ambiente manual | DEV local, projeto sintético `demo-okan-dev` |
-| Última suíte observada | GitHub Actions, execução 149, aprovada na PR 57 |
+| Última suíte observada | GitHub Actions, execução 160, aprovada na PR 58 |
 | Referência de distribuição | build `1.0.1+10`; confirmar o estado da revisão na Play Console antes de promover novas mudanças |
 
-Este SHA foi escolhido após a aprovação da matriz integrada da UX-05 e da
-correção das regressões de amizades e saguão da Arena na PR 57. Ele é a
-referência estável para comparar as próximas mudanças visuais do aplicativo.
+Este SHA foi escolhido após a conclusão da UX-09, incluindo a correção das
+regressões de amizades e saguão na PR 57 e a validação integrada da sala do
+duelo e do placar seguro na PR 58. Ele é a referência estável para comparar
+as próximas mudanças visuais do aplicativo.
 
 ### 2.1 Comandos reproduzíveis
 
@@ -89,7 +90,7 @@ O app deve exibir `DEV • LOCAL`. Dados criados neste teste devem existir somen
 | Matriz integrada da UX-05 | validado | catálogo, templates, treinos, avaliações, vídeo, fonte 200% e TalkBack aprovados no `main` após a PR 50 |
 | Offline | validado | cache, rascunho e reconexão automática aprovados em Android físico com emuladores locais |
 | Sessão expirada | validado | gate reativo, mensagem segura, Flutter CI 132 e smoke manual aprovados na PR 52 |
-| Arena: amizades, convites e saguão | validado | regressões da PR 56 isoladas e corrigidas; Flutter CI 149 e roteiro manual aprovados na PR 57 |
+| Arena: amizades, convites, saguão e sala do duelo | validado | PRs 57 e 58; Flutter CI 160, placar com dois participantes e roteiro integrado aprovados em DEV |
 
 “Validado” significa que o fluxo foi exercitado sem regressão conhecida na rodada indicada. Não substitui a matriz completa do release nem autoriza promoção automática para PROD.
 
@@ -123,7 +124,7 @@ Não registrar exceções, UID, e-mail, senha, token, payload ou dado de saúde 
 | UX-06 Dashboard | in progress | PRs web 8, 9 e 10; smoke autenticado executado em STAGING após a PR 11 | concluir a arquitetura do menu móvel e repetir a matriz de acessibilidade em celular e desktop |
 | UX-07 Home | done | PRs 28 e 29 | manter cobertura nas próximas regressões |
 | UX-08 Onboarding | done | PR 30 | manter cobertura nas próximas regressões |
-| UX-09 Estados/acessibilidade | in progress | PRs 31 a 35, 52 a 55 e 57; offline, sessão expirada, Informações Pessoais, Perfil, Assinatura e saguão da Arena aprovados em DEV | concluir e validar a sala do duelo da Arena |
+| UX-09 Estados/acessibilidade | done | PRs 31 a 35, 52 a 55, 57 e 58; estados transversais e Arena aprovados em DEV, com agregação segura do placar na PR backend 22 | manter a matriz de estados, acessibilidade e ações duplicadas na regressão contínua |
 | UX-10 Piloto/rollout | blocked | validações internas pontuais | concluir itens selecionados em STAGING, preparar roteiro, participantes, evidências e métricas |
 
 ## 6. Evidências por Pull Request
@@ -155,6 +156,7 @@ Não registrar exceções, UID, e-mail, senha, token, payload ou dado de saúde 
 - [PR 54 - estados de Meu Perfil](https://github.com/arthurcmps/okan_app/pull/54)
 - [PR 55 - estados de Assinatura e Planos](https://github.com/arthurcmps/okan_app/pull/55)
 - [PR 57 - regressões de amizades e saguão da Arena](https://github.com/arthurcmps/okan_app/pull/57)
+- [PR 58 - estados da sala do duelo e placar agregado](https://github.com/arthurcmps/okan_app/pull/58)
 
 ### Painel web
 
@@ -223,15 +225,38 @@ A UX-05 foi concluída em 10 de setembro de 2026 com código e validação integ
 Offline e sessão expirada permanecem fora deste encerramento e pertencem à
 UX-09.
 
-## 11. Próxima ordem segura
+## 11. Encerramento da UX-09
 
-1. concluir a auditoria das telas residuais da UX-09;
-2. concluir a arquitetura móvel da UX-06 e repetir a matriz mínima em STAGING;
-3. iniciar UX-10 somente com os gates anteriores registrados.
+A UX-09 foi concluída em 11 de setembro de 2026 com código e validação
+integrados:
+
+- histórico, chat, avaliações e notificações receberam estados e feedback nas
+  PRs 32 a 35;
+- offline e sessão expirada foram validados na PR 52;
+- Informações Pessoais, Perfil e Assinatura foram cobertos nas PRs 53 a 55;
+- amizades, convites e saguão da Arena foram estabilizados na PR 57;
+- a sala do duelo, o placar, o mural e as ações em processamento foram
+  concluídos na PR 58;
+- o ranking passou a ser agregado com autorização no backend pela PR 22,
+  sem liberar o histórico bruto dos amigos;
+- Flutter CI 160, Functions CI 47, Firebase Rules CI 43, lint e 278 testes do
+  backend foram aprovados;
+- o roteiro integrado passou em Android físico com dois participantes,
+  amizade, placar, reabertura da Arena e criação de duelo;
+- nenhuma implantação ou alteração direta foi realizada em PROD.
+
+Os estados e fluxos concluídos permanecem na regressão contínua e devem ser
+reavaliados quando uma tela ou contrato relacionado mudar.
+
+## 12. Próxima ordem segura
+
+1. concluir a arquitetura móvel da UX-06 e repetir a matriz mínima em STAGING;
+2. executar a regressão final dos itens selecionados em celular e desktop;
+3. preparar a UX-10 com participantes, roteiro, evidências e métricas.
 
 A UX-02 removeu o bloqueio de ambiente para o dashboard. Toda próxima mudança estrutural do web ainda deve passar por build, verificação, deploy explícito e smoke autenticado no projeto STAGING antes de qualquer promoção para PROD.
 
-## 12. Matriz de regressão visual da UX-01
+## 13. Matriz de regressão visual da UX-01
 
 O baseline essencial está concluído. Nas próximas PRs visuais, selecionar as linhas pertinentes desta matriz e comparar o mesmo estado antes/depois usando somente dados sintéticos.
 
@@ -245,6 +270,6 @@ O baseline essencial está concluído. Nas próximas PRs visuais, selecionar as 
 
 Não incluir credenciais, endereços de e-mail reais, nomes reais, dados médicos ou identificadores internos.
 
-## 13. Rollback documental
+## 14. Rollback documental
 
 Este arquivo não altera execução, dados ou configuração. Se alguma referência estiver incorreta, corrigir o registro em nova PR preservando o histórico; não reescrever evidências de forma silenciosa.
