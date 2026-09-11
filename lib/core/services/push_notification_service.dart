@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../../features/auth/presentation/pages/notifications_page.dart';
+import '../../features/arena/presentation/pages/arena_page.dart';
 import 'client_compatibility_service.dart';
 
 class PushNotificationService {
@@ -129,7 +130,20 @@ class PushNotificationService {
     debugPrint('Redirecionando pelo tipo: $type, ID: $actionId');
 
     if (_navigatorKey != null && _navigatorKey!.currentState != null) {
-      if (type == 'invite' || type == 'workout_update' || type == 'message' || type == 'workout') {
+      if (type == 'arena') {
+        final initialTab = arenaInitialTabFor(
+          actionId: actionId,
+          title: message.notification?.title ?? '',
+        );
+        _navigatorKey!.currentState!.push(
+          MaterialPageRoute<void>(
+            builder: (_) => ArenaPage(initialTab: initialTab),
+          ),
+        );
+      } else if (type == 'invite' ||
+          type == 'workout_update' ||
+          type == 'message' ||
+          type == 'workout') {
         _navigatorKey!.currentState!.push(
           MaterialPageRoute(builder: (context) => const NotificationsPage()),
         );

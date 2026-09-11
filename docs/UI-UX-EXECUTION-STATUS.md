@@ -120,7 +120,7 @@ Não registrar exceções, UID, e-mail, senha, token, payload ou dado de saúde 
 | UX-06 Dashboard | in progress | PRs web 8, 9 e 10; smoke autenticado executado em STAGING após a PR 11 | concluir a arquitetura do menu móvel e repetir a matriz de acessibilidade em celular e desktop |
 | UX-07 Home | done | PRs 28 e 29 | manter cobertura nas próximas regressões |
 | UX-08 Onboarding | done | PR 30 | manter cobertura nas próximas regressões |
-| UX-09 Estados/acessibilidade | in progress | PRs 31 a 35 e 52 a 54; offline, sessão expirada, Informações Pessoais e Perfil aprovados em DEV | concluir Assinatura e Arena |
+| UX-09 Estados/acessibilidade | in progress | PRs 31 a 35 e 52 a 55; offline, sessão expirada, Informações Pessoais, Perfil e Assinatura aprovados em DEV | concluir o saguão e a sala do duelo da Arena |
 | UX-10 Piloto/rollout | blocked | validações internas pontuais | concluir itens selecionados em STAGING, preparar roteiro, participantes, evidências e métricas |
 
 ## 6. Evidências por Pull Request
@@ -150,6 +150,7 @@ Não registrar exceções, UID, e-mail, senha, token, payload ou dado de saúde 
 - [PR 52 - offline e gate reativo de sessão](https://github.com/arthurcmps/okan_app/pull/52)
 - [PR 53 - estados de Informações Pessoais](https://github.com/arthurcmps/okan_app/pull/53)
 - [PR 54 - estados de Meu Perfil](https://github.com/arthurcmps/okan_app/pull/54)
+- [PR 55 - estados de Assinatura e Planos](https://github.com/arthurcmps/okan_app/pull/55)
 
 ### Painel web
 

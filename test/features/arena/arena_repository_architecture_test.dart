@@ -48,6 +48,8 @@ void main() {
       expect(source, contains(path), reason: path);
     }
     expect(source, contains('StorageService'));
+    expect(source, contains("where('requesterId', isEqualTo: uid)"));
+    expect(source, contains("where('receiverId', isEqualTo: uid)"));
   });
 
   test('legacy Arena path is compatibility export', () {
