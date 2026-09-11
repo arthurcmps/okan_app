@@ -7,6 +7,18 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:http/http.dart' as http;
 import '../../../../core/config/app_environment.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/okan_async_state.dart';
+
+typedef SubscriptionDataStream =
+    Stream<Map<String, dynamic>?> Function(String uid);
+typedef SubscriptionCancellationRequester =
+    Future<SubscriptionCancellationResult> Function();
+
+class SubscriptionCancellationResult {
+  const SubscriptionCancellationResult({required this.alreadyInactive});
+
+  final bool alreadyInactive;
+}
 
 bool _premiumValue(dynamic value) {
   if (value == true) return true;
@@ -19,7 +31,16 @@ bool _premiumValue(dynamic value) {
 }
 
 class ProfessorSubscriptionPage extends StatefulWidget {
-  const ProfessorSubscriptionPage({super.key});
+  const ProfessorSubscriptionPage({
+    super.key,
+    this.userId,
+    this.subscriptionDataStream,
+    this.requestCancellation,
+  });
+
+  final String? userId;
+  final SubscriptionDataStream? subscriptionDataStream;
+  final SubscriptionCancellationRequester? requestCancellation;
 
   @override
   State<ProfessorSubscriptionPage> createState() =>
@@ -27,11 +48,46 @@ class ProfessorSubscriptionPage extends StatefulWidget {
 }
 
 class _ProfessorSubscriptionPageState extends State<ProfessorSubscriptionPage> {
-  final user = FirebaseAuth.instance.currentUser;
+  User? _currentUser;
+  String? _userId;
+  Stream<Map<String, dynamic>?>? _subscriptionStream;
   bool _isLoading = false;
 
   final String _mercadoPagoPublicKey =
       "TEST-13b66d79-52ea-410d-9efb-57db088806b4";
+
+  @override
+  void initState() {
+    super.initState();
+
+    if (widget.userId != null) {
+      _userId = widget.userId;
+    } else {
+      _currentUser = FirebaseAuth.instance.currentUser;
+      _userId = _currentUser?.uid;
+    }
+    _subscribeToPlan();
+  }
+
+  void _subscribeToPlan() {
+    final uid = _userId;
+    if (uid == null) return;
+
+    _subscriptionStream =
+        (widget.subscriptionDataStream ?? _defaultSubscriptionDataStream)(uid);
+  }
+
+  Stream<Map<String, dynamic>?> _defaultSubscriptionDataStream(String uid) {
+    return FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .snapshots()
+        .map((snapshot) => snapshot.exists ? snapshot.data() : null);
+  }
+
+  void _retryPlan() {
+    setState(_subscribeToPlan);
+  }
 
   Future<void> _abrirCheckout(String planoNome, double preco) async {
     if (!OkanEnvironmentConfig.current.enableExternalPayments) {
@@ -41,6 +97,19 @@ class _ProfessorSubscriptionPageState extends State<ProfessorSubscriptionPage> {
             content: Text(
               "Pagamentos externos estão desativados no ambiente DEV.",
             ),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+      return;
+    }
+
+    final currentUser = _currentUser ?? FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Entre novamente para continuar.'),
             backgroundColor: AppColors.error,
           ),
         );
@@ -62,16 +131,17 @@ class _ProfessorSubscriptionPageState extends State<ProfessorSubscriptionPage> {
           planoNome: planoNome,
           preco: preco,
           publicKey: _mercadoPagoPublicKey,
-          usuarioAtual: user!,
+          usuarioAtual: currentUser,
         ),
       ),
     );
   }
 
   Future<void> _cancelarAssinatura() async {
-    showDialog(
+    await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
+        scrollable: true,
         backgroundColor: AppColors.surface,
         title: const Text(
           "Solicitar cancelamento?",
@@ -99,23 +169,14 @@ class _ProfessorSubscriptionPageState extends State<ProfessorSubscriptionPage> {
               }
 
               try {
-                await FirebaseAuth.instance.currentUser?.getIdToken(true);
-
-                final callable = FirebaseFunctions.instanceFor(
-                  region: 'us-central1',
-                ).httpsCallable('solicitarCancelamentoAssinatura');
-
-                final result = await callable.call();
-
-                final data = Map<String, dynamic>.from(result.data as Map);
-
-                final alreadyInactive = data['alreadyInactive'] == true;
+                final result = await (widget.requestCancellation ??
+                    _requestCancellation)();
 
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                        alreadyInactive
+                        result.alreadyInactive
                             ? "A assinatura já está inativa."
                             : "Solicitação de cancelamento registrada.",
                       ),
@@ -123,11 +184,14 @@ class _ProfessorSubscriptionPageState extends State<ProfessorSubscriptionPage> {
                     ),
                   );
                 }
-              } catch (e) {
+              } catch (_) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text("Erro ao solicitar cancelamento: $e"),
+                    const SnackBar(
+                      content: Text(
+                        "Não foi possível solicitar o cancelamento. "
+                        "Tente novamente.",
+                      ),
                       backgroundColor: AppColors.error,
                     ),
                   );
@@ -151,9 +215,33 @@ class _ProfessorSubscriptionPageState extends State<ProfessorSubscriptionPage> {
     );
   }
 
+  Future<SubscriptionCancellationResult> _requestCancellation() async {
+    await FirebaseAuth.instance.currentUser?.getIdToken(true);
+
+    final callable = FirebaseFunctions.instanceFor(
+      region: 'us-central1',
+    ).httpsCallable('solicitarCancelamentoAssinatura');
+    final result = await callable.call();
+    final data = Map<String, dynamic>.from(result.data as Map);
+
+    return SubscriptionCancellationResult(
+      alreadyInactive: data['alreadyInactive'] == true,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (user == null) return const Scaffold();
+    if (_userId == null) {
+      return const Scaffold(
+        body: OkanMessageState(
+          icon: Icons.lock_outline,
+          title: 'Sessão encerrada',
+          description: 'Entre novamente para consultar seus planos.',
+          isError: true,
+          announce: true,
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -166,18 +254,38 @@ class _ProfessorSubscriptionPageState extends State<ProfessorSubscriptionPage> {
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
-      body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('users')
-            .doc(user!.uid)
-            .snapshots(),
+      body: StreamBuilder<Map<String, dynamic>?>(
+        stream: _subscriptionStream,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting)
-            return const Center(
-              child: CircularProgressIndicator(color: AppColors.primary),
+          if (snapshot.hasError) {
+            return OkanMessageState(
+              icon: Icons.cloud_off_outlined,
+              title: 'Não foi possível carregar seus planos',
+              description: 'Verifique sua conexão e tente novamente.',
+              actionLabel: 'Tentar novamente',
+              onAction: _retryPlan,
+              isError: true,
+              announce: true,
             );
+          }
 
-          final userData = snapshot.data?.data() as Map<String, dynamic>? ?? {};
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const OkanLoadingState(label: 'Carregando planos');
+          }
+
+          final userData = snapshot.data;
+          if (userData == null) {
+            return OkanMessageState(
+              icon: Icons.workspace_premium_outlined,
+              title: 'Planos indisponíveis',
+              description: 'Não encontramos os dados da sua assinatura.',
+              actionLabel: 'Tentar novamente',
+              onAction: _retryPlan,
+              isError: true,
+              announce: true,
+            );
+          }
+
           final isPremium = _premiumValue(userData['isPremium']);
 
           return SingleChildScrollView(
@@ -321,8 +429,9 @@ class _ProfessorSubscriptionPageState extends State<ProfessorSubscriptionPage> {
             ),
           ),
           const SizedBox(height: 8),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.end,
+            spacing: 4,
             children: [
               Text(
                 preco,
@@ -367,35 +476,47 @@ class _ProfessorSubscriptionPageState extends State<ProfessorSubscriptionPage> {
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
-            height: 50,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isAtivo
-                    ? corDestaque.withOpacity(0.1)
-                    : corDestaque,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 50),
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isAtivo
+                      ? corDestaque.withOpacity(0.1)
+                      : corDestaque,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                ),
+                onPressed: onPressed,
+                child: _isLoading && !isAtivo
+                    ? Semantics(
+                        liveRegion: true,
+                        label: 'Solicitando cancelamento',
+                        child: const ExcludeSemantics(
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.black,
+                              strokeWidth: 2,
+                            ),
+                          ),
+                        ),
+                      )
+                    : Text(
+                        botaoTexto,
+                        style: TextStyle(
+                          color: isAtivo ? corDestaque : Colors.black,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                 ),
               ),
-              onPressed: onPressed,
-              child: _isLoading && !isAtivo
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        color: Colors.black,
-                        strokeWidth: 2,
-                      ),
-                    )
-                  : Text(
-                      botaoTexto,
-                      style: TextStyle(
-                        color: isAtivo ? corDestaque : Colors.black,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
             ),
-          ),
         ],
       ),
     );
