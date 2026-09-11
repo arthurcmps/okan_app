@@ -72,9 +72,13 @@ jobs:
         if: always()
         run: flutter test test/features/arena/duel_room_states_test.dart --plain-name "shows a safe comments error and retries inside the sheet"
 
-      - name: Test duel responsive layout
+      - name: Test duel responsive ranking
         if: always()
-        run: flutter test test/features/arena/duel_room_states_test.dart --plain-name "supports a small screen and 200 percent text"
+        run: flutter test test/features/arena/duel_room_states_test.dart --plain-name "supports ranking on a small screen and 200 percent text"
+
+      - name: Test duel responsive wall
+        if: always()
+        run: flutter test test/features/arena/duel_room_states_test.dart --plain-name "supports the wall on a small screen and 200 percent text"
 
       - name: Test duel unavailable session
         if: always()

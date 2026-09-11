@@ -327,7 +327,9 @@ void main() {
     expect(find.text('Nenhum comentário ainda'), findsOneWidget);
   });
 
-  testWidgets('supports a small screen and 200 percent text', (tester) async {
+  testWidgets('supports ranking on a small screen and 200 percent text', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(320, 640);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -340,7 +342,6 @@ void main() {
           delta: 12,
         ),
       ],
-      postsFactory: () => Stream.value(<ArenaPost>[wallPost()]),
     );
 
     await tester.pumpWidget(testApp(repository, textScale: 2));
@@ -348,6 +349,21 @@ void main() {
 
     expect(find.text('Amiga Sintética com Nome Extenso'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('supports the wall on a small screen and 200 percent text', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final repository = _FakeArenaRepository(
+      postsFactory: () => Stream.value(<ArenaPost>[wallPost()]),
+    );
+
+    await tester.pumpWidget(testApp(repository, textScale: 2));
+    await tester.pumpAndSettle();
 
     await openWall(tester);
 
