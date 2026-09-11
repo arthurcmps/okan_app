@@ -24,9 +24,14 @@ String getNomeMetricaGlobal(String metric) {
 }
 
 class ArenaPage extends StatefulWidget {
-  const ArenaPage({super.key, this.repository});
+  const ArenaPage({
+    super.key,
+    this.repository,
+    this.initialTab = 0,
+  }) : assert(initialTab >= 0 && initialTab < 4);
 
   final ArenaRepository? repository;
+  final int initialTab;
 
   @override
   State<ArenaPage> createState() => _ArenaPageState();
@@ -63,7 +68,11 @@ class _ArenaPageState extends State<ArenaPage>
       _friendsStream = _repository.watchFriends();
       _friendRequestsStream = _repository.watchPendingFriendRequests();
     }
-    _tabController = TabController(length: 4, vsync: this)
+    _tabController = TabController(
+      length: 4,
+      initialIndex: widget.initialTab,
+      vsync: this,
+    )
       ..addListener(() {
         if (mounted) setState(() {});
       });

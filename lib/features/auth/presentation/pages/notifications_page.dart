@@ -7,19 +7,44 @@ import '../../../notifications/data/repositories/firebase_notifications_reposito
 import '../../../notifications/domain/entities/notification_models.dart';
 import '../../../notifications/domain/repositories/notifications_repository.dart';
 import '../../data/services/professional_relationships_service.dart';
+import 'arena_page.dart';
 import 'chat_page.dart';
 import 'student_detail_page.dart';
 import 'weekly_plan_page.dart';
+
+typedef ArenaDestinationBuilder = Widget Function(int initialTab);
+
+int arenaInitialTabFor({String? actionId, String title = ''}) {
+  switch (actionId) {
+    case 'friends':
+      return 1;
+    case 'friend_invites':
+    case 'challenge_invites':
+      return 3;
+    case 'duels':
+      return 0;
+  }
+
+  final normalizedTitle = title.toLowerCase();
+  if (normalizedTitle.contains('convite aceito')) return 1;
+  if (normalizedTitle.contains('convite') ||
+      normalizedTitle.contains('desafiado')) {
+    return 3;
+  }
+  return 0;
+}
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({
     super.key,
     this.repository,
     this.userId,
+    this.arenaDestinationBuilder,
   });
 
   final NotificationsRepository? repository;
   final String? userId;
+  final ArenaDestinationBuilder? arenaDestinationBuilder;
 
   @override
   State<NotificationsPage> createState() => _NotificationsPageState();
@@ -552,6 +577,20 @@ class _NotificationsPageState extends State<NotificationsPage> {
             ),
           );
         }
+        break;
+
+      case 'arena':
+        final initialTab = arenaInitialTabFor(
+          actionId: notification.actionId,
+          title: notification.title,
+        );
+        Navigator.push(
+          context,
+          MaterialPageRoute<void>(
+            builder: (_) => widget.arenaDestinationBuilder?.call(initialTab) ??
+                ArenaPage(initialTab: initialTab),
+          ),
+        );
         break;
     }
   }

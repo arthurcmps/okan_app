@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -121,6 +122,7 @@ class FirebaseArenaRepository implements ArenaRepository {
       targetUserId: candidate.id,
       title: 'Novo Convite na Arena 🤝',
       body: '${me.name} quer adicionar você como amigo!',
+      actionId: 'friend_invites',
     );
   }
 
@@ -144,6 +146,7 @@ class FirebaseArenaRepository implements ArenaRepository {
       targetUserId: requesterId,
       title: 'Convite Aceito! ⚔️',
       body: '${me.name} agora é seu amigo na Arena Okan.',
+      actionId: 'friends',
     );
   }
 
@@ -155,34 +158,92 @@ class FirebaseArenaRepository implements ArenaRepository {
   @override
   Stream<List<ArenaFriendship>> watchFriends() {
     final uid = _requiredUid;
-    return _firestore
+    final requested = _firestore
         .collection('friendships')
+        .where('requesterId', isEqualTo: uid)
         .where('status', isEqualTo: 'accepted')
-        .snapshots()
-        .map((snapshot) {
-          final result = <ArenaFriendship>[];
-          for (final document in snapshot.docs) {
-            final data = document.data();
-            final requesterId = _string(data['requesterId']);
-            final receiverId = _string(data['receiverId']);
-            if (requesterId != uid && receiverId != uid) continue;
-            final meRequested = requesterId == uid;
-            result.add(
-              ArenaFriendship(
-                id: document.id,
-                otherUserId: meRequested ? receiverId : requesterId,
-                otherUserName: _string(
-                  meRequested ? data['receiverName'] : data['requesterName'],
-                  fallback: 'Atleta',
-                ),
-                otherUserPhoto: _nullableString(
-                  meRequested ? data['receiverPhoto'] : data['requesterPhoto'],
-                ),
-              ),
-            );
-          }
-          return result;
-        });
+        .snapshots();
+    final received = _firestore
+        .collection('friendships')
+        .where('receiverId', isEqualTo: uid)
+        .where('status', isEqualTo: 'accepted')
+        .snapshots();
+
+    late final StreamController<List<ArenaFriendship>> controller;
+    StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? requestedSub;
+    StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? receivedSub;
+    QuerySnapshot<Map<String, dynamic>>? requestedSnapshot;
+    QuerySnapshot<Map<String, dynamic>>? receivedSnapshot;
+
+    void emitFriendships() {
+      final sent = requestedSnapshot;
+      final incoming = receivedSnapshot;
+      if (sent == null || incoming == null || controller.isClosed) return;
+
+      controller.add([
+        ...sent.docs.map(
+          (document) => _friendshipFromDocument(
+            document,
+            currentUserIsRequester: true,
+          ),
+        ),
+        ...incoming.docs.map(
+          (document) => _friendshipFromDocument(
+            document,
+            currentUserIsRequester: false,
+          ),
+        ),
+      ]);
+    }
+
+    void addError(Object error, StackTrace stackTrace) {
+      if (!controller.isClosed) controller.addError(error, stackTrace);
+    }
+
+    controller = StreamController<List<ArenaFriendship>>(
+      onListen: () {
+        requestedSub = requested.listen(
+          (snapshot) {
+            requestedSnapshot = snapshot;
+            emitFriendships();
+          },
+          onError: addError,
+        );
+        receivedSub = received.listen(
+          (snapshot) {
+            receivedSnapshot = snapshot;
+            emitFriendships();
+          },
+          onError: addError,
+        );
+      },
+      onCancel: () async {
+        await requestedSub?.cancel();
+        await receivedSub?.cancel();
+      },
+    );
+
+    return controller.stream;
+  }
+
+  ArenaFriendship _friendshipFromDocument(
+    QueryDocumentSnapshot<Map<String, dynamic>> document, {
+    required bool currentUserIsRequester,
+  }) {
+    final data = document.data();
+    return ArenaFriendship(
+      id: document.id,
+      otherUserId: _string(
+        currentUserIsRequester ? data['receiverId'] : data['requesterId'],
+      ),
+      otherUserName: _string(
+        currentUserIsRequester ? data['receiverName'] : data['requesterName'],
+        fallback: 'Atleta',
+      ),
+      otherUserPhoto: _nullableString(
+        currentUserIsRequester ? data['receiverPhoto'] : data['requesterPhoto'],
+      ),
+    );
   }
 
   @override
@@ -292,6 +353,7 @@ class FirebaseArenaRepository implements ArenaRepository {
       targetUserId: challenge.creatorId,
       title: 'Novo Gladiador na Arena! ⚔️',
       body: '${me.name} acabou de aceitar o seu desafio.',
+      actionId: 'duels',
     );
   }
 
@@ -342,6 +404,7 @@ class FirebaseArenaRepository implements ArenaRepository {
         targetUserId: friend.otherUserId,
         title: 'Você foi desafiado! 🛡️',
         body: '${me.name} montou uma Arena de $label.',
+        actionId: 'challenge_invites',
       );
     }
   }
@@ -419,6 +482,7 @@ class FirebaseArenaRepository implements ArenaRepository {
     required String targetUserId,
     required String title,
     required String body,
+    String? actionId,
   }) async {
     if (targetUserId == _requiredUid) return;
     await _firestore
@@ -429,6 +493,7 @@ class FirebaseArenaRepository implements ArenaRepository {
           'type': 'arena',
           'title': title,
           'body': body,
+          if (actionId != null) 'actionId': actionId,
           'isRead': false,
           'timestamp': FieldValue.serverTimestamp(),
         });

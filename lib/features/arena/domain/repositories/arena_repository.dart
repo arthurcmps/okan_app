@@ -35,6 +35,7 @@ abstract interface class ArenaRepository {
     required String targetUserId,
     required String title,
     required String body,
+    String? actionId,
   });
 
   Future<void> cleanupChallengeImages(ArenaChallenge challenge);

@@ -17,6 +17,9 @@ alterar amizades, convites, duelos, ranking ou contratos Firebase.
 - diálogos de saída e remoção roláveis com fonte ampliada;
 - busca adaptável a tela pequena e fonte a 200%;
 - streams preservados durante troca de abas e mudanças de estado locais.
+- notificações da Arena direcionadas para a aba correspondente, inclusive para
+  registros antigos sem destino explícito;
+- amizades aceitas consultadas nos dois papéis permitidos pelas Security Rules.
 
 ## Fora do escopo
 
@@ -33,6 +36,7 @@ alterar amizades, convites, duelos, ranking ou contratos Firebase.
 - falha de busca sem vazamento de detalhe técnico;
 - sessão ausente explícita;
 - saguão em `320 × 480` com fonte a 200%.
+- navegação de notificações de convite e amizade aceita para a aba correta.
 
 ## Roteiro manual em DEV
 

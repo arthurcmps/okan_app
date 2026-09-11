@@ -54,12 +54,16 @@ class _FakeNotificationsRepository implements NotificationsRepository {
 }
 
 void main() {
-  Widget testApp(_FakeNotificationsRepository repository) {
+  Widget testApp(
+    _FakeNotificationsRepository repository, {
+    ArenaDestinationBuilder? arenaDestinationBuilder,
+  }) {
     return MaterialApp(
       theme: ThemeData.dark(useMaterial3: true),
       home: NotificationsPage(
         repository: repository,
         userId: 'student-1',
+        arenaDestinationBuilder: arenaDestinationBuilder,
       ),
     );
   }
@@ -180,5 +184,83 @@ void main() {
     );
     expect(find.textContaining('token=secret'), findsNothing);
     expect(tester.widget<IconButton>(find.byKey(actionKey)).onPressed, isNotNull);
+  });
+
+  testWidgets('opens Arena invites from legacy friend notification', (
+    tester,
+  ) async {
+    const notification = OkanNotification(
+      id: 'arena-invite',
+      type: 'arena',
+      title: 'Novo Convite na Arena 🤝',
+      body: 'Atleta Sintético quer adicionar você como amigo!',
+      senderName: 'Atleta Sintético',
+      actionId: null,
+      studentId: null,
+      isRead: true,
+      occurredAt: null,
+    );
+    final repository = _FakeNotificationsRepository(
+      invitesStreamFactory: () =>
+          Stream.value(const <PendingTrainerInvite>[]),
+      notificationsStreamFactory: () => Stream.value(const [notification]),
+    );
+    var openedTab = -1;
+
+    await tester.pumpWidget(
+      testApp(
+        repository,
+        arenaDestinationBuilder: (initialTab) {
+          openedTab = initialTab;
+          return Text('Arena aberta na aba $initialTab');
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text(notification.title));
+    await tester.tap(find.text(notification.title));
+    await tester.pumpAndSettle();
+
+    expect(openedTab, 3);
+    expect(find.text('Arena aberta na aba 3'), findsOneWidget);
+  });
+
+  testWidgets('opens Arena friends from accepted notification action', (
+    tester,
+  ) async {
+    const notification = OkanNotification(
+      id: 'arena-friend-accepted',
+      type: 'arena',
+      title: 'Convite Aceito! ⚔️',
+      body: 'Agora vocês são amigos.',
+      senderName: 'Atleta Sintético',
+      actionId: 'friends',
+      studentId: null,
+      isRead: true,
+      occurredAt: null,
+    );
+    final repository = _FakeNotificationsRepository(
+      invitesStreamFactory: () =>
+          Stream.value(const <PendingTrainerInvite>[]),
+      notificationsStreamFactory: () => Stream.value(const [notification]),
+    );
+    var openedTab = -1;
+
+    await tester.pumpWidget(
+      testApp(
+        repository,
+        arenaDestinationBuilder: (initialTab) {
+          openedTab = initialTab;
+          return Text('Arena aberta na aba $initialTab');
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text(notification.title));
+    await tester.tap(find.text(notification.title));
+    await tester.pumpAndSettle();
+
+    expect(openedTab, 1);
+    expect(find.text('Arena aberta na aba 1'), findsOneWidget);
   });
 }

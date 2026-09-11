@@ -227,4 +227,20 @@ void main() {
     expect(find.text('Sessão encerrada'), findsOneWidget);
     expect(find.text('Entre novamente para acessar a Arena.'), findsOneWidget);
   });
+
+  testWidgets('opens the requested Arena tab', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData.dark(useMaterial3: true),
+        home: ArenaPage(
+          repository: _FakeArenaRepository(),
+          initialTab: 3,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Convites de Duelo ⚔️'), findsOneWidget);
+    expect(find.text('Pedidos de Amizade 🤝'), findsOneWidget);
+  });
 }
