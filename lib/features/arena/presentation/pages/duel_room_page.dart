@@ -162,10 +162,14 @@ class _DuelRoomPageState extends State<DuelRoomPage>
         elevation: 0,
         title: Text(
           'Duelo de ${getNomeMetricaGlobal(widget.challenge.metric)}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: const TextStyle(color: Colors.white, fontSize: 16),
         ),
         bottom: TabBar(
           controller: _tabController,
+          isScrollable: true,
+          tabAlignment: TabAlignment.center,
           indicatorColor: AppColors.competition,
           labelColor: AppColors.competition,
           unselectedLabelColor: Colors.white54,
@@ -738,7 +742,7 @@ class _DuelRoomPageState extends State<DuelRoomPage>
           child: SafeArea(
             top: false,
             child: SizedBox(
-              height: MediaQuery.of(context).size.height * 0.6,
+              height: MediaQuery.of(context).size.height * 0.8,
               child: Column(
                 children: [
                   Padding(
