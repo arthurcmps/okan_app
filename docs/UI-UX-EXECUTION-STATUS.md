@@ -125,7 +125,7 @@ Não registrar exceções, UID, e-mail, senha, token, payload ou dado de saúde 
 | UX-07 Home | done | PRs 28 e 29 | manter cobertura nas próximas regressões |
 | UX-08 Onboarding | done | PR 30 | manter cobertura nas próximas regressões |
 | UX-09 Estados/acessibilidade | done | PRs 31 a 35, 52 a 55, 57 e 58; estados transversais e Arena aprovados em DEV, com agregação segura do placar na PR backend 22 | manter a matriz de estados, acessibilidade e ações duplicadas na regressão contínua |
-| UX-10 Piloto/rollout | blocked | validações internas pontuais | concluir itens selecionados em STAGING, preparar roteiro, participantes, evidências e métricas |
+| UX-10 Piloto/rollout | in progress | roteiro operacional em `docs/UX-10-PILOT-ROLLOUT.md` | aprovar participantes, gerar candidato STAGING, executar tarefas, medir resultados e resolver bloqueadores |
 
 ## 6. Evidências por Pull Request
 
@@ -272,9 +272,9 @@ alterar tabelas, modais, papéis ou destinos do menu.
 
 ## 13. Próxima ordem segura
 
-1. preparar a UX-10 com participantes, roteiro, evidências e métricas;
+1. aprovar o roteiro UX-10 e selecionar participantes por papel;
 2. gerar um candidato de piloto contendo somente os itens já aprovados;
-3. executar o piloto em celular e desktop e corrigir eventuais bloqueadores;
+3. executar o piloto em celular e desktop, medir os resultados e corrigir bloqueadores;
 4. considerar rollout gradual somente depois de todos os gates de liberação.
 
 A UX-02 removeu o bloqueio de ambiente para o dashboard. Toda próxima mudança estrutural do web ainda deve passar por build, verificação, deploy explícito e smoke autenticado no projeto STAGING antes de qualquer promoção para PROD.
