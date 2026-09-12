@@ -121,7 +121,7 @@ Não registrar exceções, UID, e-mail, senha, token, payload ou dado de saúde 
 | UX-03 Tokens | done | paleta e cores semânticas no app (PRs 23 e 37); tokens CSS operacionais no web (PRs web 13 e 14); validações manuais em DEV/STAGING | dívida residual direcionada às UX-04, UX-05 e UX-09 e às páginas estáticas do web |
 | UX-04 Auth | done | web aprovado em STAGING na PR web 15; app aprovado em DEV no aparelho físico e integrado pela PR 42 | manter login, cadastro, recuperação e verificação de e-mail na regressão contínua |
 | UX-05 Telas antigas | done | PRs 23, 25, 26 e 43 a 50; matriz integrada aprovada em Android físico com dados sintéticos, fonte 200% e TalkBack | manter esses fluxos na regressão contínua |
-| UX-06 Dashboard | in progress | PRs web 8, 9 e 10; smoke autenticado executado em STAGING após a PR 11 | concluir a arquitetura do menu móvel e repetir a matriz de acessibilidade em celular e desktop |
+| UX-06 Dashboard | done | PRs web 8, 9, 10, 11 e 16; acessibilidade, cartões responsivos, navegação móvel e smoke autenticado aprovados em STAGING | manter a matriz web em regressão contínua |
 | UX-07 Home | done | PRs 28 e 29 | manter cobertura nas próximas regressões |
 | UX-08 Onboarding | done | PR 30 | manter cobertura nas próximas regressões |
 | UX-09 Estados/acessibilidade | done | PRs 31 a 35, 52 a 55, 57 e 58; estados transversais e Arena aprovados em DEV, com agregação segura do placar na PR backend 22 | manter a matriz de estados, acessibilidade e ações duplicadas na regressão contínua |
@@ -167,6 +167,7 @@ Não registrar exceções, UID, e-mail, senha, token, payload ou dado de saúde 
 - [PR 13 - tokens visuais canônicos do painel](https://github.com/arthurcmps/okan_web/pull/13)
 - [PR 14 - cores operacionais HTML/JavaScript convertidas para tokens](https://github.com/arthurcmps/okan_web/pull/14)
 - [PR 15 - experiência de login e cadastro das academias](https://github.com/arthurcmps/okan_web/pull/15)
+- [PR 16 - arquitetura da navegação móvel do dashboard](https://github.com/arthurcmps/okan_web/pull/16)
 
 ## 7. Encerramento da UX-02
 
@@ -248,15 +249,37 @@ integrados:
 Os estados e fluxos concluídos permanecem na regressão contínua e devem ser
 reavaliados quando uma tela ou contrato relacionado mudar.
 
-## 12. Próxima ordem segura
+## 12. Encerramento da UX-06
 
-1. concluir a arquitetura móvel da UX-06 e repetir a matriz mínima em STAGING;
-2. executar a regressão final dos itens selecionados em celular e desktop;
-3. preparar a UX-10 com participantes, roteiro, evidências e métricas.
+A UX-06 foi concluída em 11 de setembro de 2026 com código e validação
+integrados no painel web:
+
+- navegação, controles, foco e redução de movimento foram cobertos nas PRs 8 e
+  10;
+- tabelas ganharam apresentação responsiva e detalhes acessíveis na PR 9;
+- o painel passou a utilizar o ambiente STAGING isolado e fail-closed da PR 11;
+- a PR 16 limitou a navegação móvel a quatro destinos primários e reuniu as
+  ações secundárias no painel `Mais`, preservando IDs, handlers e RBAC;
+- 66 testes automatizados e o Web CI 13 foram aprovados;
+- o smoke autenticado passou com super admin e gestor em 360 px, navegação por
+  teclado e desktop em 1366 x 768;
+- não houve rolagem horizontal, sobreposição do menu ou exposição de opções não
+  autorizadas;
+- nenhuma implantação foi realizada em PROD.
+
+A matriz do dashboard permanece como regressão contínua, especialmente ao
+alterar tabelas, modais, papéis ou destinos do menu.
+
+## 13. Próxima ordem segura
+
+1. preparar a UX-10 com participantes, roteiro, evidências e métricas;
+2. gerar um candidato de piloto contendo somente os itens já aprovados;
+3. executar o piloto em celular e desktop e corrigir eventuais bloqueadores;
+4. considerar rollout gradual somente depois de todos os gates de liberação.
 
 A UX-02 removeu o bloqueio de ambiente para o dashboard. Toda próxima mudança estrutural do web ainda deve passar por build, verificação, deploy explícito e smoke autenticado no projeto STAGING antes de qualquer promoção para PROD.
 
-## 13. Matriz de regressão visual da UX-01
+## 14. Matriz de regressão visual da UX-01
 
 O baseline essencial está concluído. Nas próximas PRs visuais, selecionar as linhas pertinentes desta matriz e comparar o mesmo estado antes/depois usando somente dados sintéticos.
 
@@ -270,6 +293,6 @@ O baseline essencial está concluído. Nas próximas PRs visuais, selecionar as 
 
 Não incluir credenciais, endereços de e-mail reais, nomes reais, dados médicos ou identificadores internos.
 
-## 14. Rollback documental
+## 15. Rollback documental
 
 Este arquivo não altera execução, dados ou configuração. Se alguma referência estiver incorreta, corrigir o registro em nova PR preservando o histórico; não reescrever evidências de forma silenciosa.
