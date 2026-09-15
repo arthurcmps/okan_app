@@ -4,16 +4,14 @@ import 'package:flutter/foundation.dart';
 
 abstract final class ClientCompatibilityInfo {
   static const int schemaVersion = 2;
-  static const String appVersion = '1.0.1';
-  static const int buildNumber = 10;
+  static const String appVersion = '1.0.2';
+  static const int buildNumber = 11;
 }
 
 class ClientCompatibilityService {
-  ClientCompatibilityService({
-    FirebaseAuth? auth,
-    FirebaseFirestore? firestore,
-  }) : _auth = auth ?? FirebaseAuth.instance,
-       _firestore = firestore ?? FirebaseFirestore.instance;
+  ClientCompatibilityService({FirebaseAuth? auth, FirebaseFirestore? firestore})
+    : _auth = auth ?? FirebaseAuth.instance,
+      _firestore = firestore ?? FirebaseFirestore.instance;
 
   final FirebaseAuth _auth;
   final FirebaseFirestore _firestore;
