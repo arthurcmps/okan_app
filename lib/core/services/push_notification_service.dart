@@ -99,12 +99,12 @@ class PushNotificationService {
               'Notificações Importantes',
               importance: Importance.max,
               priority: Priority.high,
-              icon: '@mipmap/ic_launcher',
+              icon: 'ic_notification',
             ),
           ),
         );
       }
-    }); // <-- AQUI ESTAVA FALTANDO FECHAR O ");"
+    });
 
     // 2. CLIQUE EM SEGUNDO PLANO (Background)
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
