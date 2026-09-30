@@ -99,7 +99,7 @@ class PushNotificationService {
               'Notificações Importantes',
               importance: Importance.max,
               priority: Priority.high,
-              icon: '@mipmap/ic_launcher',
+              icon: 'ic_notification',
             ),
           ),
         );
