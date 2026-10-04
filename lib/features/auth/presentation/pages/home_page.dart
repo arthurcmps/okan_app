@@ -10,20 +10,21 @@ import 'students_page.dart';
 import 'chat_page.dart';
 import 'notifications_page.dart';
 import 'arena_page.dart';
+import '../../../running/presentation/pages/running_page.dart';
 import '../../../../core/theme/app_colors.dart';
 import 'discover_workouts_page.dart';
 import '../../../../core/services/push_notification_service.dart';
 import '../../data/models/user_model.dart';
 import '../widgets/home_action_cards.dart';
 
-class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+class HomeDashboardPage extends StatefulWidget {
+  const HomeDashboardPage({super.key});
 
   @override
-  State<HomePage> createState() => _HomePageState();
+  State<HomeDashboardPage> createState() => _HomeDashboardPageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomeDashboardPageState extends State<HomeDashboardPage> {
   final user = FirebaseAuth.instance.currentUser;
 
   @override
@@ -63,14 +64,17 @@ class _HomePageState extends State<HomePage> {
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [AppColors.secondary, AppColors.primary.withOpacity(0.8)],
+            colors: [
+              AppColors.secondary,
+              AppColors.primary.withValues(alpha: 0.8),
+            ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: AppColors.primary.withOpacity(0.2),
+              color: AppColors.primary.withValues(alpha: 0.2),
               blurRadius: 15,
               spreadRadius: -2,
               offset: const Offset(0, 4),
@@ -545,14 +549,14 @@ class _HomePageState extends State<HomePage> {
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withOpacity(0.05)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
         ),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.15),
+                color: color.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(icon, color: color),
@@ -804,6 +808,50 @@ class _HomePageState extends State<HomePage> {
           },
         );
       },
+    );
+  }
+}
+
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  int _selectedIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: const [HomeDashboardPage(), RunningPage()],
+      ),
+      bottomNavigationBar: NavigationBar(
+        backgroundColor: AppColors.surface,
+        indicatorColor: AppColors.primary,
+        selectedIndex: _selectedIndex,
+        onDestinationSelected: (index) {
+          setState(() {
+            _selectedIndex = index;
+          });
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: 'Início',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.directions_run_outlined),
+            selectedIcon: Icon(Icons.directions_run),
+            label: 'Corrida',
+          ),
+        ],
+      ),
     );
   }
 }
