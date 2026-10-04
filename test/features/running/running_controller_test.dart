@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:okan_app/features/running/data/services/location_tracking_service.dart';
+import 'package:okan_app/features/running/domain/entities/run_point.dart';
+import 'package:okan_app/features/running/domain/entities/run_session.dart';
 import 'package:okan_app/features/running/presentation/controllers/running_controller.dart';
 
 class FakeLocationService extends LocationTrackingService {
@@ -42,7 +44,6 @@ Position sample({
   );
 }
 
-// Permite entregar eventos do stream e concluir tarefas assíncronas.
 Future<void> flushEvents() async {
   await Future<void>.delayed(Duration.zero);
   await Future<void>.delayed(Duration.zero);
@@ -75,6 +76,7 @@ void main() {
         latitude: -22.78495,
       ),
     );
+
     await flushEvents();
 
     expect(controller.isRecording, isTrue);
@@ -86,20 +88,20 @@ void main() {
     final distanceBeforeResume = controller.session!.distanceMeters;
     final pointsBeforeResume = controller.session!.points.length;
 
-    // Simula deslocamento durante a pausa.
     location.updates.add(
       sample(
         timestamp: initialTime.add(const Duration(seconds: 3)),
         latitude: -22.780,
       ),
     );
+
     await flushEvents();
 
     expect(controller.activeDuration, pausedTime);
     expect(controller.session!.points.length, pointsBeforeResume);
 
     location.currentPosition = sample(
-      timestamp: DateTime.now(),
+      timestamp: initialTime.add(const Duration(seconds: 3)),
       latitude: -22.780,
     );
 
@@ -116,7 +118,13 @@ void main() {
 
     final finishedPoints = controller.session!.points.length;
 
-    location.updates.add(sample(timestamp: DateTime.now(), latitude: -22.779));
+    location.updates.add(
+      sample(
+        timestamp: initialTime.add(const Duration(seconds: 4)),
+        latitude: -22.779,
+      ),
+    );
+
     await flushEvents();
 
     expect(controller.session!.points.length, finishedPoints);
@@ -158,6 +166,7 @@ void main() {
         latitude: -22.780,
       ),
     );
+
     await flushEvents();
 
     expect(controller.session!.points.length, 2);
@@ -172,6 +181,7 @@ void main() {
     final pointCount = controller.session!.points.length;
 
     location.updates.addError(StateError('Falha simulada do GPS'));
+
     await flushEvents();
 
     expect(controller.isPaused, isTrue);
@@ -190,5 +200,58 @@ void main() {
     expect(controller.isRecording, isFalse);
     expect(controller.isBusy, isFalse);
     expect(controller.message, contains('baixa precisão'));
+  });
+
+  test('recupera tempo salvo e retoma em outro segmento', () async {
+    final recovered = RunSession(
+      id: 'recovered-run',
+      startedAt: initialTime.subtract(const Duration(minutes: 10)),
+      status: RunStatus.paused,
+      activeDuration: const Duration(minutes: 2),
+      distanceMeters: 200,
+      points: [
+        RunPoint(
+          latitude: -22.785,
+          longitude: -43.311,
+          recordedAt: initialTime.subtract(const Duration(minutes: 1)),
+          accuracyMeters: 5,
+          segmentIndex: 3,
+        ),
+      ],
+    );
+
+    controller.restorePausedSession(recovered);
+
+    expect(controller.isPaused, isTrue);
+    expect(controller.activeDuration, const Duration(minutes: 2));
+    expect(controller.session!.distanceMeters, 200);
+
+    await flushEvents();
+
+    // Recuperar não inicia o cronômetro.
+    expect(controller.activeDuration, const Duration(minutes: 2));
+
+    location.currentPosition = sample(
+      timestamp: DateTime.now(),
+      latitude: -22.780,
+    );
+
+    await controller.resume();
+
+    expect(controller.isRecording, isTrue);
+    expect(controller.session!.id, 'recovered-run');
+    expect(controller.session!.points.last.segmentIndex, 4);
+
+    // Não soma o deslocamento entre a posição antiga e a atual.
+    expect(controller.session!.distanceMeters, 200);
+    expect(
+      controller.activeDuration,
+      greaterThanOrEqualTo(const Duration(minutes: 2)),
+    );
+
+    await controller.finish();
+
+    expect(controller.isFinished, isTrue);
+    expect(controller.session!.activeDuration, controller.activeDuration);
   });
 }

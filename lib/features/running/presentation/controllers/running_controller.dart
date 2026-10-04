@@ -21,6 +21,8 @@ class RunningController extends ChangeNotifier {
   final LocationTrackingService _locationService;
   final Stopwatch _stopwatch = Stopwatch();
 
+  Duration _restoredDuration = Duration.zero;
+
   StreamSubscription<Position>? _positionSubscription;
   Timer? _refreshTimer;
 
@@ -40,11 +42,40 @@ class RunningController extends ChangeNotifier {
   String? get message => _message;
 
   Duration get activeDuration =>
-      _session == null ? Duration.zero : _stopwatch.elapsed;
+      _session == null ? Duration.zero : _restoredDuration + _stopwatch.elapsed;
 
   bool get isRecording => _session?.status == RunStatus.recording;
   bool get isPaused => _session?.status == RunStatus.paused;
   bool get isFinished => _session?.status == RunStatus.finished;
+
+  void restorePausedSession(RunSession recovered) {
+    if (_disposed) return;
+
+    if (_isBusy || _session != null) {
+      throw StateError(
+        'Só é possível recuperar uma corrida antes de iniciar outra.',
+      );
+    }
+
+    if (recovered.status != RunStatus.paused) {
+      throw ArgumentError('A sessão recuperada precisa estar pausada.');
+    }
+
+    _stopwatch.stop();
+    _stopwatch.reset();
+
+    _restoredDuration = recovered.activeDuration;
+    _session = recovered;
+    _previousPoint = null;
+    _lastPosition = null;
+
+    _segmentIndex = recovered.points.isEmpty
+        ? 0
+        : recovered.points.last.segmentIndex;
+
+    _message = 'Corrida recuperada. Retome quando estiver pronto.';
+    _emit();
+  }
 
   Future<void> start() async {
     if (_disposed || _isBusy || _session != null) return;
@@ -92,12 +123,14 @@ class RunningController extends ChangeNotifier {
 
       if (resuming) {
         _segmentIndex++;
+
         _session = _session!.copyWith(
           status: RunStatus.recording,
           points: [..._session!.points, firstPoint],
         );
       } else {
         _segmentIndex = 0;
+        _restoredDuration = Duration.zero;
         _stopwatch.reset();
 
         _session = RunSession(
@@ -117,6 +150,7 @@ class RunningController extends ChangeNotifier {
       _positionSubscription = _locationService.watchPositions().listen(
         (position) {
           if (_disposed || generation != _trackingGeneration) return;
+
           _handlePosition(position);
         },
         onError: (Object error, StackTrace stackTrace) {
@@ -147,10 +181,11 @@ class RunningController extends ChangeNotifier {
       );
 
       _refreshTimer?.cancel();
+
       _refreshTimer = Timer.periodic(const Duration(seconds: 1), (_) {
         if (_disposed || !isRecording) return;
 
-        _session = _session!.copyWith(activeDuration: _stopwatch.elapsed);
+        _session = _session!.copyWith(activeDuration: activeDuration);
 
         _emit();
       });
@@ -179,7 +214,7 @@ class RunningController extends ChangeNotifier {
     if (isRecording) {
       _session = _session!.copyWith(
         status: RunStatus.paused,
-        activeDuration: _stopwatch.elapsed,
+        activeDuration: activeDuration,
       );
     }
 
@@ -253,7 +288,7 @@ class RunningController extends ChangeNotifier {
     _message = null;
 
     _session = _session!.copyWith(
-      activeDuration: _stopwatch.elapsed,
+      activeDuration: activeDuration,
       distanceMeters: _session!.distanceMeters + additionalDistance,
       points: [..._session!.points, point],
     );
@@ -274,7 +309,7 @@ class RunningController extends ChangeNotifier {
   }
 
   Future<void> _stopActivity(RunStatus status, {String? message}) async {
-    if (_disposed || !isRecording && !isPaused) return;
+    if (_disposed || (!isRecording && !isPaused)) return;
 
     _isBusy = true;
     _stopwatch.stop();
@@ -284,7 +319,7 @@ class RunningController extends ChangeNotifier {
 
     _session = _session!.copyWith(
       status: status,
-      activeDuration: _stopwatch.elapsed,
+      activeDuration: activeDuration,
       endedAt: status == RunStatus.finished ? DateTime.now() : null,
     );
 
@@ -319,7 +354,9 @@ class RunningController extends ChangeNotifier {
     _previousPoint = null;
     _message = null;
     _segmentIndex = 0;
+    _restoredDuration = Duration.zero;
     _stopwatch.reset();
+
     _emit();
   }
 
@@ -332,7 +369,9 @@ class RunningController extends ChangeNotifier {
     _disposed = true;
     _stopwatch.stop();
     _refreshTimer?.cancel();
+
     unawaited(_cancelTracking());
+
     super.dispose();
   }
 }
