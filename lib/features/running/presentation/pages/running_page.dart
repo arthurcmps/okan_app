@@ -1,14 +1,20 @@
 import 'dart:async';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../core/config/app_environment.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../data/database/runs_local_database.dart';
+import '../../data/repositories/local_runs_repository.dart';
 import '../../data/services/location_tracking_service.dart';
 import '../../domain/entities/run_session.dart';
+import '../controllers/run_autosave_controller.dart';
 import '../controllers/running_controller.dart';
+import 'running_history_page.dart';
 
 class RunningPage extends StatefulWidget {
   const RunningPage({super.key});
@@ -25,32 +31,164 @@ class _RunningPageState extends State<RunningPage> with WidgetsBindingObserver {
   final LocationTrackingService _locationService =
       const LocationTrackingService();
 
+  RunAutosaveController? _autosave;
+  StreamSubscription<User?>? _authSubscription;
+
+  String? _ownerUid;
+  String? _initializationError;
+
   LatLng? _locatedPosition;
   double? _locatedAccuracy;
-  bool _isLocating = false;
+  LocalRunsRepository? _repository;
 
-  bool get _isBusy => _isLocating || _runningController.isBusy;
+  bool _storageReady = false;
+  bool _isInitializing = false;
+  bool _isLocating = false;
+  bool _actionInProgress = false;
+  bool _mapReady = false;
+
+  bool get _isOwner =>
+      _ownerUid != null && FirebaseAuth.instance.currentUser?.uid == _ownerUid;
+
+  bool get _isBusy =>
+      !_storageReady ||
+      !_isOwner ||
+      _isLocating ||
+      _actionInProgress ||
+      _runningController.isBusy;
 
   @override
   void initState() {
     super.initState();
+
     WidgetsBinding.instance.addObserver(this);
+    unawaited(_initializeStorage());
+  }
+
+  Future<void> _initializeStorage() async {
+    if (_isInitializing || _storageReady) return;
+
+    setState(() {
+      _isInitializing = true;
+      _initializationError = null;
+    });
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+
+      if (user == null) {
+        throw StateError('É necessário entrar no aplicativo.');
+      }
+
+      final ownerUid = user.uid;
+      final config = OkanEnvironmentConfig.current;
+
+      final environment = switch (config.environment) {
+        OkanEnvironment.development => 'dev',
+        OkanEnvironment.staging => 'staging',
+        OkanEnvironment.production => 'prod',
+      };
+
+      final database = await RunsLocalDatabase(environment: environment).open();
+
+      if (!mounted) return;
+
+      final repository = LocalRunsRepository(database: database);
+
+      final recovered = await repository.getRecoverableSession(
+        ownerUid: ownerUid,
+      );
+
+      if (!mounted) return;
+
+      if (FirebaseAuth.instance.currentUser?.uid != ownerUid) {
+        throw StateError('A conta mudou durante a inicialização.');
+      }
+
+      _ownerUid = ownerUid;
+      _repository = repository;
+
+      if (recovered != null) {
+        _runningController.restorePausedSession(recovered);
+      }
+
+      _autosave = RunAutosaveController(
+        runningController: _runningController,
+        repository: repository,
+        ownerUid: ownerUid,
+      );
+
+      _authSubscription = FirebaseAuth.instance.authStateChanges().listen((
+        currentUser,
+      ) {
+        if (!mounted || currentUser?.uid == _ownerUid) return;
+
+        setState(() {
+          _storageReady = false;
+          _initializationError =
+              'A conta foi alterada. Reabra a página de corrida.';
+        });
+
+        unawaited(_pauseAndSave());
+      });
+
+      setState(() {
+        _storageReady = true;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        _initializationError =
+            'Não foi possível preparar o armazenamento das corridas. '
+            'Confira se está conectado à sua conta e tente novamente.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isInitializing = false);
+      }
+    }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Neste protótipo, sair do app ou bloquear a tela pausa a corrida.
     if (state == AppLifecycleState.hidden ||
         state == AppLifecycleState.paused) {
-      unawaited(_runningController.pause());
+      unawaited(_pauseAndSave());
+    }
+  }
+
+  Future<void> _pauseAndSave() async {
+    await _runningController.pause();
+
+    final autosave = _autosave;
+    if (autosave != null) {
+      await autosave.flush();
     }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+
+    final subscription = _authSubscription;
+    if (subscription != null) {
+      unawaited(subscription.cancel());
+    }
+
+    // Solicita o último checkpoint antes de liberar os controladores.
+    // Uma interrupção abrupta ainda pode impedir essa gravação.
+    unawaited(_runningController.pause());
+
+    final autosave = _autosave;
+    if (autosave != null) {
+      unawaited(autosave.flush());
+      autosave.dispose();
+    }
+
     _runningController.dispose();
     _mapController.dispose();
+
     super.dispose();
   }
 
@@ -62,25 +200,38 @@ class _RunningPageState extends State<RunningPage> with WidgetsBindingObserver {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  void _centerMap(LatLng location) {
+    if (_mapReady) {
+      _mapController.move(location, 17);
+    }
+  }
+
   Future<void> _findMyLocation() async {
     if (_isBusy) return;
 
-    // Durante ou depois de uma corrida, centraliza na última posição.
+    final session = _runningController.session;
     final lastPosition = _runningController.lastPosition;
 
-    if (_runningController.session != null && lastPosition != null) {
-      _mapController.move(
-        LatLng(lastPosition.latitude, lastPosition.longitude),
-        17,
-      );
-      return;
+    if (session != null) {
+      if (lastPosition != null) {
+        _centerMap(LatLng(lastPosition.latitude, lastPosition.longitude));
+        return;
+      }
+
+      if (session.points.isNotEmpty) {
+        final point = session.points.last;
+
+        _centerMap(LatLng(point.latitude, point.longitude));
+        return;
+      }
     }
 
     setState(() => _isLocating = true);
 
     try {
       final position = await _locationService.getCurrentPosition();
-      if (!mounted) return;
+
+      if (!mounted || !_isOwner) return;
 
       final location = LatLng(position.latitude, position.longitude);
 
@@ -89,7 +240,7 @@ class _RunningPageState extends State<RunningPage> with WidgetsBindingObserver {
         _locatedAccuracy = position.accuracy;
       });
 
-      _mapController.move(location, 17);
+      _centerMap(location);
     } on LocationAccessException catch (error) {
       _showMessage(error.message);
     } on TimeoutException {
@@ -109,28 +260,68 @@ class _RunningPageState extends State<RunningPage> with WidgetsBindingObserver {
   Future<void> _activateRun({bool resuming = false}) async {
     if (_isBusy) return;
 
-    if (resuming) {
-      await _runningController.resume();
-    } else {
-      await _runningController.start();
-    }
-
-    if (!mounted) return;
-
-    // Trata também a saída do app enquanto a posição inicial era obtida.
-    final lifecycle = WidgetsBinding.instance.lifecycleState;
-
-    if (lifecycle == AppLifecycleState.hidden ||
-        lifecycle == AppLifecycleState.paused ||
-        lifecycle == AppLifecycleState.detached) {
-      await _runningController.pause();
+    if (_autosave?.errorMessage != null) {
+      _showMessage('Tente salvar os dados pendentes antes de continuar.');
       return;
     }
 
-    final position = _runningController.lastPosition;
+    setState(() => _actionInProgress = true);
 
-    if (_runningController.isRecording && position != null) {
-      _mapController.move(LatLng(position.latitude, position.longitude), 17);
+    try {
+      if (resuming) {
+        await _runningController.resume();
+      } else {
+        await _runningController.start();
+      }
+
+      if (!mounted) return;
+
+      final lifecycle = WidgetsBinding.instance.lifecycleState;
+
+      if (!_isOwner ||
+          lifecycle == AppLifecycleState.hidden ||
+          lifecycle == AppLifecycleState.paused ||
+          lifecycle == AppLifecycleState.detached) {
+        await _pauseAndSave();
+        return;
+      }
+
+      final autosave = _autosave;
+      if (autosave != null) {
+        final saved = await autosave.flush();
+
+        if (!saved) {
+          await _runningController.pause();
+          _showMessage(
+            'A corrida foi pausada porque o salvamento não foi confirmado.',
+          );
+          return;
+        }
+      }
+
+      final position = _runningController.lastPosition;
+
+      if (mounted && _runningController.isRecording && position != null) {
+        _centerMap(LatLng(position.latitude, position.longitude));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _actionInProgress = false);
+      }
+    }
+  }
+
+  Future<void> _pauseRun() async {
+    if (_isBusy) return;
+
+    setState(() => _actionInProgress = true);
+
+    try {
+      await _pauseAndSave();
+    } finally {
+      if (mounted) {
+        setState(() => _actionInProgress = false);
+      }
     }
   }
 
@@ -142,8 +333,7 @@ class _RunningPageState extends State<RunningPage> with WidgetsBindingObserver {
       builder: (dialogContext) => AlertDialog(
         title: const Text('Finalizar corrida?'),
         content: const Text(
-          'A captura será encerrada e o resumo ficará nesta tela. '
-          'O salvamento ainda não foi implementado.',
+          'A captura será encerrada e o resultado será salvo no aparelho.',
         ),
         actions: [
           TextButton(
@@ -158,38 +348,72 @@ class _RunningPageState extends State<RunningPage> with WidgetsBindingObserver {
       ),
     );
 
-    if (!mounted || confirmed != true) return;
+    if (!mounted || !_isOwner || confirmed != true) return;
 
-    await _runningController.finish();
+    setState(() => _actionInProgress = true);
+
+    try {
+      await _runningController.finish();
+
+      final saved = await _autosave!.flush();
+
+      _showMessage(
+        saved
+            ? 'Corrida salva no aparelho.'
+            : 'O salvamento falhou. Use “Tentar salvar novamente”.',
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _actionInProgress = false);
+      }
+    }
   }
 
-  Future<void> _clearFinishedRun() async {
+  Future<void> _prepareNewRun() async {
     if (_isBusy) return;
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Preparar outra corrida?'),
-        content: const Text(
-          'O resultado atual será descartado. '
-          'Neste protótipo, ele ainda não foi salvo.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Manter resultado'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Descartar'),
-          ),
-        ],
-      ),
-    );
+    setState(() => _actionInProgress = true);
 
-    if (!mounted || confirmed != true) return;
+    try {
+      final saved = await _autosave!.flush();
 
-    _runningController.clearFinishedSession();
+      if (!mounted || !_isOwner) return;
+
+      if (!saved) {
+        _showMessage(
+          'Salve o resultado pendente antes de preparar outra corrida.',
+        );
+        return;
+      }
+
+      // Limpa somente o resumo da tela.
+      // O resultado continua no banco local.
+      _runningController.clearFinishedSession();
+    } finally {
+      if (mounted) {
+        setState(() => _actionInProgress = false);
+      }
+    }
+  }
+
+  Future<void> _retrySave() async {
+    if (_isBusy) return;
+
+    setState(() => _actionInProgress = true);
+
+    try {
+      final saved = await _autosave!.retry();
+
+      _showMessage(
+        saved
+            ? 'Dados salvos no aparelho.'
+            : 'Ainda não foi possível salvar. Tente novamente.',
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _actionInProgress = false);
+      }
+    }
   }
 
   Future<void> _openMapCredits() async {
@@ -203,6 +427,37 @@ class _RunningPageState extends State<RunningPage> with WidgetsBindingObserver {
       }
     } catch (_) {
       _showMessage('Não foi possível abrir os créditos do mapa.');
+    }
+  }
+
+  Future<void> _openHistory() async {
+    if (_isBusy || _repository == null) return;
+
+    setState(() => _actionInProgress = true);
+
+    try {
+      // Consultar o histórico pausa uma corrida em andamento.
+      await _pauseAndSave();
+
+      if (!mounted || !_isOwner) return;
+
+      if (_autosave?.errorMessage != null) {
+        _showMessage('Salve os dados pendentes antes de abrir o histórico.');
+        return;
+      }
+
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => RunningHistoryPage(
+            repository: _repository!,
+            ownerUid: _ownerUid!,
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _actionInProgress = false);
+      }
     }
   }
 
@@ -239,7 +494,6 @@ class _RunningPageState extends State<RunningPage> with WidgetsBindingObserver {
   }
 
   String _formatPace(RunSession? session) {
-    // Evita exibir um ritmo instável nos primeiros metros.
     if (session == null || session.distanceMeters < 20) return '—';
 
     final pace = session.averagePaceSecondsPerKm;
@@ -297,9 +551,9 @@ class _RunningPageState extends State<RunningPage> with WidgetsBindingObserver {
 
     if (session.status == RunStatus.finished) {
       return OutlinedButton.icon(
-        onPressed: _isBusy ? null : _clearFinishedRun,
+        onPressed: _isBusy ? null : _prepareNewRun,
         icon: const Icon(Icons.add),
-        label: const Text('Preparar outra corrida'),
+        label: const Text('Nova corrida'),
       );
     }
 
@@ -310,7 +564,7 @@ class _RunningPageState extends State<RunningPage> with WidgetsBindingObserver {
             onPressed: _isBusy
                 ? null
                 : session.status == RunStatus.recording
-                ? () => _runningController.pause()
+                ? _pauseRun
                 : () => _activateRun(resuming: true),
             icon: Icon(
               session.status == RunStatus.recording
@@ -334,19 +588,76 @@ class _RunningPageState extends State<RunningPage> with WidgetsBindingObserver {
     );
   }
 
+  String _storageLabel(RunSession? session) {
+    final autosave = _autosave;
+
+    if (session == null) return 'Armazenamento local pronto.';
+    if (autosave?.errorMessage != null) return autosave!.errorMessage!;
+    if (autosave?.isSaving == true) return 'Salvando no aparelho...';
+    if (autosave?.hasPendingChanges == true) {
+      return 'Aguardando o próximo salvamento.';
+    }
+
+    return 'Dados salvos no aparelho.';
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (!_storageReady) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          title: const Text('Corrida'),
+          automaticallyImplyLeading: false,
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: _isInitializing
+                ? const CircularProgressIndicator()
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _initializationError ??
+                            'Preparando o armazenamento local...',
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _ownerUid == null
+                            ? _initializeStorage
+                            : null,
+                        child: const Text('Tentar novamente'),
+                      ),
+                    ],
+                  ),
+          ),
+        ),
+      );
+    }
+
+    final autosave = _autosave!;
+
     return AnimatedBuilder(
-      animation: _runningController,
+      animation: Listenable.merge([_runningController, autosave]),
       builder: (context, child) {
         final session = _runningController.session;
         final position = _runningController.lastPosition;
 
-        final markerPosition = position == null
-            ? _locatedPosition
-            : LatLng(position.latitude, position.longitude);
+        LatLng? markerPosition = _locatedPosition;
+        double? accuracy = _locatedAccuracy;
 
-        final accuracy = position?.accuracy ?? _locatedAccuracy;
+        if (session != null) {
+          if (position != null) {
+            markerPosition = LatLng(position.latitude, position.longitude);
+            accuracy = position.accuracy;
+          } else if (session.points.isNotEmpty) {
+            final point = session.points.last;
+            markerPosition = LatLng(point.latitude, point.longitude);
+            accuracy = point.accuracyMeters;
+          }
+        }
 
         return Scaffold(
           backgroundColor: AppColors.background,
@@ -361,11 +672,12 @@ class _RunningPageState extends State<RunningPage> with WidgetsBindingObserver {
               Expanded(
                 child: FlutterMap(
                   mapController: _mapController,
-                  options: const MapOptions(
-                    initialCenter: _initialCenter,
-                    initialZoom: 14,
+                  options: MapOptions(
+                    initialCenter: markerPosition ?? _initialCenter,
+                    initialZoom: session == null ? 14 : 17,
                     minZoom: 3,
                     maxZoom: 19,
+                    onMapReady: () => _mapReady = true,
                   ),
                   children: [
                     TileLayer(
@@ -415,7 +727,7 @@ class _RunningPageState extends State<RunningPage> with WidgetsBindingObserver {
                 top: false,
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
-                    maxHeight: MediaQuery.sizeOf(context).height * 0.45,
+                    maxHeight: MediaQuery.sizeOf(context).height * 0.5,
                   ),
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(16),
@@ -450,7 +762,7 @@ class _RunningPageState extends State<RunningPage> with WidgetsBindingObserver {
                         Text(
                           accuracy == null
                               ? 'Localize-se para conferir o sinal do GPS.'
-                              : 'Precisão estimada: '
+                              : 'Precisão da última posição: '
                                     '${accuracy.toStringAsFixed(0)} metros.',
                           textAlign: TextAlign.center,
                           style: const TextStyle(color: AppColors.textSub),
@@ -463,12 +775,35 @@ class _RunningPageState extends State<RunningPage> with WidgetsBindingObserver {
                             style: const TextStyle(color: Colors.orange),
                           ),
                         ],
-                        if (_isBusy) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          _storageLabel(session),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: autosave.errorMessage == null
+                                ? AppColors.textSub
+                                : Colors.orange,
+                            fontSize: 12,
+                          ),
+                        ),
+                        if (autosave.errorMessage != null)
+                          TextButton.icon(
+                            onPressed: _isBusy ? null : _retrySave,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Tentar salvar novamente'),
+                          ),
+                        if (_isBusy || autosave.isSaving) ...[
                           const SizedBox(height: 12),
                           const LinearProgressIndicator(),
                         ],
                         const SizedBox(height: 12),
                         _buildActions(session),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          onPressed: _isBusy ? null : _openHistory,
+                          icon: const Icon(Icons.history),
+                          label: const Text('Histórico de corridas'),
+                        ),
                         TextButton.icon(
                           onPressed: _isBusy ? null : _findMyLocation,
                           icon: const Icon(Icons.my_location),
@@ -479,9 +814,10 @@ class _RunningPageState extends State<RunningPage> with WidgetsBindingObserver {
                           ),
                         ),
                         const Text(
-                          'Protótipo: mantenha o app aberto. '
-                          'Sair do app ou bloquear a tela pausa a corrida. '
-                          'Os dados ainda não são salvos.',
+                          'Mantenha o app aberto durante a gravação. '
+                          'Sair ou bloquear a tela pausa a corrida. '
+                          'Os resultados ficam neste aparelho; '
+                          'a sincronização ainda não está disponível.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: AppColors.textSub,
