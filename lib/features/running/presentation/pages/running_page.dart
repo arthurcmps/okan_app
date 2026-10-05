@@ -16,6 +16,7 @@ import '../../domain/entities/run_session.dart';
 import '../controllers/run_autosave_controller.dart';
 import '../controllers/running_controller.dart';
 import 'running_history_page.dart';
+import '../../data/services/running_notification_permission_service.dart';
 
 class RunningPage extends StatefulWidget {
   const RunningPage({super.key});
@@ -31,6 +32,8 @@ class _RunningPageState extends State<RunningPage> with WidgetsBindingObserver {
   final RunningController _runningController = RunningController();
   final LocationTrackingService _locationService =
       const LocationTrackingService();
+  final RunningNotificationPermissionService _notificationPermissionService =
+      RunningNotificationPermissionService();
 
   RunAutosaveController? _autosave;
   StreamSubscription<User?>? _authSubscription;
@@ -278,6 +281,53 @@ class _RunningPageState extends State<RunningPage> with WidgetsBindingObserver {
     }
   }
 
+  Future<bool> _ensureRunNotificationPermission() async {
+    final granted = await _notificationPermissionService.ensurePermission();
+
+    if (!mounted || !_isOwner) return false;
+    if (granted) return true;
+
+    final openSettings = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Permitir notificações'),
+        content: const Text(
+          'O Okan usa uma notificação para mostrar quando o registro '
+          'da corrida está ativo, inclusive com a tela bloqueada. '
+          'Ative as notificações nas configurações do aplicativo '
+          'e depois tente iniciar ou retomar a corrida.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Agora não'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Abrir configurações'),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted || !_isOwner) return false;
+
+    if (openSettings == true) {
+      final opened = await _notificationPermissionService.openAppSettings();
+
+      if (!opened) {
+        _showMessage(
+          'Abra as configurações do celular e permita '
+          'as notificações do Okan.',
+        );
+      }
+    }
+
+    // Depois de voltar das configurações, o usuário toca novamente
+    // em Iniciar ou Retomar. Não iniciamos a captura automaticamente.
+    return false;
+  }
+
   Future<void> _activateRun({bool resuming = false}) async {
     if (_isBusy) return;
 
@@ -289,6 +339,19 @@ class _RunningPageState extends State<RunningPage> with WidgetsBindingObserver {
     setState(() => _actionInProgress = true);
 
     try {
+      final granted = await _ensureRunNotificationPermission();
+
+      if (!mounted || !_isOwner || !granted) return;
+
+      // A solicitação de permissão pode abrir outra tela.
+      // O serviço precisa ser iniciado com o aplicativo visível.
+      if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+        _showMessage(
+          'Volte à tela de corrida e toque novamente em Iniciar ou Retomar.',
+        );
+        return;
+      }
+
       if (resuming) {
         await _runningController.resume();
       } else {
@@ -329,11 +392,16 @@ class _RunningPageState extends State<RunningPage> with WidgetsBindingObserver {
       final position = _runningController.lastPosition;
 
       if (mounted &&
-          lifecycle == AppLifecycleState.resumed &&
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed &&
           _runningController.isRecording &&
           position != null) {
         _centerMap(LatLng(position.latitude, position.longitude));
       }
+    } catch (error, stackTrace) {
+      debugPrint('Erro ao preparar a corrida: $error');
+      debugPrintStack(stackTrace: stackTrace);
+
+      _showMessage('Não foi possível preparar a corrida. Tente novamente.');
     } finally {
       if (mounted) {
         setState(() => _actionInProgress = false);
