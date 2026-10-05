@@ -6,6 +6,8 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../data/repositories/local_run_sync_repository.dart';
+import '../controllers/run_sync_controller.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../domain/entities/run_session.dart';
@@ -40,10 +42,12 @@ class RunningHistoryPage extends StatefulWidget {
     super.key,
     required this.repository,
     required this.ownerUid,
+    required this.syncController,
   });
 
   final RunsRepository repository;
   final String ownerUid;
+  final RunSyncController syncController;
 
   @override
   State<RunningHistoryPage> createState() => _RunningHistoryPageState();
@@ -53,12 +57,18 @@ class _RunningHistoryPageState extends State<RunningHistoryPage> {
   static const _pageSize = 20;
 
   final List<RunSession> _sessions = [];
+  final Map<String, RunSyncQueueEntry?> _syncStates = {};
 
   StreamSubscription<User?>? _authSubscription;
 
   bool _loading = false;
   bool _hasMore = true;
+  bool _syncReadFailed = false;
+
   String? _error;
+  String? _retryingRunId;
+
+  int _syncRequest = 0;
 
   bool get _isOwner =>
       FirebaseAuth.instance.currentUser?.uid == widget.ownerUid;
@@ -67,11 +77,16 @@ class _RunningHistoryPageState extends State<RunningHistoryPage> {
   void initState() {
     super.initState();
 
+    widget.syncController.addListener(_onSyncChanged);
+
     _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) {
       if (!mounted || user?.uid == widget.ownerUid) return;
 
+      _syncRequest++;
+
       setState(() {
         _sessions.clear();
+        _syncStates.clear();
         _error = 'A conta foi alterada. Reabra o histórico.';
       });
     });
@@ -81,6 +96,12 @@ class _RunningHistoryPageState extends State<RunningHistoryPage> {
 
   @override
   void dispose() {
+    _syncRequest++;
+
+    // O controlador pertence à página de corrida.
+    // Aqui removemos apenas o listener do histórico.
+    widget.syncController.removeListener(_onSyncChanged);
+
     final subscription = _authSubscription;
     if (subscription != null) {
       unawaited(subscription.cancel());
@@ -89,8 +110,47 @@ class _RunningHistoryPageState extends State<RunningHistoryPage> {
     super.dispose();
   }
 
+  void _onSyncChanged() {
+    if (!mounted || !_isOwner) return;
+
+    setState(() {});
+    unawaited(_refreshSyncStates());
+  }
+
+  Future<void> _refreshSyncStates() async {
+    if (!mounted || !_isOwner || _loading) return;
+
+    final request = ++_syncRequest;
+    final runIds = _sessions.map((session) => session.id).toList();
+
+    try {
+      final entries = await Future.wait<RunSyncQueueEntry?>(
+        runIds.map(widget.syncController.getState),
+      );
+
+      if (!mounted || !_isOwner || request != _syncRequest) return;
+
+      setState(() {
+        _syncStates.clear();
+
+        for (var index = 0; index < runIds.length; index++) {
+          _syncStates[runIds[index]] = entries[index];
+        }
+
+        _syncReadFailed = false;
+      });
+    } catch (_) {
+      if (!mounted || !_isOwner || request != _syncRequest) return;
+
+      setState(() => _syncReadFailed = true);
+    }
+  }
+
   Future<void> _load({bool reset = false}) async {
     if (_loading || !_isOwner) return;
+
+    // Invalida consultas de sincronização anteriores.
+    _syncRequest++;
 
     setState(() {
       _loading = true;
@@ -107,13 +167,16 @@ class _RunningHistoryPageState extends State<RunningHistoryPage> {
       if (!mounted || !_isOwner) return;
 
       setState(() {
-        if (reset) _sessions.clear();
+        if (reset) {
+          _sessions.clear();
+          _syncStates.clear();
+        }
 
         _sessions.addAll(page);
         _hasMore = page.length == _pageSize;
       });
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || !_isOwner) return;
 
       setState(() {
         _error = 'Não foi possível carregar as corridas.';
@@ -121,6 +184,52 @@ class _RunningHistoryPageState extends State<RunningHistoryPage> {
     } finally {
       if (mounted) {
         setState(() => _loading = false);
+
+        if (_isOwner) {
+          await _refreshSyncStates();
+        }
+      }
+    }
+  }
+
+  Future<void> _refreshHistory() async {
+    await _load(reset: true);
+
+    if (!mounted || !_isOwner) return;
+
+    // Solicita o envio das corridas pendentes sem bloquear a lista.
+    unawaited(widget.syncController.syncPending());
+  }
+
+  Future<void> _retrySync(String runId) async {
+    if (!_isOwner ||
+        _retryingRunId != null ||
+        widget.syncController.isSyncing) {
+      return;
+    }
+
+    setState(() => _retryingRunId = runId);
+
+    try {
+      await widget.syncController.retryRun(runId);
+
+      if (!mounted || !_isOwner) return;
+
+      await _refreshSyncStates();
+    } catch (_) {
+      if (!mounted || !_isOwner) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Não foi possível solicitar o envio. '
+            'A corrida continua salva neste aparelho.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _retryingRunId = null);
       }
     }
   }
@@ -132,6 +241,118 @@ class _RunningHistoryPageState extends State<RunningHistoryPage> {
       MaterialPageRoute<void>(
         builder: (_) =>
             _RunDetailsPage(session: session, ownerUid: widget.ownerUid),
+      ),
+    );
+  }
+
+  Widget _buildSyncStatus(RunSession session) {
+    final entry = _syncStates[session.id];
+
+    final String label;
+    final IconData icon;
+    final Color color;
+
+    if (_syncReadFailed) {
+      label = 'Estado de sincronização indisponível';
+      icon = Icons.cloud_off_outlined;
+      color = Colors.orange;
+    } else {
+      switch (entry?.status) {
+        case RunSyncStatus.synced:
+          label = 'Sincronizada';
+          icon = Icons.cloud_done_outlined;
+          color = Colors.green;
+
+        case RunSyncStatus.failed:
+          label = 'Falha na sincronização';
+          icon = Icons.cloud_off_outlined;
+          color = Colors.orange;
+
+        case RunSyncStatus.pending:
+          label = 'Pendente de sincronização';
+          icon = Icons.cloud_upload_outlined;
+          color = AppColors.textSub;
+
+        case null:
+          label = _syncStates.containsKey(session.id)
+              ? 'Estado de sincronização não encontrado'
+              : 'Consultando sincronização...';
+          icon = Icons.cloud_outlined;
+          color = AppColors.textSub;
+      }
+    }
+
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: color),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(label, style: TextStyle(color: color, fontSize: 12)),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSessionCard(RunSession session) {
+    final entry = _syncStates[session.id];
+    final failed = !_syncReadFailed && entry?.status == RunSyncStatus.failed;
+    final retrying = _retryingRunId == session.id;
+
+    return Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.directions_run, color: AppColors.primary),
+            title: Text(_dateText(session.startedAt)),
+            subtitle: Text(
+              '${session.distanceKm.toStringAsFixed(2)} km'
+              ' · ${_durationText(session.activeDuration)}'
+              '\nRitmo: ${_paceText(session)}',
+            ),
+            isThreeLine: true,
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _openDetails(session),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildSyncStatus(session),
+                if (failed) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    entry?.lastError ??
+                        'A corrida está salva neste aparelho. '
+                            'Tente sincronizar novamente.',
+                    style: const TextStyle(
+                      color: AppColors.textSub,
+                      fontSize: 12,
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed:
+                          !_isOwner ||
+                              _retryingRunId != null ||
+                              widget.syncController.isSyncing
+                          ? null
+                          : () => _retrySync(session.id),
+                      icon: const Icon(Icons.cloud_upload_outlined),
+                      label: Text(
+                        retrying
+                            ? 'Tentando sincronizar...'
+                            : 'Tentar sincronizar novamente',
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -198,38 +419,28 @@ class _RunningHistoryPageState extends State<RunningHistoryPage> {
           ? const Center(
               child: Text('Entre novamente para consultar suas corridas.'),
             )
-          : RefreshIndicator(
-              onRefresh: () => _load(reset: true),
-              child: ListView.builder(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16),
-                itemCount: _sessions.length + 1,
-                itemBuilder: (context, index) {
-                  if (index == _sessions.length) {
-                    return _buildFooter();
-                  }
+          : Column(
+              children: [
+                if (widget.syncController.isSyncing)
+                  const LinearProgressIndicator(),
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: _refreshHistory,
+                    child: ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _sessions.length + 1,
+                      itemBuilder: (context, index) {
+                        if (index == _sessions.length) {
+                          return _buildFooter();
+                        }
 
-                  final session = _sessions[index];
-
-                  return Card(
-                    child: ListTile(
-                      leading: const Icon(
-                        Icons.directions_run,
-                        color: AppColors.primary,
-                      ),
-                      title: Text(_dateText(session.startedAt)),
-                      subtitle: Text(
-                        '${session.distanceKm.toStringAsFixed(2)} km'
-                        ' · ${_durationText(session.activeDuration)}'
-                        '\nRitmo: ${_paceText(session)}',
-                      ),
-                      isThreeLine: true,
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => _openDetails(session),
+                        return _buildSessionCard(_sessions[index]);
+                      },
                     ),
-                  );
-                },
-              ),
+                  ),
+                ),
+              ],
             ),
     );
   }

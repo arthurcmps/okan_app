@@ -705,7 +705,16 @@ class _RunningPageState extends State<RunningPage> with WidgetsBindingObserver {
   }
 
   Future<void> _openHistory() async {
-    if (_isBusy || _repository == null) return;
+    final repository = _repository;
+    final syncController = _runSync;
+    final ownerUid = _ownerUid;
+
+    if (_isBusy ||
+        repository == null ||
+        syncController == null ||
+        ownerUid == null) {
+      return;
+    }
 
     setState(() => _actionInProgress = true);
 
@@ -723,11 +732,16 @@ class _RunningPageState extends State<RunningPage> with WidgetsBindingObserver {
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => RunningHistoryPage(
-            repository: _repository!,
-            ownerUid: _ownerUid!,
+            repository: repository,
+            ownerUid: ownerUid,
+            syncController: syncController,
           ),
         ),
       );
+
+      if (mounted && _isOwner) {
+        await _refreshSyncState();
+      }
     } finally {
       if (mounted) {
         setState(() => _actionInProgress = false);
