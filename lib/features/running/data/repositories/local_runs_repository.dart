@@ -113,6 +113,26 @@ class LocalRunsRepository implements RunsRepository {
     });
   }
 
+  Future<RunSession?> getSession({
+    required String ownerUid,
+    required String runId,
+  }) async {
+    _validateIds(ownerUid, runId);
+
+    return _database.transaction<RunSession?>((transaction) async {
+      final rows = await transaction.query(
+        'run_sessions',
+        where: 'owner_uid = ? AND run_id = ?',
+        whereArgs: [ownerUid, runId],
+        limit: 1,
+      );
+
+      if (rows.isEmpty) return null;
+
+      return _readSession(transaction, rows.single);
+    });
+  }
+
   @override
   Future<RunSession?> getRecoverableSession({required String ownerUid}) async {
     _validateOwner(ownerUid);

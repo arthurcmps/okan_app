@@ -12,6 +12,8 @@ class RunsLocalDatabase {
     }
   }
 
+  static const schemaVersion = 2;
+
   final String environment;
 
   Future<Database>? _opening;
@@ -28,14 +30,14 @@ class RunsLocalDatabase {
 
       return await openDatabase(
         databasePath,
-        version: 1,
+        version: schemaVersion,
         onConfigure: (database) async {
           await database.execute('PRAGMA foreign_keys = ON');
         },
         onCreate: createSchema,
+        onUpgrade: upgradeSchema,
       );
     } catch (_) {
-      // Permite tentar abrir novamente após uma falha.
       _opening = null;
       rethrow;
     }
@@ -101,6 +103,148 @@ class RunsLocalDatabase {
       CREATE UNIQUE INDEX idx_run_sessions_one_active
       ON run_sessions (owner_uid)
       WHERE status IN ('recording', 'paused')
+    ''');
+
+    // Permite criar um banco v1 nos testes de migração.
+    if (version >= 2) {
+      await _createSyncSchema(database);
+    }
+  }
+
+  static Future<void> upgradeSchema(
+    Database database,
+    int oldVersion,
+    int newVersion,
+  ) async {
+    if (oldVersion < 2 && newVersion >= 2) {
+      await _createSyncSchema(database);
+
+      // Corridas antigas também entram na fila.
+      // Não modifica métricas, pontos ou estado das sessões.
+      await database.execute('''
+        INSERT INTO run_sync_queue (
+          owner_uid,
+          run_id,
+          sync_status,
+          created_at_us,
+          updated_at_us
+        )
+        SELECT
+          owner_uid,
+          run_id,
+          'pending',
+          updated_at_us,
+          updated_at_us
+        FROM run_sessions
+        WHERE status = 'finished'
+      ''');
+    }
+  }
+
+  static Future<void> _createSyncSchema(Database database) async {
+    await database.execute('''
+      CREATE TABLE run_sync_queue (
+        owner_uid TEXT NOT NULL,
+        run_id TEXT NOT NULL,
+
+        sync_status TEXT NOT NULL DEFAULT 'pending'
+          CHECK (sync_status IN ('pending', 'failed', 'synced')),
+
+        attempt_count INTEGER NOT NULL DEFAULT 0
+          CHECK (attempt_count >= 0),
+
+        next_attempt_at_us INTEGER DEFAULT 0
+          CHECK (
+            next_attempt_at_us IS NULL
+            OR next_attempt_at_us >= 0
+          ),
+
+        last_attempt_at_us INTEGER,
+        last_error TEXT,
+        last_error_code TEXT,
+
+        synced_at_us INTEGER,
+        content_hash TEXT,
+        server_distance_meters REAL
+          CHECK (
+            server_distance_meters IS NULL
+            OR server_distance_meters >= 0
+          ),
+
+        created_at_us INTEGER NOT NULL,
+        updated_at_us INTEGER NOT NULL,
+
+        PRIMARY KEY (owner_uid, run_id),
+
+        FOREIGN KEY (owner_uid, run_id)
+          REFERENCES run_sessions (owner_uid, run_id)
+          ON DELETE CASCADE,
+
+        CHECK (
+          sync_status != 'synced'
+          OR (
+            synced_at_us IS NOT NULL
+            AND content_hash IS NOT NULL
+            AND server_distance_meters IS NOT NULL
+          )
+        )
+      )
+    ''');
+
+    await database.execute('''
+      CREATE INDEX idx_run_sync_queue_ready
+      ON run_sync_queue (
+        owner_uid,
+        sync_status,
+        next_attempt_at_us,
+        created_at_us
+      )
+    ''');
+
+    // Corrida que já é inserida como finalizada.
+    await database.execute('''
+      CREATE TRIGGER enqueue_inserted_finished_run
+      AFTER INSERT ON run_sessions
+      WHEN NEW.status = 'finished'
+      BEGIN
+        INSERT OR IGNORE INTO run_sync_queue (
+          owner_uid,
+          run_id,
+          sync_status,
+          created_at_us,
+          updated_at_us
+        )
+        VALUES (
+          NEW.owner_uid,
+          NEW.run_id,
+          'pending',
+          NEW.updated_at_us,
+          NEW.updated_at_us
+        );
+      END
+    ''');
+
+    // Corrida ativa que passa para finalizada.
+    await database.execute('''
+      CREATE TRIGGER enqueue_updated_finished_run
+      AFTER UPDATE OF status ON run_sessions
+      WHEN NEW.status = 'finished' AND OLD.status != 'finished'
+      BEGIN
+        INSERT OR IGNORE INTO run_sync_queue (
+          owner_uid,
+          run_id,
+          sync_status,
+          created_at_us,
+          updated_at_us
+        )
+        VALUES (
+          NEW.owner_uid,
+          NEW.run_id,
+          'pending',
+          NEW.updated_at_us,
+          NEW.updated_at_us
+        );
+      END
     ''');
   }
 }
