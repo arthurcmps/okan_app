@@ -28,6 +28,7 @@ class _RunSharePreviewPageState extends State<RunSharePreviewPage> {
   final RunImageShareService _shareService = RunImageShareService();
 
   bool _sharing = false;
+  bool _showRoute = false;
 
   bool get _isOwner =>
       FirebaseAuth.instance.currentUser?.uid == widget.ownerUid;
@@ -138,11 +139,35 @@ class _RunSharePreviewPageState extends State<RunSharePreviewPage> {
                       fit: BoxFit.contain,
                       child: RepaintBoundary(
                         key: _cardKey,
-                        child: RunShareCard(session: widget.session),
+                        child: RunShareCard(
+                          session: widget.session,
+                          showRoute: _showRoute,
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(height: 20),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Mostrar percurso'),
+                    subtitle: Text(
+                      widget.session.points.any(
+                            (point) => point.hasValidCoordinates,
+                          )
+                          ? 'Desenho do trajeto sem ruas ou coordenadas.'
+                          : 'Esta corrida não possui percurso registrado.',
+                    ),
+                    value: _showRoute,
+                    onChanged:
+                        _sharing ||
+                            !widget.session.points.any(
+                              (point) => point.hasValidCoordinates,
+                            )
+                        ? null
+                        : (value) {
+                            setState(() => _showRoute = value);
+                          },
+                  ),
                   const Text(
                     'Compartilhe sua conquista com uma imagem '
                     'vertical para Stories.',

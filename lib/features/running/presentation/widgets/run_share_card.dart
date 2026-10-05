@@ -2,11 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../domain/entities/run_session.dart';
+import 'run_route_art.dart';
 
 class RunShareCard extends StatelessWidget {
-  const RunShareCard({super.key, required this.session});
+  const RunShareCard({
+    super.key,
+    required this.session,
+    this.showRoute = false,
+  });
 
   final RunSession session;
+  final bool showRoute;
 
   static const _background = Color(0xFF120E16);
   static const _accent = Color(0xFFFFB347);
@@ -68,11 +74,13 @@ class RunShareCard extends StatelessWidget {
     final distance = NumberFormat('0.00', 'pt_BR').format(session.distanceKm);
     final date = DateFormat('dd/MM/yyyy').format(session.startedAt.toLocal());
 
+    final hasRoute = session.points.any((point) => point.hasValidCoordinates);
+
     return MediaQuery.withNoTextScaling(
       child: Container(
         width: 360,
         height: 640,
-        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 48),
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 40),
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
@@ -85,7 +93,7 @@ class RunShareCard extends StatelessWidget {
           children: [
             Image.asset(
               'assets/images/logo_okan.png',
-              height: 64,
+              height: 56,
               fit: BoxFit.contain,
               errorBuilder: (context, error, stackTrace) => const Text(
                 'OKAN',
@@ -98,8 +106,19 @@ class RunShareCard extends StatelessWidget {
               ),
             ),
             const Spacer(),
-            const Icon(Icons.directions_run, size: 64, color: _accent),
-            const SizedBox(height: 16),
+            SizedBox(
+              height: 96,
+              child: showRoute && hasRoute
+                  ? RunRouteArt(points: session.points)
+                  : const Center(
+                      child: Icon(
+                        Icons.directions_run,
+                        size: 64,
+                        color: _accent,
+                      ),
+                    ),
+            ),
+            const SizedBox(height: 12),
             const Text(
               'MAIS UM PERCURSO.\nMAIS UMA CONQUISTA.',
               textAlign: TextAlign.center,
@@ -110,9 +129,9 @@ class RunShareCard extends StatelessWidget {
                 fontWeight: FontWeight.bold,
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
             SizedBox(
-              height: 80,
+              height: 72,
               child: FittedBox(
                 fit: BoxFit.scaleDown,
                 child: Text(
@@ -134,7 +153,7 @@ class RunShareCard extends StatelessWidget {
                 fontSize: 12,
               ),
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 20),
             Row(
               children: [
                 _metric(_duration, 'TEMPO ATIVO'),
