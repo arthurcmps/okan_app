@@ -8,6 +8,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../data/repositories/local_run_sync_repository.dart';
 import '../controllers/run_sync_controller.dart';
+import 'run_share_preview_page.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../domain/entities/run_session.dart';
@@ -474,6 +475,20 @@ class _RunDetailsPage extends StatelessWidget {
     ];
   }
 
+  void _openSharePreview(BuildContext context) {
+    if (FirebaseAuth.instance.currentUser?.uid != ownerUid ||
+        session.status != RunStatus.finished) {
+      return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            RunSharePreviewPage(session: session, ownerUid: ownerUid),
+      ),
+    );
+  }
+
   Future<void> _openCredits(BuildContext context) async {
     try {
       final opened = await launchUrl(
@@ -631,6 +646,12 @@ class _RunDetailsPage extends StatelessWidget {
                             color: AppColors.textSub,
                             fontSize: 12,
                           ),
+                        ),
+                        const SizedBox(height: 16),
+                        OutlinedButton.icon(
+                          onPressed: () => _openSharePreview(context),
+                          icon: const Icon(Icons.share_outlined),
+                          label: const Text('Compartilhar corrida'),
                         ),
                       ],
                     ),
