@@ -18,17 +18,16 @@ String getNomeMetricaGlobal(String metric) {
       return 'Frequência de Treinos';
     case 'volume':
       return 'Carga Total Movida';
+    case 'runningDistance':
+      return 'Distância de Corrida';
     default:
       return 'Desafio';
   }
 }
 
 class ArenaPage extends StatefulWidget {
-  const ArenaPage({
-    super.key,
-    this.repository,
-    this.initialTab = 0,
-  }) : assert(initialTab >= 0 && initialTab < 4);
+  const ArenaPage({super.key, this.repository, this.initialTab = 0})
+    : assert(initialTab >= 0 && initialTab < 4);
 
   final ArenaRepository? repository;
   final int initialTab;
@@ -68,14 +67,11 @@ class _ArenaPageState extends State<ArenaPage>
       _friendsStream = _repository.watchFriends();
       _friendRequestsStream = _repository.watchPendingFriendRequests();
     }
-    _tabController = TabController(
-      length: 4,
-      initialIndex: widget.initialTab,
-      vsync: this,
-    )
-      ..addListener(() {
-        if (mounted) setState(() {});
-      });
+    _tabController =
+        TabController(length: 4, initialIndex: widget.initialTab, vsync: this)
+          ..addListener(() {
+            if (mounted) setState(() {});
+          });
   }
 
   @override
@@ -164,15 +160,9 @@ class _ArenaPageState extends State<ArenaPage>
     }
   }
 
-  Future<void> _respondChallenge(
-    ArenaChallenge challenge,
-    bool accept,
-  ) async {
+  Future<void> _respondChallenge(ArenaChallenge challenge, bool accept) async {
     try {
-      await _repository.respondChallenge(
-        challenge: challenge,
-        accept: accept,
-      );
+      await _repository.respondChallenge(challenge: challenge, accept: accept);
     } catch (_) {
       if (mounted) {
         _showMessage(
@@ -368,8 +358,9 @@ class _ArenaPageState extends State<ArenaPage>
         }
 
         final challenges = snapshot.data!
-            .where((challenge) =>
-                challenge.participants[_uid]?.status == 'accepted')
+            .where(
+              (challenge) => challenge.participants[_uid]?.status == 'accepted',
+            )
             .toList(growable: false);
 
         if (challenges.isEmpty) {
@@ -415,8 +406,8 @@ class _ArenaPageState extends State<ArenaPage>
                   borderRadius: BorderRadius.circular(16),
                   side: BorderSide(
                     color: challenge.isEnded
-                        ? Colors.amber.withOpacity(0.5)
-                        : AppColors.competition.withOpacity(0.5),
+                        ? Colors.amber.withValues(alpha: 0.5)
+                        : AppColors.competition.withValues(alpha: 0.5),
                   ),
                 ),
                 child: Padding(
@@ -464,7 +455,9 @@ class _ArenaPageState extends State<ArenaPage>
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        names.isEmpty ? 'Aguardando aceites...' : names.join(', '),
+                        names.isEmpty
+                            ? 'Aguardando aceites...'
+                            : names.join(', '),
                         style: const TextStyle(color: Colors.white54),
                       ),
                     ],
@@ -489,9 +482,8 @@ class _ArenaPageState extends State<ArenaPage>
             title: 'Não foi possível carregar seus amigos',
             description: 'Verifique sua conexão e tente novamente.',
             actionLabel: 'Tentar novamente',
-            onAction: () => setState(
-              () => _friendsStream = _repository.watchFriends(),
-            ),
+            onAction: () =>
+                setState(() => _friendsStream = _repository.watchFriends()),
             isError: true,
             announce: true,
           );
@@ -533,7 +525,10 @@ class _ArenaPageState extends State<ArenaPage>
                 ),
                 trailing: IconButton(
                   tooltip: 'Remover ${friend.otherUserName}',
-                  icon: const Icon(Icons.person_remove, color: Colors.redAccent),
+                  icon: const Icon(
+                    Icons.person_remove,
+                    color: Colors.redAccent,
+                  ),
                   onPressed: () => _confirmRemoveFriend(friend),
                 ),
               ),
@@ -626,7 +621,8 @@ class _ArenaPageState extends State<ArenaPage>
         padding: const EdgeInsets.all(16),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final compact = constraints.maxWidth < 360 ||
+            final compact =
+                constraints.maxWidth < 360 ||
                 MediaQuery.textScalerOf(context).scale(16) >= 28;
             final identity = Row(
               mainAxisSize: compact ? MainAxisSize.min : MainAxisSize.max,
@@ -673,11 +669,7 @@ class _ArenaPageState extends State<ArenaPage>
             if (compact) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  identity,
-                  const SizedBox(height: 16),
-                  action,
-                ],
+                children: [identity, const SizedBox(height: 16), action],
               );
             }
             return Row(
@@ -754,8 +746,7 @@ class _ArenaPageState extends State<ArenaPage>
         }
         final pending = snapshot.data!
             .where(
-              (challenge) =>
-                  challenge.participants[_uid]?.status == 'pending',
+              (challenge) => challenge.participants[_uid]?.status == 'pending',
             )
             .toList(growable: false);
         if (pending.isEmpty) {
@@ -838,8 +829,8 @@ class _ArenaPageState extends State<ArenaPage>
               description: 'Verifique sua conexão e tente novamente.',
               actionLabel: 'Tentar novamente',
               onAction: () => setState(
-                () => _friendRequestsStream =
-                    _repository.watchPendingFriendRequests(),
+                () => _friendRequestsStream = _repository
+                    .watchPendingFriendRequests(),
               ),
               isError: true,
               announce: true,
@@ -954,20 +945,41 @@ class _ArenaPageState extends State<ArenaPage>
                     value: 'weight',
                     child: Text('Maior Perda de Peso (kg)'),
                   ),
+                  DropdownMenuItem(
+                    value: 'runningDistance',
+                    child: Text('Distância de Corrida (km)'),
+                  ),
                 ],
                 onChanged: (value) {
-                  if (value != null) setModalState(() => metric = value);
+                  if (value != null) {
+                    setModalState(() => metric = value);
+                  }
                 },
               ),
+              if (metric == 'runningDistance') ...[
+                const SizedBox(height: 12),
+                const Text(
+                  'Vence quem acumular mais quilômetros. '
+                  'Contam corridas finalizadas e sincronizadas que '
+                  'comecem e terminem dentro do período do duelo.',
+                  style: TextStyle(color: AppColors.textSub, fontSize: 12),
+                ),
+              ],
               const SizedBox(height: 16),
               DropdownButtonFormField<int>(
                 initialValue: duration,
                 dropdownColor: AppColors.surface,
                 style: const TextStyle(color: Colors.white),
                 items: const [
-                  DropdownMenuItem(value: 15, child: Text('15 Dias (Tiro Curto)')),
+                  DropdownMenuItem(
+                    value: 15,
+                    child: Text('15 Dias (Tiro Curto)'),
+                  ),
                   DropdownMenuItem(value: 30, child: Text('30 Dias (Padrão)')),
-                  DropdownMenuItem(value: 60, child: Text('60 Dias (Maratona)')),
+                  DropdownMenuItem(
+                    value: 60,
+                    child: Text('60 Dias (Maratona)'),
+                  ),
                 ],
                 onChanged: (value) {
                   if (value != null) setModalState(() => duration = value);
@@ -987,7 +999,7 @@ class _ArenaPageState extends State<ArenaPage>
                   builder: (context, snapshot) {
                     if (snapshot.hasError) {
                       return const OkanMessageState(
-                        key: const ValueKey('arena-create-friends-error'),
+                        key: ValueKey('arena-create-friends-error'),
                         icon: Icons.cloud_off_outlined,
                         title: 'Não foi possível carregar seus amigos',
                         description:
@@ -1034,7 +1046,8 @@ class _ArenaPageState extends State<ArenaPage>
                               selected.add(friend);
                             } else {
                               selected.removeWhere(
-                                (item) => item.otherUserId == friend.otherUserId,
+                                (item) =>
+                                    item.otherUserId == friend.otherUserId,
                               );
                             }
                           }),

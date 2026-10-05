@@ -50,7 +50,9 @@ class _DuelRoomPageState extends State<DuelRoomPage>
     _rankingFuture = widget.repository.calculateRanking(widget.challenge);
     _postsStream = widget.repository.watchPosts(widget.challenge.id);
     if (widget.challenge.isEnded) {
-      widget.repository.cleanupChallengeImages(widget.challenge).catchError((_) {
+      widget.repository.cleanupChallengeImages(widget.challenge).catchError((
+        _,
+      ) {
         debugPrint('Não foi possível concluir a limpeza de imagens da Arena.');
       });
     }
@@ -193,6 +195,7 @@ class _DuelRoomPageState extends State<DuelRoomPage>
       'bodyFatPercentage' => '%',
       'constancy' => 'treinos',
       'volume' => 'kg movidos',
+      'runningDistance' => 'km',
       _ => '',
     };
 
@@ -205,7 +208,7 @@ class _DuelRoomPageState extends State<DuelRoomPage>
               padding: const EdgeInsets.all(12),
               margin: const EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(
-                color: Colors.amber.withOpacity(0.2),
+                color: Colors.amber.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.amber),
               ),
@@ -225,6 +228,25 @@ class _DuelRoomPageState extends State<DuelRoomPage>
                 ],
               ),
             ),
+          if (metric == 'runningDistance')
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: Text(
+                'O placar soma as distâncias das corridas sincronizadas '
+                'no período do duelo. Um envio pendente aparecerá '
+                'depois da sincronização e da atualização do placar.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppColors.textSub, fontSize: 12),
+              ),
+            ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: _retryRanking,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Atualizar placar'),
+            ),
+          ),
           Expanded(
             child: FutureBuilder<List<ArenaRankingEntry>>(
               future: _rankingFuture,
@@ -263,9 +285,16 @@ class _DuelRoomPageState extends State<DuelRoomPage>
                     final athlete = ranking[index];
                     final negativeMetric =
                         metric == 'weight' || metric == 'bodyFatPercentage';
-                    final progress = negativeMetric
-                        ? '${athlete.delta > 0 ? '+' : ''}${athlete.delta.toStringAsFixed(1)} $suffix'
-                        : '${athlete.delta.toInt()} $suffix';
+                    final String progress;
+                    if (negativeMetric) {
+                      progress =
+                          '${athlete.delta > 0 ? '+' : ''}'
+                          '${athlete.delta.toStringAsFixed(1)} $suffix';
+                    } else if (metric == 'runningDistance') {
+                      progress = '${athlete.delta.toStringAsFixed(2)} $suffix';
+                    } else {
+                      progress = '${athlete.delta.toInt()} $suffix';
+                    }
                     final progressColor = negativeMetric
                         ? (athlete.delta < 0
                               ? AppColors.success
@@ -301,16 +330,9 @@ class _DuelRoomPageState extends State<DuelRoomPage>
     final isSendingTaunt = _sendingTaunts.contains(athlete.userId);
     final identity = Row(
       children: [
-        SizedBox(
-          width: 30,
-          child: Center(child: _position(index)),
-        ),
+        SizedBox(width: 30, child: Center(child: _position(index))),
         const SizedBox(width: 8),
-        UserAvatar(
-          photoUrl: athlete.photoUrl,
-          name: athlete.name,
-          radius: 18,
-        ),
+        UserAvatar(photoUrl: athlete.photoUrl, name: athlete.name, radius: 18),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
@@ -339,10 +361,7 @@ class _DuelRoomPageState extends State<DuelRoomPage>
       children: [
         Text(
           progress,
-          style: TextStyle(
-            color: progressColor,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(color: progressColor, fontWeight: FontWeight.bold),
         ),
         if (athlete.userId != _uid)
           IconButton(
@@ -368,7 +387,8 @@ class _DuelRoomPageState extends State<DuelRoomPage>
         padding: const EdgeInsets.all(12),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final compact = constraints.maxWidth < 360 ||
+            final compact =
+                constraints.maxWidth < 360 ||
                 MediaQuery.textScalerOf(context).scale(16) >= 28;
             if (compact) {
               return Column(
@@ -553,10 +573,7 @@ class _DuelRoomPageState extends State<DuelRoomPage>
                               strokeWidth: 2,
                             ),
                           )
-                        : const Icon(
-                            Icons.send,
-                            color: AppColors.competition,
-                          ),
+                        : const Icon(Icons.send, color: AppColors.competition),
                     onPressed: _isPublishing ? null : _postText,
                   ),
                 ],
@@ -628,7 +645,8 @@ class _DuelRoomPageState extends State<DuelRoomPage>
             const Divider(color: Colors.white10, height: 30),
             LayoutBuilder(
               builder: (context, constraints) {
-                final compact = constraints.maxWidth < 360 ||
+                final compact =
+                    constraints.maxWidth < 360 ||
                     MediaQuery.textScalerOf(context).scale(16) >= 28;
                 final commentsAction = compact
                     ? TextButton(
@@ -696,7 +714,7 @@ class _DuelRoomPageState extends State<DuelRoomPage>
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
             color: selected
-                ? AppColors.competition.withValues(alpha: 0.2)
+                ? Colors.amber.withValues(alpha: 0.2)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(

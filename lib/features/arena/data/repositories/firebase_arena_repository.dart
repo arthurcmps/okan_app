@@ -27,9 +27,7 @@ Stream<List<ArenaFriendship>> combineArenaFriendshipStreams({
     final incoming = receivedFriends;
     if (sent == null || incoming == null || controller.isClosed) return;
 
-    controller.add(
-      List<ArenaFriendship>.unmodifiable([...sent, ...incoming]),
-    );
+    controller.add(List<ArenaFriendship>.unmodifiable([...sent, ...incoming]));
   }
 
   void startListening() {
@@ -43,22 +41,16 @@ Stream<List<ArenaFriendship>> combineArenaFriendshipStreams({
       }
     }
 
-    requestedSub = requested.listen(
-      (friendships) {
-        if (currentGeneration != generation) return;
-        requestedFriends = friendships;
-        emitFriendships();
-      },
-      onError: addError,
-    );
-    receivedSub = received.listen(
-      (friendships) {
-        if (currentGeneration != generation) return;
-        receivedFriends = friendships;
-        emitFriendships();
-      },
-      onError: addError,
-    );
+    requestedSub = requested.listen((friendships) {
+      if (currentGeneration != generation) return;
+      requestedFriends = friendships;
+      emitFriendships();
+    }, onError: addError);
+    receivedSub = received.listen((friendships) {
+      if (currentGeneration != generation) return;
+      receivedFriends = friendships;
+      emitFriendships();
+    }, onError: addError);
   }
 
   void stopListening() {
@@ -98,27 +90,29 @@ List<ArenaRankingEntry> parseArenaRankingResponse(Object? rawResponse) {
     throw StateError('Resposta inválida do placar da Arena.');
   }
 
-  return rawRanking.map((rawEntry) {
-    if (rawEntry is! Map) {
-      throw StateError('Entrada inválida no placar da Arena.');
-    }
+  return rawRanking
+      .map((rawEntry) {
+        if (rawEntry is! Map) {
+          throw StateError('Entrada inválida no placar da Arena.');
+        }
 
-    final entry = Map<String, dynamic>.from(rawEntry);
-    final userId = FirebaseArenaRepository._string(entry['userId']);
-    if (userId.isEmpty) {
-      throw StateError('Participante inválido no placar da Arena.');
-    }
+        final entry = Map<String, dynamic>.from(rawEntry);
+        final userId = FirebaseArenaRepository._string(entry['userId']);
+        if (userId.isEmpty) {
+          throw StateError('Participante inválido no placar da Arena.');
+        }
 
-    return ArenaRankingEntry(
-      userId: userId,
-      name: FirebaseArenaRepository._string(
-        entry['name'],
-        fallback: 'Atleta',
-      ),
-      photoUrl: FirebaseArenaRepository._nullableString(entry['photoUrl']),
-      delta: FirebaseArenaRepository._number(entry['delta']),
-    );
-  }).toList(growable: false);
+        return ArenaRankingEntry(
+          userId: userId,
+          name: FirebaseArenaRepository._string(
+            entry['name'],
+            fallback: 'Atleta',
+          ),
+          photoUrl: FirebaseArenaRepository._nullableString(entry['photoUrl']),
+          delta: FirebaseArenaRepository._number(entry['delta']),
+        );
+      })
+      .toList(growable: false);
 }
 
 class FirebaseArenaRepository implements ArenaRepository {
@@ -254,10 +248,9 @@ class FirebaseArenaRepository implements ArenaRepository {
       return;
     }
 
-    await _firestore
-        .collection('friendships')
-        .doc(requestId)
-        .update({'status': 'accepted'});
+    await _firestore.collection('friendships').doc(requestId).update({
+      'status': 'accepted',
+    });
     final me = await loadCurrentProfile();
     await sendArenaNotification(
       targetUserId: requesterId,
@@ -532,10 +525,9 @@ class FirebaseArenaRepository implements ArenaRepository {
   Future<void> cleanupChallengeImages(ArenaChallenge challenge) async {
     if (challenge.imagesDeleted) return;
     await _storageService.limparImagensArena(challengeId: challenge.id);
-    await _firestore
-        .collection('challenges')
-        .doc(challenge.id)
-        .update({'imagensApagadas': true});
+    await _firestore.collection('challenges').doc(challenge.id).update({
+      'imagensApagadas': true,
+    });
   }
 
   @override
@@ -547,29 +539,31 @@ class FirebaseArenaRepository implements ArenaRepository {
         .orderBy('timestamp', descending: true)
         .snapshots()
         .map(
-          (snapshot) => snapshot.docs.map((document) {
-            final data = document.data();
-            final rawReactions = Map<String, dynamic>.from(
-              data['reactions'] as Map? ?? const {},
-            );
-            final reactions = <String, List<String>>{};
-            rawReactions.forEach((emoji, value) {
-              reactions[emoji] = (value as List? ?? const [])
-                  .map((item) => item.toString())
-                  .toList(growable: false);
-            });
-            return ArenaPost(
-              id: document.id,
-              authorId: _string(data['authorId']),
-              authorName: _string(data['authorName'], fallback: 'Atleta'),
-              authorPhoto: _nullableString(data['authorPhoto']),
-              text: _string(data['text']),
-              imageUrl: _nullableString(data['imageUrl']),
-              createdAt: _date(data['timestamp']) ?? DateTime.now(),
-              reactions: reactions,
-              commentsCount: _int(data['commentsCount']),
-            );
-          }).toList(growable: false),
+          (snapshot) => snapshot.docs
+              .map((document) {
+                final data = document.data();
+                final rawReactions = Map<String, dynamic>.from(
+                  data['reactions'] as Map? ?? const {},
+                );
+                final reactions = <String, List<String>>{};
+                rawReactions.forEach((emoji, value) {
+                  reactions[emoji] = (value as List? ?? const [])
+                      .map((item) => item.toString())
+                      .toList(growable: false);
+                });
+                return ArenaPost(
+                  id: document.id,
+                  authorId: _string(data['authorId']),
+                  authorName: _string(data['authorName'], fallback: 'Atleta'),
+                  authorPhoto: _nullableString(data['authorPhoto']),
+                  text: _string(data['text']),
+                  imageUrl: _nullableString(data['imageUrl']),
+                  createdAt: _date(data['timestamp']) ?? DateTime.now(),
+                  reactions: reactions,
+                  commentsCount: _int(data['commentsCount']),
+                );
+              })
+              .toList(growable: false),
         );
   }
 
@@ -725,6 +719,8 @@ class FirebaseArenaRepository implements ArenaRepository {
         return 'Frequência de Treinos';
       case 'volume':
         return 'Carga Total Movida';
+      case 'runningDistance':
+        return 'Distância de Corrida';
       default:
         return 'Desafio';
     }
