@@ -1,23 +1,25 @@
 import 'dart:io';
-import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../../../core/services/storage_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
+
 import '../../../../core/services/auth_service.dart';
+import '../../../../core/services/storage_service.dart';
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/okan_async_state.dart';
 import '../../../../core/widgets/user_avatar.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../data/models/user_model.dart';
 import 'anamnese_tab.dart';
 import 'assessments_tab.dart';
 import 'library_admin_page.dart';
 import 'login_page.dart';
-import 'workout_history_page.dart';
 import 'personal_data_page.dart';
-import 'super_admin_page.dart';
 import 'professor_subscription_page.dart';
-import 'package:intl/intl.dart';
-import '../../data/models/user_model.dart';
+import 'super_admin_page.dart';
+import 'workout_history_page.dart';
 
 typedef ProfileDataStream = Stream<Map<String, dynamic>?> Function(String uid);
 typedef ProfileImagePicker = Future<File?> Function(ImageSource source);
@@ -56,9 +58,10 @@ class _ProfilePageState extends State<ProfilePage>
     with SingleTickerProviderStateMixin {
   late final String? _userId;
   Stream<Map<String, dynamic>?>? _profileStream;
-  late TabController _tabController;
-  bool _isUploading = false;
+  late final TabController _tabController;
 
+  bool _isUploading = false;
+  bool _isSigningOut = false;
   int _adminTapCount = 0;
 
   @override
@@ -96,45 +99,31 @@ class _ProfilePageState extends State<ProfilePage>
     super.dispose();
   }
 
-  // Método auxiliar para formatar em dd/MM/yyyy
-  String _formatarDataNascimento(dynamic dataNascimento) {
-    if (dataNascimento == null) return "--/--/----";
-    try {
-      DateTime nascimento;
-      if (dataNascimento is Timestamp) {
-        nascimento = dataNascimento.toDate();
-      } else if (dataNascimento is DateTime) {
-        nascimento = dataNascimento;
-      } else {
-        return "--/--/----";
-      }
-      return DateFormat('dd/MM/yyyy').format(nascimento);
-    } catch (_) {
-      return "--/--/----";
-    }
-  }
-
-  // Método atualizado para calcular a idade a partir do formato correto
   String _calcularIdade(dynamic dataNascimento) {
-    if (dataNascimento == null) return "--";
+    if (dataNascimento == null) return '--';
+
     try {
-      DateTime nascimento;
+      final DateTime nascimento;
       if (dataNascimento is Timestamp) {
         nascimento = dataNascimento.toDate();
       } else if (dataNascimento is DateTime) {
         nascimento = dataNascimento;
       } else {
-        return "--";
+        return '--';
       }
+
       final hoje = DateTime.now();
       int idade = hoje.year - nascimento.year;
+
       if (hoje.month < nascimento.month ||
           (hoje.month == nascimento.month && hoje.day < nascimento.day)) {
         idade--;
       }
-      return "$idade anos (${DateFormat('dd/MM/yyyy').format(nascimento)})";
+
+      final dataFormatada = DateFormat('dd/MM/yyyy').format(nascimento);
+      return '$idade anos ($dataFormatada)';
     } catch (_) {
-      return "--";
+      return '--';
     }
   }
 
@@ -164,26 +153,25 @@ class _ProfilePageState extends State<ProfilePage>
     try {
       await (widget.birthDateUpdater ?? _updateBirthDate)(_userId!, picked);
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              "Data atualizada para ${DateFormat('dd/MM/yyyy').format(picked)}!",
-            ),
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Data atualizada para '
+            '${DateFormat('dd/MM/yyyy').format(picked)}!',
           ),
-        );
-      }
+        ),
+      );
     } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Não foi possível atualizar a data. Tente novamente.',
-            ),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Não foi possível atualizar a data. Tente novamente.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
     }
   }
 
@@ -242,7 +230,7 @@ class _ProfilePageState extends State<ProfilePage>
   Future<void> _atualizarFoto(ImageSource source) async {
     try {
       final imagem = await (widget.imagePicker ?? _pickImage)(source);
-      if (imagem == null) return;
+      if (imagem == null || !mounted) return;
 
       setState(() => _isUploading = true);
 
@@ -253,9 +241,7 @@ class _ProfilePageState extends State<ProfilePage>
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
               'Não foi possível atualizar a foto. Tente novamente.',
@@ -276,6 +262,7 @@ class _ProfilePageState extends State<ProfilePage>
       source: source,
       imageQuality: 50,
     );
+
     return pickedFile == null ? null : File(pickedFile.path);
   }
 
@@ -287,56 +274,108 @@ class _ProfilePageState extends State<ProfilePage>
     await AuthService().deslogar();
   }
 
+  Future<void> _handleSignOut() async {
+    if (_isSigningOut) return;
+
+    setState(() => _isSigningOut = true);
+
+    try {
+      await (widget.signOut ?? _signOut)();
+
+      if (!mounted) return;
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute<void>(builder: (_) => const LoginPage()),
+        (route) => false,
+      );
+    } catch (error, stackTrace) {
+      debugPrint('Erro ao sair da conta: $error');
+      debugPrintStack(stackTrace: stackTrace);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Não foi possível sair da conta. Tente novamente.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSigningOut = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final uid = _userId;
-    if (uid == null) {
-      return const Scaffold(
-        body: OkanMessageState(
-          icon: Icons.lock_outline,
-          title: 'Sessão encerrada',
-          description: 'Entre novamente para acessar seu perfil.',
-          isError: true,
-          announce: true,
-        ),
-      );
-    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text(
-          "Meu Perfil",
+          'Meu Perfil',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
         elevation: 0,
         backgroundColor: Colors.transparent,
         foregroundColor: Colors.white,
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: AppColors.primary,
-          labelColor: AppColors.primary,
-          unselectedLabelColor: Colors.white30,
-          indicatorWeight: 3,
-          dividerColor: Colors.transparent,
-          tabs: const [
-            Tab(text: "Conta", icon: Icon(Icons.person_outline)),
-            Tab(text: "Anamnese", icon: Icon(Icons.assignment_ind_outlined)),
-            Tab(text: "Medidas", icon: Icon(Icons.show_chart)),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildAccountTab(),
-          (widget.anamneseBuilder ??
-              (_) => AnamneseTab(studentId: uid, isEditable: true))(context),
-          (widget.assessmentsBuilder ??
-              (_) => AssessmentsTab(studentId: uid))(context),
+        actions: [
+          IconButton(
+            tooltip: _isSigningOut ? 'Saindo da conta' : 'Sair da conta',
+            onPressed: _isSigningOut ? null : _handleSignOut,
+            icon: _isSigningOut
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.primary,
+                    ),
+                  )
+                : const Icon(Icons.logout),
+          ),
         ],
+        bottom: uid == null
+            ? null
+            : TabBar(
+                controller: _tabController,
+                indicatorColor: AppColors.primary,
+                labelColor: AppColors.primary,
+                unselectedLabelColor: Colors.white30,
+                indicatorWeight: 3,
+                dividerColor: Colors.transparent,
+                tabs: const [
+                  Tab(text: 'Conta', icon: Icon(Icons.person_outline)),
+                  Tab(
+                    text: 'Anamnese',
+                    icon: Icon(Icons.assignment_ind_outlined),
+                  ),
+                  Tab(text: 'Medidas', icon: Icon(Icons.show_chart)),
+                ],
+              ),
       ),
+      body: uid == null
+          ? const OkanMessageState(
+              icon: Icons.lock_outline,
+              title: 'Sessão encerrada',
+              description: 'Entre novamente para acessar seu perfil.',
+              isError: true,
+              announce: true,
+            )
+          : TabBarView(
+              controller: _tabController,
+              children: [
+                _buildAccountTab(),
+                (widget.anamneseBuilder ??
+                    (_) =>
+                        AnamneseTab(studentId: uid, isEditable: true))(context),
+                (widget.assessmentsBuilder ??
+                    (_) => AssessmentsTab(studentId: uid))(context),
+              ],
+            ),
     );
   }
 
@@ -374,28 +413,25 @@ class _ProfilePageState extends State<ProfilePage>
         }
 
         final profile = UserModel.fromMap(data, _userId!);
-
-        final String nome = profile.name.isNotEmpty ? profile.name : "Usuário";
-
-        final String email = profile.email;
-        final String? photoUrl = profile.photoUrl;
+        final nome = profile.name.isNotEmpty ? profile.name : 'Usuário';
+        final email = profile.email;
+        final photoUrl = profile.photoUrl;
 
         final dynamic birthDateRaw =
             data['birthDate'] ?? data['dataNascimento'];
-        final String idade = _calcularIdade(birthDateRaw);
-        final bool precisaData = (birthDateRaw == null);
+        final idade = _calcularIdade(birthDateRaw);
+        final precisaData = birthDateRaw == null;
 
         // Persona funcional do app, não RBAC.
-        final bool isProfessor = profile.isProfessorMember;
+        final isProfessor = profile.isProfessorMember;
 
-        String roleLabel = "ALUNO";
-
+        String roleLabel = 'ALUNO';
         if (profile.isProfessor) {
-          roleLabel = "PERSONAL TRAINER";
+          roleLabel = 'PERSONAL TRAINER';
         } else if (profile.isSuperAdmin) {
-          roleLabel = "SUPER ADMIN";
+          roleLabel = 'SUPER ADMIN';
         } else if (profile.isGymAdmin) {
-          roleLabel = "GESTOR";
+          roleLabel = 'GESTOR';
         }
 
         return SingleChildScrollView(
@@ -414,7 +450,7 @@ class _ProfilePageState extends State<ProfilePage>
                         margin: const EdgeInsets.only(bottom: 20),
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.1),
+                          color: AppColors.primary.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: AppColors.primary),
                         ),
@@ -427,7 +463,8 @@ class _ProfilePageState extends State<ProfilePage>
                             SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                "Cadastro incompleto! Toque para adicionar sua Data de Nascimento.",
+                                'Cadastro incompleto! Toque para adicionar '
+                                'sua Data de Nascimento.',
                                 style: TextStyle(
                                   color: AppColors.primary,
                                   fontWeight: FontWeight.bold,
@@ -440,7 +477,6 @@ class _ProfilePageState extends State<ProfilePage>
                     ),
                   ),
                 ),
-
               Center(
                 child: Column(
                   children: [
@@ -449,6 +485,7 @@ class _ProfilePageState extends State<ProfilePage>
                         GestureDetector(
                           onTap: () {
                             _adminTapCount++;
+
                             if (_adminTapCount >= 7) {
                               _adminTapCount = 0;
 
@@ -462,7 +499,7 @@ class _ProfilePageState extends State<ProfilePage>
                               } else {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text("Acesso Negado."),
+                                    content: Text('Acesso Negado.'),
                                     backgroundColor: AppColors.error,
                                   ),
                                 );
@@ -528,8 +565,7 @@ class _ProfilePageState extends State<ProfilePage>
                         color: Colors.white,
                       ),
                     ),
-
-                    if (idade != "--")
+                    if (idade != '--')
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
                         child: Text(
@@ -541,7 +577,6 @@ class _ProfilePageState extends State<ProfilePage>
                           ),
                         ),
                       ),
-
                     Container(
                       margin: const EdgeInsets.only(top: 8),
                       padding: const EdgeInsets.symmetric(
@@ -553,7 +588,7 @@ class _ProfilePageState extends State<ProfilePage>
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(
-                            color: AppColors.secondary.withOpacity(0.3),
+                            color: AppColors.secondary.withValues(alpha: 0.3),
                             blurRadius: 8,
                             offset: const Offset(0, 4),
                           ),
@@ -576,13 +611,11 @@ class _ProfilePageState extends State<ProfilePage>
                   ],
                 ),
               ),
-
               const SizedBox(height: 30),
-
               const Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  "Configurações",
+                  'Configurações',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -591,44 +624,40 @@ class _ProfilePageState extends State<ProfilePage>
                 ),
               ),
               const SizedBox(height: 10),
-
               _buildMenuOption(
                 icon: Icons.badge_outlined,
                 color: AppColors.secondary,
-                title: "Informações Pessoais",
+                title: 'Informações Pessoais',
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => PersonalDataPage(uid: _userId!),
+                    builder: (_) => PersonalDataPage(uid: _userId),
                   ),
                 ),
               ),
-
               _buildMenuOption(
                 icon: Icons.history,
                 color: Colors.white,
-                title: "Histórico de Treinos",
+                title: 'Histórico de Treinos',
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => WorkoutHistoryPage(
-                      studentId: _userId!,
+                    builder: (_) => WorkoutHistoryPage(
+                      studentId: _userId,
                       studentName: nome,
                     ),
                   ),
                 ),
               ),
-
-              // Recursos exclusivos da persona professor no mobile.
               if (isProfessor)
                 _buildMenuOption(
                   icon: Icons.workspace_premium,
                   color: AppColors.primary,
-                  title: "Assinatura e Planos",
+                  title: 'Assinatura e Planos',
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const ProfessorSubscriptionPage(),
+                      builder: (_) => const ProfessorSubscriptionPage(),
                     ),
                   ),
                 ),
@@ -641,12 +670,12 @@ class _ProfilePageState extends State<ProfilePage>
                       ? AppColors.primary
                       : Colors.white,
                   title: profile.isSuperAdmin
-                      ? "Administrar Catálogo"
-                      : "Gerenciar Biblioteca",
+                      ? 'Administrar Catálogo'
+                      : 'Gerenciar Biblioteca',
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => LibraryAdminPage(
+                      builder: (_) => LibraryAdminPage(
                         canManageExerciseCatalog: profile.isSuperAdmin,
                         catalogOnly:
                             profile.isSuperAdmin && !profile.isProfessorMember,
@@ -654,24 +683,12 @@ class _ProfilePageState extends State<ProfilePage>
                     ),
                   ),
                 ),
-
               _buildMenuOption(
                 icon: Icons.logout,
                 color: AppColors.error,
-                title: "Sair da Conta",
+                title: _isSigningOut ? 'Saindo da Conta...' : 'Sair da Conta',
                 isDestructive: true,
-                onTap: () async {
-                  await (widget.signOut ?? _signOut)();
-                  if (mounted) {
-                    Navigator.pushAndRemoveUntil(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const LoginPage(),
-                      ),
-                      (route) => false,
-                    );
-                  }
-                },
+                onTap: _isSigningOut ? null : _handleSignOut,
               ),
             ],
           ),
@@ -684,7 +701,7 @@ class _ProfilePageState extends State<ProfilePage>
     required IconData icon,
     required Color color,
     required String title,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
     bool isDestructive = false,
   }) {
     return Padding(
@@ -694,13 +711,13 @@ class _ProfilePageState extends State<ProfilePage>
         clipBehavior: Clip.antiAlias,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: Colors.white.withOpacity(0.05)),
+          side: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
         ),
         child: ListTile(
           leading: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, color: color),
