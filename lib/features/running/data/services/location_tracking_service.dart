@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
 class LocationAccessException implements Exception {
@@ -52,14 +53,35 @@ class LocationTrackingService {
     );
   }
 
+  LocationSettings _trackingSettings() {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      return AndroidSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 5,
+        intervalDuration: const Duration(seconds: 5),
+        foregroundNotificationConfig: const ForegroundNotificationConfig(
+          notificationTitle: 'Okan · Corrida em andamento',
+          notificationText: 'Registrando seu percurso. Abra o app para pausar.',
+          notificationChannelName: 'Registro de corridas',
+          notificationIcon: AndroidResource(
+            name: 'ic_notification',
+            defType: 'drawable',
+          ),
+          enableWakeLock: true,
+          setOngoing: true,
+        ),
+      );
+    }
+
+    return const LocationSettings(
+      accuracy: LocationAccuracy.high,
+      distanceFilter: 5,
+    );
+  }
+
   Stream<Position> watchPositions() async* {
     await ensureAccess();
 
-    yield* Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 5,
-      ),
-    );
+    yield* Geolocator.getPositionStream(locationSettings: _trackingSettings());
   }
 }

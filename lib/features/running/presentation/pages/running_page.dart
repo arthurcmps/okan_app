@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../../../core/config/app_environment.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -46,6 +47,9 @@ class _RunningPageState extends State<RunningPage> with WidgetsBindingObserver {
   bool _isLocating = false;
   bool _actionInProgress = false;
   bool _mapReady = false;
+
+  bool get _supportsBackgroundTracking =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
   bool get _isOwner =>
       _ownerUid != null && FirebaseAuth.instance.currentUser?.uid == _ownerUid;
@@ -152,9 +156,26 @@ class _RunningPageState extends State<RunningPage> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.detached) {
+      unawaited(_pauseAndSave());
+      return;
+    }
+
     if (state == AppLifecycleState.hidden ||
         state == AppLifecycleState.paused) {
-      unawaited(_pauseAndSave());
+      if (_supportsBackgroundTracking) {
+        unawaited(_saveCheckpoint());
+      } else {
+        unawaited(_pauseAndSave());
+      }
+    }
+  }
+
+  Future<void> _saveCheckpoint() async {
+    final autosave = _autosave;
+
+    if (autosave != null) {
+      await autosave.flush();
     }
   }
 
@@ -278,30 +299,39 @@ class _RunningPageState extends State<RunningPage> with WidgetsBindingObserver {
 
       final lifecycle = WidgetsBinding.instance.lifecycleState;
 
-      if (!_isOwner ||
+      final isInBackground =
           lifecycle == AppLifecycleState.hidden ||
-          lifecycle == AppLifecycleState.paused ||
-          lifecycle == AppLifecycleState.detached) {
+          lifecycle == AppLifecycleState.paused;
+
+      if (!_isOwner ||
+          lifecycle == AppLifecycleState.detached ||
+          (isInBackground && !_supportsBackgroundTracking)) {
         await _pauseAndSave();
         return;
       }
 
       final autosave = _autosave;
+
       if (autosave != null) {
         final saved = await autosave.flush();
 
         if (!saved) {
           await _runningController.pause();
+
           _showMessage(
             'A corrida foi pausada porque o salvamento não foi confirmado.',
           );
+
           return;
         }
       }
 
       final position = _runningController.lastPosition;
 
-      if (mounted && _runningController.isRecording && position != null) {
+      if (mounted &&
+          lifecycle == AppLifecycleState.resumed &&
+          _runningController.isRecording &&
+          position != null) {
         _centerMap(LatLng(position.latitude, position.longitude));
       }
     } finally {
@@ -813,13 +843,18 @@ class _RunningPageState extends State<RunningPage> with WidgetsBindingObserver {
                                 : 'Centralizar última posição',
                           ),
                         ),
-                        const Text(
-                          'Mantenha o app aberto durante a gravação. '
-                          'Sair ou bloquear a tela pausa a corrida. '
-                          'Os resultados ficam neste aparelho; '
-                          'a sincronização ainda não está disponível.',
+                        Text(
+                          _supportsBackgroundTracking
+                              ? 'Durante a corrida, você pode bloquear a tela ou usar outro app. '
+                                    'A notificação indica que o registro está ativo. '
+                                    'Os resultados ficam neste aparelho; '
+                                    'a sincronização ainda não está disponível.'
+                              : 'Mantenha o app aberto durante a gravação. '
+                                    'Sair ou bloquear a tela pausa a corrida. '
+                                    'Os resultados ficam neste aparelho; '
+                                    'a sincronização ainda não está disponível.',
                           textAlign: TextAlign.center,
-                          style: TextStyle(
+                          style: const TextStyle(
                             color: AppColors.textSub,
                             fontSize: 12,
                           ),
