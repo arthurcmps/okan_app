@@ -4,8 +4,8 @@ import 'package:flutter/foundation.dart';
 
 abstract final class ClientCompatibilityInfo {
   static const int schemaVersion = 2;
-  static const String appVersion = '1.0.2';
-  static const int buildNumber = 11;
+  static const String appVersion = '1.0.3';
+  static const int buildNumber = 13;
 }
 
 class ClientCompatibilityService {
