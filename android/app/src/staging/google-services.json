@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:993246251446:android:c7e12e7f386b5c67cf1917",
+        "mobilesdk_app_id": "1:993246251446:android:e4a992a199f0f9b4cf1917",
         "android_client_info": {
-          "package_name": "com.sankofa.okan"
+          "package_name": "com.sankofa.okan.staging"
         }
       },
       "oauth_client": [],

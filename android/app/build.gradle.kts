@@ -70,6 +70,8 @@ android {
 
         create("staging") {
             dimension = "environment"
+            applicationIdSuffix = ".staging"
+
             resValue(
                 type = "string",
                 name = "app_name",
