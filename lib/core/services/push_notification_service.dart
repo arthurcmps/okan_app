@@ -6,12 +6,13 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../../features/auth/presentation/pages/notifications_page.dart';
 import '../../features/arena/presentation/pages/arena_page.dart';
 import 'client_compatibility_service.dart';
+import '../../features/auth/presentation/pages/academy_link_requests_page.dart';
 
 class PushNotificationService {
   final FirebaseMessaging _fcm = FirebaseMessaging.instance;
   final ClientCompatibilityService _clientCompatibilityService =
       ClientCompatibilityService();
-  
+
   // Instância do plugin de notificações locais declarada aqui para evitar erros
   final FlutterLocalNotificationsPlugin _localNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
@@ -37,12 +38,13 @@ class PushNotificationService {
 
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
       debugPrint('Permissão de Push concedida!');
-      
-      await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
+
+      await FirebaseMessaging.instance
+          .setForegroundNotificationPresentationOptions(
+            alert: true,
+            badge: true,
+            sound: true,
+          );
 
       // Garante que tentaremos pegar e salvar o token no banco
       await salvarTokenAtual();
@@ -71,20 +73,26 @@ class PushNotificationService {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-      'fcmTokens': FieldValue.arrayUnion([token]),
-    }).catchError((e) {
-      debugPrint('Erro ao salvar FCM Token: $e');
-    });
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .update({
+          'fcmTokens': FieldValue.arrayUnion([token]),
+        })
+        .catchError((e) {
+          debugPrint('Erro ao salvar FCM Token: $e');
+        });
   }
-  
+
   void setupInteractions(GlobalKey<NavigatorState> navigatorKey) {
     _navigatorKey = navigatorKey;
 
     // 1. ABERTO EM PRIMEIRO PLANO (Foreground) - Mostra o banner Android
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      debugPrint("Recebi notificação no foreground: ${message.notification?.title}");
-      
+      debugPrint(
+        "Recebi notificação no foreground: ${message.notification?.title}",
+      );
+
       RemoteNotification? notification = message.notification;
       AndroidNotification? android = message.notification?.android;
 
@@ -113,7 +121,9 @@ class PushNotificationService {
     });
 
     // 3. CLIQUE COM APP FECHADO (Terminated)
-    FirebaseMessaging.instance.getInitialMessage().then((RemoteMessage? message) {
+    FirebaseMessaging.instance.getInitialMessage().then((
+      RemoteMessage? message,
+    ) {
       if (message != null) {
         debugPrint("App foi aberto a partir de uma notificação!");
         Future.delayed(const Duration(milliseconds: 500), () {
@@ -138,6 +148,12 @@ class PushNotificationService {
         _navigatorKey!.currentState!.push(
           MaterialPageRoute<void>(
             builder: (_) => ArenaPage(initialTab: initialTab),
+          ),
+        );
+      } else if (type == 'academy_link_request') {
+        _navigatorKey!.currentState!.push(
+          MaterialPageRoute<void>(
+            builder: (_) => const AcademyLinkRequestsPage(),
           ),
         );
       } else if (type == 'invite' ||

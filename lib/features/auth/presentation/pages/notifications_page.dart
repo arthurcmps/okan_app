@@ -11,6 +11,7 @@ import 'arena_page.dart';
 import 'chat_page.dart';
 import 'student_detail_page.dart';
 import 'weekly_plan_page.dart';
+import 'academy_link_requests_page.dart';
 
 typedef ArenaDestinationBuilder = Widget Function(int initialTab);
 
@@ -62,14 +63,14 @@ class _NotificationsPageState extends State<NotificationsPage> {
   void initState() {
     super.initState();
     _repository = widget.repository ?? FirebaseNotificationsRepository();
-    _currentUserId =
-        widget.userId ?? FirebaseAuth.instance.currentUser?.uid;
+    _currentUserId = widget.userId ?? FirebaseAuth.instance.currentUser?.uid;
 
     final currentUserId = _currentUserId;
     if (currentUserId != null) {
       _pendingInvitesStream = _repository.watchPendingInvites(currentUserId);
-      _recentNotificationsStream =
-          _repository.watchRecentNotifications(currentUserId);
+      _recentNotificationsStream = _repository.watchRecentNotifications(
+        currentUserId,
+      );
     }
   }
 
@@ -85,8 +86,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
     final currentUserId = _currentUserId;
     if (currentUserId == null) return;
     setState(() {
-      _recentNotificationsStream =
-          _repository.watchRecentNotifications(currentUserId);
+      _recentNotificationsStream = _repository.watchRecentNotifications(
+        currentUserId,
+      );
     });
   }
 
@@ -119,9 +121,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
     final currentUserId = _currentUserId;
 
     if (currentUserId == null) {
-      return const Scaffold(
-        body: Center(child: Text('Não logado')),
-      );
+      return const Scaffold(body: Center(child: Text('Não logado')));
     }
 
     return Scaffold(
@@ -136,6 +136,17 @@ class _NotificationsPageState extends State<NotificationsPage> {
         elevation: 0,
         foregroundColor: Colors.white,
         actions: [
+          IconButton(
+            tooltip: 'Solicitações de academias',
+            icon: const Icon(Icons.business),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const AcademyLinkRequestsPage(),
+                ),
+              );
+            },
+          ),
           IconButton(
             key: const ValueKey('notifications-mark-all-read'),
             icon: _isMarkingAllRead
@@ -169,10 +180,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                 ),
               ),
             ),
-            _buildInvitesStream(
-              _repository,
-              currentUserId,
-            ),
+            _buildInvitesStream(_repository, currentUserId),
             const SizedBox(height: 24),
             const Padding(
               padding: EdgeInsets.only(left: 4, bottom: 10),
@@ -233,11 +241,11 @@ class _NotificationsPageState extends State<NotificationsPage> {
                 color: AppColors.surface,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: AppColors.primary.withOpacity(0.3),
+                  color: AppColors.primary.withValues(alpha: 0.3),
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.primary.withOpacity(0.1),
+                    color: AppColors.primary.withValues(alpha: 0.1),
                     blurRadius: 10,
                   ),
                 ],
@@ -277,9 +285,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                                     false,
                                   ),
                             style: OutlinedButton.styleFrom(
-                              side: const BorderSide(
-                                color: AppColors.error,
-                              ),
+                              side: const BorderSide(color: AppColors.error),
                             ),
                             child: processingDecision == false
                                 ? const SizedBox.square(
@@ -402,7 +408,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: notification.isRead
-                        ? AppColors.surface.withOpacity(0.5)
+                        ? AppColors.surface.withValues(alpha: 0.5)
                         : AppColors.surface,
                     borderRadius: BorderRadius.circular(12),
                     border: notification.isRead
@@ -491,14 +497,17 @@ class _NotificationsPageState extends State<NotificationsPage> {
     if (!context.mounted) return;
 
     switch (notification.type) {
+      case 'academy_link_request':
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => const AcademyLinkRequestsPage(),
+          ),
+        );
+        break;
       case 'invite':
         final inviteId = notification.actionId;
         if (inviteId != null && inviteId.isNotEmpty) {
-          await _mostrarDialogoConvite(
-            context,
-            repository,
-            inviteId,
-          );
+          await _mostrarDialogoConvite(context, repository, inviteId);
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -527,10 +536,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
       case 'workout':
       case 'workout_update':
-        final currentProfile =
-            await repository.loadUserProfile(currentUserId);
-        final isProfessor =
-            currentProfile?.isTrainingProfessional == true;
+        final currentProfile = await repository.loadUserProfile(currentUserId);
+        final isProfessor = currentProfile?.isTrainingProfessional == true;
 
         if (!isProfessor) {
           if (context.mounted) {
@@ -547,14 +554,12 @@ class _NotificationsPageState extends State<NotificationsPage> {
           break;
         }
 
-        final studentId =
-            notification.actionId ?? notification.studentId;
+        final studentId = notification.actionId ?? notification.studentId;
 
         if (studentId != null &&
             studentId.isNotEmpty &&
             studentId != currentUserId) {
-          final studentProfile =
-              await repository.loadUserProfile(studentId);
+          final studentProfile = await repository.loadUserProfile(studentId);
 
           if (context.mounted) {
             Navigator.push(
@@ -571,9 +576,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
         } else if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text(
-                "Abra a aba 'Meus Alunos' para conferir o treino.",
-              ),
+              content: Text("Abra a aba 'Meus Alunos' para conferir o treino."),
             ),
           );
         }
@@ -587,7 +590,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
         Navigator.push(
           context,
           MaterialPageRoute<void>(
-            builder: (_) => widget.arenaDestinationBuilder?.call(initialTab) ??
+            builder: (_) =>
+                widget.arenaDestinationBuilder?.call(initialTab) ??
                 ArenaPage(initialTab: initialTab),
           ),
         );
@@ -623,10 +627,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
           backgroundColor: AppColors.surface,
           title: const Text(
             'Convite Pendente',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-            ),
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
           ),
           content: Text(
             '${invite.personalName} quer ser o seu treinador no Okan.',
@@ -636,12 +637,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
             TextButton(
               onPressed: () {
                 Navigator.pop(ctx);
-                _responderConvite(
-                  context,
-                  repository,
-                  inviteId,
-                  false,
-                );
+                _responderConvite(context, repository, inviteId, false);
               },
               child: const Text(
                 'Recusar',
@@ -654,12 +650,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
               ),
               onPressed: () {
                 Navigator.pop(ctx);
-                _responderConvite(
-                  context,
-                  repository,
-                  inviteId,
-                  true,
-                );
+                _responderConvite(context, repository, inviteId, true);
               },
               child: const Text(
                 'Aceitar',
@@ -677,9 +668,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              'Não foi possível abrir o convite. Tente novamente.',
-            ),
+            content: Text('Não foi possível abrir o convite. Tente novamente.'),
           ),
         );
       }
@@ -746,7 +735,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withValues(alpha: 0.15),
         shape: BoxShape.circle,
       ),
       child: Icon(icon, color: color, size: 20),
@@ -769,7 +758,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
       padding: const EdgeInsets.symmetric(vertical: 20),
       width: double.infinity,
       decoration: BoxDecoration(
-        color: AppColors.surface.withOpacity(0.3),
+        color: AppColors.surface.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.white10),
       ),
@@ -813,9 +802,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
         width: double.infinity,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.error.withOpacity(0.08),
+          color: AppColors.error.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.error.withOpacity(0.35)),
+          border: Border.all(color: AppColors.error.withValues(alpha: 0.35)),
         ),
         child: Column(
           children: [
@@ -859,9 +848,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                   ? 'Convite aceito! Agora vocês estão conectados.'
                   : 'Convite recusado.',
             ),
-            backgroundColor: aceitar
-                ? AppColors.success
-                : AppColors.neutral,
+            backgroundColor: aceitar ? AppColors.success : AppColors.neutral,
           ),
         );
       }
@@ -870,9 +857,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              professionalRelationshipErrorMessage(error),
-            ),
+            content: Text(professionalRelationshipErrorMessage(error)),
             backgroundColor: AppColors.error,
           ),
         );
